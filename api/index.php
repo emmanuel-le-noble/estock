@@ -140,6 +140,9 @@ function handle_articles_list(): void {
     if (!est_connecte()) {
         json_out(['error' => 'Non autorisé. Connectez-vous.'], 401);
     }
+    if (!peut('articles_consulter')) {
+        json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
+    }
 
     global $pdo;
     $search    = trim($_GET['q'] ?? '');
@@ -295,6 +298,9 @@ function handle_scan(): void {
     if (!est_connecte()) {
         json_out(['error' => 'Non autorisé. Connectez-vous.'], 401);
     }
+    if (!peut('caisse_gerer')) {
+        json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
+    }
 
     $code = trim($_GET['code'] ?? '');
     if ($code === '') {
@@ -379,6 +385,9 @@ function handle_scan(): void {
 function handle_caisse_sync(): void {
     if (!est_connecte()) {
         json_out(['error' => 'Non autorisé. Connectez-vous.'], 401);
+    }
+    if (!peut('caisse_gerer')) {
+        json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
@@ -517,6 +526,9 @@ function handle_caisse_status(): void {
     if (!est_connecte()) {
         json_out(['error' => 'Non autorisé.'], 401);
     }
+    if (!peut('caisse_gerer')) {
+        json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
+    }
 
     global $pdo;
     $u = user_courant();
@@ -542,6 +554,9 @@ function handle_generer_code_barre(): void {
     global $pdo;
     if (!est_connecte()) {
         json_out(['error' => 'Non autorisé.'], 401);
+    }
+    if (!peut('articles_modifier')) {
+        json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
     }
     try {
         $code = api_generer_code_barre($pdo);

@@ -10,3 +10,13 @@ AddDefaultCharset utf-8
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
 </IfModule>
+
+# Protéger les dossiers sensibles
+<DirectoryMatch "^\.|config|includes|database|vendor|templates">
+    Require all denied
+</DirectoryMatch>
+
+# Autoriser l'accès public uniquement
+<DirectoryMatch "^(assets|api|uploads|img)">
+    Require all granted
+</DirectoryMatch>

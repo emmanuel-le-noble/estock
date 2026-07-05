@@ -185,13 +185,17 @@ function db_article_decrement_stock(PDO $pdo, int $id, int $quantite, int $magas
  * Lister tous les articles actifs (pour dropdowns).
  */
 function db_articles_list_active(PDO $pdo, int $limit = 500): array {
-    return $pdo->query("SELECT id, nom, code_barre FROM articles WHERE actif=1 ORDER BY nom LIMIT $limit")->fetchAll();
+    $limit = max(1, min(1000, (int)$limit));
+    $stmt = $pdo->prepare("SELECT id, nom, code_barre FROM articles WHERE actif=1 ORDER BY nom LIMIT $limit");
+    $stmt->execute();
+    return $stmt->fetchAll();
 }
 
 /**
  * Rechercher des articles avec filtres dynamiques (stock consultation).
  */
 function db_articles_search_stock(PDO $pdo, string $search = '', int $limit = 200, int $magasin_id = 0): array {
+    $limit = max(1, min(1000, (int)$limit));
     if ($magasin_id > 0) {
         $sql = "
             SELECT a.code_barre, a.nom, a.sku, a.prix_vente,
@@ -251,12 +255,14 @@ function db_articles_count_active(PDO $pdo): int {
  */
 function db_articles_stock_value(PDO $pdo, int $magasin_id = 0): float {
     if ($magasin_id > 0) {
-        return (float)$pdo->query(
+        $stmt = $pdo->prepare(
             "SELECT COALESCE(SUM(sm.quantite * a.prix_achat), 0)
              FROM stock_magasins sm
              JOIN articles a ON a.id = sm.article_id
-             WHERE sm.magasin_id = $magasin_id AND a.actif = 1"
-        )->fetchColumn();
+             WHERE sm.magasin_id = :mid AND a.actif = 1"
+        );
+        $stmt->execute([':mid' => $magasin_id]);
+        return (float)$stmt->fetchColumn();
     }
     return (float)$pdo->query("SELECT COALESCE(SUM(quantite_stock * prix_achat),0) FROM articles")->fetchColumn();
 }
@@ -266,24 +272,29 @@ function db_articles_stock_value(PDO $pdo, int $magasin_id = 0): float {
  * Si magasin_id fourni, filtre par magasin.
  */
 function db_articles_low_stock(PDO $pdo, int $limit = 50, int $magasin_id = 0): array {
+    $limit = max(1, (int)$limit);
     if ($magasin_id > 0) {
-        return $pdo->query("
+        $stmt = $pdo->prepare("
             SELECT a.code_barre, a.nom, COALESCE(sm.quantite, 0) AS quantite_stock,
                    COALESCE(sm.stock_alerte, a.seuil_alerte) AS seuil_alerte, a.emplacement
             FROM articles a
-            LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = $magasin_id
+            LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = :mid
             WHERE a.actif = 1 AND COALESCE(sm.quantite, 0) <= COALESCE(sm.stock_alerte, a.seuil_alerte)
             ORDER BY (COALESCE(sm.quantite, 0) - COALESCE(sm.stock_alerte, a.seuil_alerte)) ASC, a.nom ASC
             LIMIT $limit
-        ")->fetchAll();
+        ");
+        $stmt->execute([':mid' => $magasin_id]);
+        return $stmt->fetchAll();
     }
-    return $pdo->query("
+    $stmt = $pdo->prepare("
         SELECT code_barre, nom, quantite_stock, seuil_alerte, emplacement
         FROM articles
         WHERE actif = 1 AND quantite_stock <= seuil_alerte
         ORDER BY (quantite_stock - seuil_alerte) ASC, nom ASC
         LIMIT $limit
-    ")->fetchAll();
+    ");
+    $stmt->execute();
+    return $stmt->fetchAll();
 }
 
 /**
@@ -291,23 +302,25 @@ function db_articles_low_stock(PDO $pdo, int $limit = 50, int $magasin_id = 0): 
  * Si magasin_id fourni, filtre par magasin.
  */
 function db_articles_low_stock_with_supplier(PDO $pdo, int $limit = 100, int $magasin_id = 0): array {
+    $limit = max(1, (int)$limit);
     if ($magasin_id > 0) {
-        $stmt = $pdo->query("
+        $stmt = $pdo->prepare("
             SELECT a.id, a.code_barre, a.nom, COALESCE(sm.quantite, 0) AS quantite_stock,
                    COALESCE(sm.stock_alerte, a.seuil_alerte) AS seuil_alerte,
                    a.emplacement, a.prix_vente, a.prix_achat, a.fournisseur_id,
                    f.nom AS fournisseur_nom, f.contact AS fournisseur_contact,
                    f.telephone AS fournisseur_telephone
             FROM articles a
-            LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = $magasin_id
+            LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = :mid
             LEFT JOIN fournisseurs f ON f.id = a.fournisseur_id
             WHERE a.actif = 1 AND COALESCE(sm.quantite, 0) <= COALESCE(sm.stock_alerte, a.seuil_alerte)
             ORDER BY (COALESCE(sm.quantite, 0) - COALESCE(sm.stock_alerte, a.seuil_alerte)) ASC, a.nom ASC
             LIMIT $limit
         ");
-        return $stmt ? $stmt->fetchAll() : [];
+        $stmt->execute([':mid' => $magasin_id]);
+        return $stmt->fetchAll();
     }
-    $stmt = $pdo->query("
+    $stmt = $pdo->prepare("
         SELECT a.id, a.code_barre, a.nom, a.quantite_stock, a.seuil_alerte,
                a.emplacement, a.prix_vente, a.prix_achat, a.fournisseur_id,
                f.nom AS fournisseur_nom, f.contact AS fournisseur_contact,
@@ -318,7 +331,8 @@ function db_articles_low_stock_with_supplier(PDO $pdo, int $limit = 100, int $ma
         ORDER BY (a.quantite_stock - a.seuil_alerte) ASC, a.nom ASC
         LIMIT $limit
     ");
-    return $stmt ? $stmt->fetchAll() : [];
+    $stmt->execute();
+    return $stmt->fetchAll();
 }
 
 /**
@@ -327,12 +341,14 @@ function db_articles_low_stock_with_supplier(PDO $pdo, int $limit = 100, int $ma
  */
 function db_articles_low_stock_count(PDO $pdo, int $magasin_id = 0): int {
     if ($magasin_id > 0) {
-        return (int)$pdo->query(
+        $stmt = $pdo->prepare(
             "SELECT COUNT(*) FROM stock_magasins sm
              JOIN articles a ON a.id = sm.article_id
-             WHERE sm.magasin_id = $magasin_id AND a.actif = 1
+             WHERE sm.magasin_id = :mid AND a.actif = 1
              AND sm.quantite <= sm.stock_alerte"
-        )->fetchColumn();
+        );
+        $stmt->execute([':mid' => $magasin_id]);
+        return (int)$stmt->fetchColumn();
     }
     return (int)$pdo->query(
         "SELECT COUNT(*) FROM articles WHERE actif = 1 AND quantite_stock <= seuil_alerte"
@@ -380,14 +396,17 @@ function db_fournisseur_get_by_id(PDO $pdo, int $id): ?array {
  * Lister tous les fournisseurs avec le nombre d'articles liés.
  */
 function db_fournisseurs_list_with_count(PDO $pdo, int $limit = 500): array {
-    return $pdo->query("
+    $limit = max(1, min(1000, (int)$limit));
+    $stmt = $pdo->prepare("
         SELECT f.*, COUNT(a.id) AS nb_articles
         FROM fournisseurs f
         LEFT JOIN articles a ON a.fournisseur_id = f.id
         GROUP BY f.id
         ORDER BY f.nom
         LIMIT $limit
-    ")->fetchAll();
+    ");
+    $stmt->execute();
+    return $stmt->fetchAll();
 }
 
 /**
@@ -494,7 +513,10 @@ function db_user_get_by_login(PDO $pdo, string $login): ?array {
  * Lister tous les utilisateurs.
  */
 function db_users_list(PDO $pdo, int $limit = 200): array {
-    return $pdo->query("SELECT id, nom, login, role, actif, date_creation FROM utilisateurs ORDER BY nom LIMIT $limit")->fetchAll();
+    $limit = max(1, min(1000, (int)$limit));
+    $stmt = $pdo->prepare("SELECT id, nom, login, role, actif, date_creation FROM utilisateurs ORDER BY nom LIMIT $limit");
+    $stmt->execute();
+    return $stmt->fetchAll();
 }
 
 /**
@@ -656,6 +678,7 @@ function db_stats_period(PDO $pdo, string $debut, string $fin): array {
  * Top N articles les plus vendus sur une période.
  */
 function db_stats_top_articles(PDO $pdo, string $debut, string $fin, int $limit = 5): array {
+    $limit = max(1, min(100, (int)$limit));
     $stmt = $pdo->prepare("SELECT a.nom, a.code_barre, SUM(lf.quantite) AS total_qte,
             SUM(lf.quantite * lf.prix_unitaire) AS total_montant
         FROM lignes_facture lf
@@ -718,14 +741,17 @@ function db_mouvement_insert(PDO $pdo, int $article_id, ?int $user_id, string $t
  * Derniers mouvements (dashboard).
  */
 function db_mouvements_recent(PDO $pdo, int $limit = 8): array {
-    return $pdo->query("
+    $limit = max(1, min(100, (int)$limit));
+    $stmt = $pdo->prepare("
         SELECT m.*, a.nom AS article_nom, u.nom AS user_nom
         FROM mouvements_stock m
         JOIN articles a ON a.id = m.article_id
         LEFT JOIN utilisateurs u ON u.id = m.utilisateur_id
         ORDER BY m.date_mouvement DESC
         LIMIT $limit
-    ")->fetchAll();
+    ");
+    $stmt->execute();
+    return $stmt->fetchAll();
 }
 
 /**
@@ -1081,6 +1107,7 @@ function db_transferer_stock(
  * Lister les transferts récents avec noms des magasins et articles.
  */
 function db_transferts_list(PDO $pdo, int $magasin_id = 0, int $limit = 50): array {
+    $limit = max(1, min(500, (int)$limit));
     $sql = "SELECT t.*, a.nom AS article_nom, a.code_barre,
                    ms.nom AS source_nom, md.nom AS destination_nom,
                    u.nom AS utilisateur_nom
@@ -1618,10 +1645,15 @@ function db_lot_decrement_fefo(PDO $pdo, int $article_id, int $magasin_id, int $
  * Retourne les lots expirés + les lots expirant dans N jours.
  */
 function db_get_expiring_lots(PDO $pdo, int $jours = 30, int $magasin_id = 0): array {
-    $where_magasin = $magasin_id > 0 ? "AND al.magasin_id = $magasin_id" : "";
+    $jours = max(1, (int)$jours);
     
-    // Lots déjà périmés
-    $expired = $pdo->query("
+    $params_expired = [];
+    $where_expired = '';
+    if ($magasin_id > 0) {
+        $where_expired = 'AND al.magasin_id = :mid';
+        $params_expired[':mid'] = $magasin_id;
+    }
+    $stmt_expired = $pdo->prepare("
         SELECT al.id, al.numero_lot, al.quantite, al.date_peremption,
                a.nom AS article_nom, a.code_barre, m.nom AS magasin_nom,
                DATEDIFF(CURDATE(), al.date_peremption) AS jours_depasse
@@ -1631,12 +1663,19 @@ function db_get_expiring_lots(PDO $pdo, int $jours = 30, int $magasin_id = 0): a
         WHERE al.quantite > 0
           AND al.date_peremption IS NOT NULL
           AND al.date_peremption < CURDATE()
-          $where_magasin
+          $where_expired
         ORDER BY al.date_peremption ASC
-    ")->fetchAll();
+    ");
+    $stmt_expired->execute($params_expired);
+    $expired = $stmt_expired->fetchAll();
     
-    // Lots expirant bientôt
-    $expiring = $pdo->query("
+    $params_expiring = [':jours' => $jours];
+    $where_expiring = '';
+    if ($magasin_id > 0) {
+        $where_expiring = 'AND al.magasin_id = :mid';
+        $params_expiring[':mid'] = $magasin_id;
+    }
+    $stmt_expiring = $pdo->prepare("
         SELECT al.id, al.numero_lot, al.quantite, al.date_peremption,
                a.nom AS article_nom, a.code_barre, m.nom AS magasin_nom,
                DATEDIFF(al.date_peremption, CURDATE()) AS jours_restants
@@ -1646,10 +1685,12 @@ function db_get_expiring_lots(PDO $pdo, int $jours = 30, int $magasin_id = 0): a
         WHERE al.quantite > 0
           AND al.date_peremption IS NOT NULL
           AND al.date_peremption >= CURDATE()
-          AND al.date_peremption <= DATE_ADD(CURDATE(), INTERVAL $jours DAY)
-          $where_magasin
+          AND al.date_peremption <= DATE_ADD(CURDATE(), INTERVAL :jours DAY)
+          $where_expiring
         ORDER BY al.date_peremption ASC
-    ")->fetchAll();
+    ");
+    $stmt_expiring->execute($params_expiring);
+    $expiring = $stmt_expiring->fetchAll();
     
     return [
         'expired'  => $expired,
@@ -1662,15 +1703,23 @@ function db_get_expiring_lots(PDO $pdo, int $jours = 30, int $magasin_id = 0): a
  * Compter les alertes de péremption pour le badge de la topbar.
  */
 function db_peremption_alert_count(PDO $pdo, int $jours = 30, int $magasin_id = 0): int {
-    $where_magasin = $magasin_id > 0 ? "AND al.magasin_id = $magasin_id" : "";
-    return (int)$pdo->query("
+    $jours = max(1, (int)$jours);
+    $params = [':jours' => $jours];
+    $where = '';
+    if ($magasin_id > 0) {
+        $where = 'AND al.magasin_id = :mid';
+        $params[':mid'] = $magasin_id;
+    }
+    $stmt = $pdo->prepare("
         SELECT COUNT(*)
         FROM article_lots al
         WHERE al.quantite > 0
           AND al.date_peremption IS NOT NULL
-          AND al.date_peremption <= DATE_ADD(CURDATE(), INTERVAL $jours DAY)
-          $where_magasin
-    ")->fetchColumn();
+          AND al.date_peremption <= DATE_ADD(CURDATE(), INTERVAL :jours DAY)
+          $where
+    ");
+    $stmt->execute($params);
+    return (int)$stmt->fetchColumn();
 }
 
 /**
@@ -1693,18 +1742,25 @@ function db_lots_by_article(PDO $pdo, int $article_id, int $magasin_id): array {
  * Compter le total des lots avec du stock dans un magasin (pour statistiques).
  */
 function db_lots_count(PDO $pdo, int $magasin_id = 0): int {
-    $where_magasin = $magasin_id > 0 ? "AND magasin_id = $magasin_id" : "";
-    return (int)$pdo->query("
-        SELECT COUNT(*) FROM article_lots WHERE quantite > 0 $where_magasin
-    ")->fetchColumn();
+    if ($magasin_id > 0) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM article_lots WHERE quantite > 0 AND magasin_id = :mid");
+        $stmt->execute([':mid' => $magasin_id]);
+        return (int)$stmt->fetchColumn();
+    }
+    return (int)$pdo->query("SELECT COUNT(*) FROM article_lots WHERE quantite > 0")->fetchColumn();
 }
 
 /**
  * Lister tous les lots avec infos article (pour tableau complet des péremptions).
  */
 function db_lots_all_with_details(PDO $pdo, int $magasin_id = 0): array {
-    $where_magasin = $magasin_id > 0 ? "AND al.magasin_id = $magasin_id" : "";
-    return $pdo->query("
+    $params = [];
+    $where = '';
+    if ($magasin_id > 0) {
+        $where = 'AND al.magasin_id = :mid';
+        $params[':mid'] = $magasin_id;
+    }
+    $stmt = $pdo->prepare("
         SELECT al.id, al.numero_lot, al.quantite, al.date_peremption, al.date_reception,
                a.nom AS article_nom, a.code_barre, a.prix_vente,
                m.nom AS magasin_nom,
@@ -1719,7 +1775,7 @@ function db_lots_all_with_details(PDO $pdo, int $magasin_id = 0): array {
         JOIN articles a ON a.id = al.article_id
         JOIN magasins m ON m.id = al.magasin_id
         WHERE al.quantite > 0
-           $where_magasin
+           $where
         ORDER BY 
             CASE 
                 WHEN al.date_peremption IS NULL THEN 2
@@ -1727,7 +1783,9 @@ function db_lots_all_with_details(PDO $pdo, int $magasin_id = 0): array {
                 ELSE 1
             END,
             al.date_peremption ASC
-    ")->fetchAll();
+    ");
+    $stmt->execute($params);
+    return $stmt->fetchAll();
 }
 
 // ============================================================

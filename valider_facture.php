@@ -179,12 +179,10 @@ try {
         }
         $lots_info = $lot_parts ? ' [' . implode(', ', $lot_parts) . ']' : '';
 
-        // [CORRECTION INTERROMPANT LA DOUBLE DÉCRÉMENTATION]
-        // db_article_update_stock est retiré d'ici car db_deduire_stock_lot s'en charge déjà automatiquement en interne !
-
-        // Décrémentation physique unique du stock global sur la table principale 'articles' via 'quantite_stock'
-        $stmt_global = $pdo->prepare("UPDATE articles SET quantite_stock = quantite_stock - ? WHERE id = ?");
-        $stmt_global->execute([$l['quantite'], $l['article_id']]);
+        // db_deduire_stock_lot() gère article_lots + stock_magasins
+        // On décrémente aussi le compteur global articles.quantite_stock
+        $stmt_global = $pdo->prepare("UPDATE articles SET quantite_stock = quantite_stock - :qte WHERE id = :id");
+        $stmt_global->execute([':qte' => $l['quantite'], ':id' => $l['article_id']]);
 
         // Mouvement de stock pour traçabilité historique
         $motif_vente = 'Vente facture ' . $numero . $lots_info;

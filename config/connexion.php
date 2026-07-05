@@ -15,6 +15,9 @@ require_once __DIR__ . '/../vendor/autoload.php';
 define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');
 define('DB_NAME', getenv('DB_NAME') ?: 'estock_db');
 define('DB_USER', getenv('DB_USER') ?: 'root');
+if (!getenv('DB_PASS')) {
+    error_log('[SECURITE] DB_PASS non défini — utilizing fallback password. Set DB_PASS in production!');
+}
 define('DB_PASS', getenv('DB_PASS') ?: 'admin');
 define('DB_CHARSET', 'utf8mb4');
 
@@ -23,6 +26,9 @@ define('ROLE_ADMIN', 'Admin');
 define('ROLE_MAGASINIER', 'Magasinier');
 define('ROLE_VENDEUR', 'Vendeur');
 
+if (!getenv('SECRET_URL_KEY')) {
+    error_log('[SECURITE] SECRET_URL_KEY non défini — utilizing default. Set SECRET_URL_KEY in production!');
+}
 define('SECRET_URL_KEY', getenv('SECRET_URL_KEY') ?: 'estock_hmac_changez_moi_en_prod_2024');
 
 // ============================================================
@@ -167,7 +173,7 @@ function afficher_flash(): void {
 function json_out($data, int $code = 200): void {
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP);
     exit;
 }
 

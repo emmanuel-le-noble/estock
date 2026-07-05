@@ -2,8 +2,9 @@
 /**
  * ticket_print.php — Affiche le ticket thermique 80mm pour impression.
  *
- * Usage : ticket_print.php?facture_id=<id>
+ * Usage : ticket_print.php?facture_id=<id>&token=<hmac>
  * Génère un HTML autonome (pas de base.html.twig), déclenche window.print().
+ * Sécurisé : requiert authentification OU signature HMAC valide.
  */
 
 require_once __DIR__ . '/config/connexion.php';
@@ -15,6 +16,19 @@ $factureId = (int)($_GET['facture_id'] ?? 0);
 if ($factureId <= 0) {
     http_response_code(400);
     exit('Paramètre facture_id invalide.');
+}
+
+// Sécurité : authentification OU signature HMAC
+$token = $_GET['token'] ?? '';
+if (!est_connecte() && !verify_url_signature($factureId, $token)) {
+    http_response_code(403);
+    exit('Accès non autorisé.');
+}
+
+// Si authentifié, vérifier les droits RBAC
+if (est_connecte() && !peut('ventes_consulter')) {
+    http_response_code(403);
+    exit('Droits insuffisants.');
 }
 
 $facture = db_facture_get_by_id($pdo, $factureId);
@@ -58,7 +72,7 @@ $devise = param('devise_symbole', 'FCFA');
 
 // Rendu Twig
 $loader = new \Twig\Loader\FilesystemLoader(__DIR__ . '/templates');
-$twig = new \Twig\Environment($loader, ['autoescape' => false]);
+$twig = new \Twig\Environment($loader, ['autoescape' => 'html']);
 
 echo $twig->render('ticket_print.html.twig', [
     'facture'  => $facture,
