@@ -1,0 +1,105 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <span class="badge text-bg-secondary fs-6">{{ (magasins|default([]))|length }} magasin{{ (magasins|default([]))|length > 1 ? 's' : '' }}</span>
+    </div>
+</div>
+
+{# ---- Formulaire d'ajout ---- #}
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Ajouter un magasin</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" class="row g-3 align-items-end">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="ajouter">
+            <div class="col-md-3">
+                <label class="form-label">Nom du magasin *</label>
+                <input type="text" name="nom" class="form-control" required maxlength="150"
+                       placeholder="ex : Entrepôt Nord">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Adresse</label>
+                <input type="text" name="adresse" class="form-control" maxlength="255"
+                       placeholder="ex : 45 Rue du Commerce">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Code postal</label>
+                <input type="text" name="code_postal" class="form-control" maxlength="10"
+                       placeholder="ex : 75001">
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-plus-lg"></i> Ajouter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ---- Liste des magasins ---- #}
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Nom</th>
+                        <th>Adresse</th>
+                        <th>Code postal</th>
+                        <th class="text-center">Statut</th>
+                        <th class="text-center">Créé le</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in magasins|default([]) %}
+                        <tr>
+                            <td class="text-muted">{{ m.id }}</td>
+                            <td class="fw-semibold">{{ m.nom|e }}</td>
+                            <td>{{ m.adresse|e ?: '—' }}</td>
+                            <td>{{ m.code_postal|e ?: '—' }}</td>
+                            <td class="text-center">
+                                {% if m.actif %}
+                                    <span class="badge text-bg-success">Actif</span>
+                                {% else %}
+                                    <span class="badge text-bg-danger">Inactif</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center text-muted small">{{ date_fr(m.date_creation) }}</td>
+                            <td class="text-end">
+                                <form method="post" class="d-inline">
+                                    {{ csrf_field() }}
+                                    <input type="hidden" name="action" value="toggle">
+                                    <input type="hidden" name="id" value="{{ m.id }}">
+                                    {% if m.actif %}
+                                        <button type="submit" class="btn btn-outline-danger btn-sm"
+                                                onclick="return confirm('Désactiver ce magasin ?')">
+                                            <i class="bi bi-eye-slash"></i> Désactiver
+                                        </button>
+                                    {% else %}
+                                        <button type="submit" class="btn btn-outline-success btn-sm"
+                                                onclick="return confirm('Activer ce magasin ?')">
+                                            <i class="bi bi-eye"></i> Activer
+                                        </button>
+                                    {% endif %}
+                                </form>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="bi bi-shop fs-1 d-block mb-2"></i> Aucun magasin enregistré.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

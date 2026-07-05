@@ -1,0 +1,59 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+
+        {# ---- Carte profil ---- #}
+        <div class="card shadow-sm mb-4">
+            <div class="card-body text-center py-4">
+                <span class="avatar avatar-profile">
+                    {{ current_user.nom|default('U')|trim|slice(0,1)|upper }}
+                </span>
+                <h5 class="mb-1 mt-3">{{ current_user.nom|default('') }}</h5>
+                <span class="badge text-bg-secondary">{{ current_role|default('') }}</span>
+                <div class="text-muted small mt-1">{{ current_user.login|default('') }}</div>
+            </div>
+        </div>
+
+        {# ---- Formulaire changement de mot de passe ---- #}
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-shield-lock"></i> Changer le mot de passe</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="profil.php">
+                    <input type="hidden" name="action" value="changer_mdp">
+                    {{ csrf_field() }}
+
+                    <div class="mb-3">
+                        <label for="mdp_actuel" class="form-label">Mot de passe actuel</label>
+                        <input type="password" class="form-control" id="mdp_actuel"
+                               name="mdp_actuel" required autocomplete="current-password">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="mdp_nouveau" class="form-label">Nouveau mot de passe</label>
+                        <input type="password" class="form-control" id="mdp_nouveau"
+                               name="mdp_nouveau" minlength="8" required autocomplete="new-password">
+                        <div class="form-text">Minimum 8 caractères.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="mdp_confirme" class="form-label">Confirmer le nouveau mot de passe</label>
+                        <input type="password" class="form-control" id="mdp_confirme"
+                               name="mdp_confirme" minlength="8" required autocomplete="new-password">
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Enregistrer le nouveau mot de passe
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

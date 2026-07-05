@@ -1,0 +1,15 @@
+{
+    "name": "estock/app",
+    "description": "eStock - Systeme de gestion de stock",
+    "type": "project",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Emmanuel-Le-Noble",
+            "email": "noblecompagnie@gmail.com"
+        }
+    ],
+    "require": {
+        "twig/twig": "^3.0"
+    }
+}

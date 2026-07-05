@@ -1,0 +1,189 @@
+{# ticket_print.html.twig — Ticket thermique 80mm, autonome (pas de base.html.twig) #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket {{ facture.numero_facture }}</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            color: #000;
+            background: #fff;
+            width: 80mm;
+            margin: 0 auto;
+            padding: 4mm;
+            line-height: 1.35;
+        }
+        .ticket { width: 100%; }
+        h1 { font-size: 16px; text-align: center; margin-bottom: 2mm; }
+        .shop-info { text-align: center; font-size: 11px; margin-bottom: 3mm; }
+        .ticket-hr { border-top: 1px dashed #000; margin: 2.5mm 0; }
+        .ticket-hr-thick { border-top: 2px solid #000; margin: 2.5mm 0; }
+        table { width: 100%; border-collapse: collapse; }
+        td, th { padding: 0.8mm 0; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .fw-bold { font-weight: 700; }
+        .fs-sm { font-size: 10px; }
+        .fs-lg { font-size: 14px; }
+        .mt-1 { margin-top: 1mm; }
+        .mb-1 { margin-bottom: 1mm; }
+        .footer-msg { text-align: center; font-size: 10px; margin-top: 3mm; }
+        @media print {
+            body { padding: 0; width: 80mm; }
+            .no-print { display: none !important; }
+        }
+        @page { size: 80mm auto; margin: 0; }
+    </style>
+</head>
+<body>
+<div class="ticket">
+
+    {# --- En-tête magasin --- #}
+    {% if magasin is defined and magasin %}
+        <h1>{{ magasin.nom_magasin }}</h1>
+        <div class="shop-info">
+            {% if magasin.adresse is defined and magasin.adresse %}{{ magasin.adresse }}<br>{% endif %}
+            {% if magasin.telephone is defined and magasin.telephone %}Tél: {{ magasin.telephone }}<br>{% endif %}
+            {% if magasin.email is defined and magasin.email %}{{ magasin.email }}{% endif %}
+        </div>
+    {% else %}
+        <h1>eStock POS</h1>
+    {% endif %}
+
+    <div class="ticket-hr-thick"></div>
+
+    {# --- Infos facture --- #}
+    <table>
+        <tr>
+            <td class="fw-bold">Facture</td>
+            <td class="text-right">{{ facture.numero_facture }}</td>
+        </tr>
+        <tr>
+            <td>Date</td>
+            <td class="text-right">{{ facture.date_facture is defined ? facture.date_facture|date('d/m/Y H:i') : '' }}</td>
+        </tr>
+        <tr>
+            <td>Vendeur</td>
+            <td class="text-right">{{ facture.vendeur_nom|default('') }}</td>
+        </tr>
+        {% if facture.client_nom is defined and facture.client_nom %}
+        <tr>
+            <td>Client</td>
+            <td class="text-right">{{ facture.client_nom }}</td>
+        </tr>
+        {% endif %}
+    </table>
+
+    <div class="ticket-hr"></div>
+
+    {# --- Lignes d'articles --- #}
+    <table>
+        <thead>
+            <tr>
+                <th>Article</th>
+                <th class="text-center">Qte</th>
+                <th class="text-right">P.U.</th>
+                <th class="text-right">Sous-total</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for ligne in lignes %}
+            <tr>
+                <td>
+                    {{ ligne.nom|default('')|slice(0, 24) }}
+                    {% if ligne.remise_pct is defined and ligne.remise_pct %}
+                        <br><span class="fs-sm">  -{{ ligne.remise_pct }}%</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">{{ ligne.quantite }}</td>
+                <td class="text-right">{{ ligne.prix_unitaire|number_format(decimals, '.', ' ') }}</td>
+                <td class="text-right fw-bold">{{ (ligne.prix_unitaire * ligne.quantite)|number_format(decimals, '.', ' ') }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="ticket-hr-thick"></div>
+
+    {# --- Totaux --- #}
+    <table>
+        <tr>
+            <td>Total HT</td>
+            <td class="text-right">{{ facture.total_ht|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+        </tr>
+        <tr>
+            <td>TVA ({{ tva_taux }}%)</td>
+            <td class="text-right">{{ (facture.total_ttc - facture.total_ht)|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+        </tr>
+        <tr>
+            <td class="fw-bold fs-lg">TOTAL TTC</td>
+            <td class="text-right fw-bold fs-lg">{{ facture.total_ttc|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+        </tr>
+    </table>
+
+    <div class="ticket-hr"></div>
+
+    {# --- Paiements --- #}
+    <div class="fw-bold mb-1">PAIEMENTS</div>
+    <table>
+    {% if paiements is defined and paiements|length > 0 %}
+        {% for p in paiements %}
+        <tr>
+            <td>{{ p.mode_paiement|default('') }}</td>
+            <td class="text-right">{{ p.montant|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+        </tr>
+        {% endfor %}
+    {% else %}
+        <tr>
+            <td>Especes</td>
+            <td class="text-right">{{ facture.montant_paye|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+        </tr>
+    {% endif %}
+        <tr>
+            <td class="fw-bold">Montant paye</td>
+            <td class="text-right fw-bold">{{ facture.montant_paye|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+        </tr>
+        {% if facture.monnaie_rendue is defined and facture.monnaie_rendue > 0 %}
+        <tr>
+            <td class="fw-bold">Monnaie rendue</td>
+            <td class="text-right fw-bold">{{ facture.monnaie_rendue|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+        </tr>
+        {% endif %}
+    </table>
+
+    <div class="ticket-hr-thick"></div>
+
+    {# --- Footer --- #}
+    <div class="footer-msg">
+        Merci pour votre achat !<br>
+        eStock POS — {{ "now"|date('d/m/Y') }}
+    </div>
+
+    {# --- Code-barres facture (optionnel) --- #}
+    <div class="text-center mt-1" id="barcodeFacture"></div>
+
+</div>
+
+{# Script JsBarcode pour code-barres facture (impression) #}
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+    try {
+        JsBarcode('#barcodeFacture', '{{ facture.numero_facture }}', {
+            format: 'CODE128',
+            width: 1.2,
+            height: 30,
+            displayValue: true,
+            fontSize: 10,
+            margin: 2
+        });
+    } catch(e) {}
+    window.addEventListener('load', function() {
+        setTimeout(function() { window.print(); }, 400);
+    });
+</script>
+</body>
+</html>

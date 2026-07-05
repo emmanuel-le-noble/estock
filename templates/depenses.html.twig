@@ -1,0 +1,244 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    {# ── Barre d'action ── #}
+    <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalDepense">
+            <i class="bi bi-plus-lg"></i> Nouvelle dépense
+        </button>
+    </div>
+
+    {# ── Filtre de date ── #}
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">Date début</label>
+                    <input type="date" name="date_debut" class="form-control" value="{{ debut|default('') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Date fin</label>
+                    <input type="date" name="date_fin" class="form-control" value="{{ fin|default('') }}">
+                </div>
+                <div class="col-md-4 d-flex gap-2">
+                    <button class="btn btn-primary"><i class="bi bi-funnel"></i> Filtrer</button>
+                    <a href="depenses.php" class="btn btn-outline-secondary">Mois en cours</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# ── Cartes résumé ── #}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4">
+            <div class="stat-card is-danger">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="stat-label">Total dépenses</div>
+                        <div class="stat-value">{{ money(total_depenses|default(0)) }}</div>
+                    </div>
+                    <span class="stat-icon"><i class="bi bi-wallet2"></i></span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="stat-card is-info">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="stat-label">Nombre de dépenses</div>
+                        <div class="stat-value">{{ (depenses|default([]))|length }}</div>
+                    </div>
+                    <span class="stat-icon"><i class="bi bi-list-ol"></i></span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="stat-card is-warning">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="stat-label">Top catégorie</div>
+                        <div class="stat-value text-truncate" style="max-width:160px">
+                            {{ (by_categorie|default([]))[0].categorie|default('—') }}
+                        </div>
+                    </div>
+                    <span class="stat-icon"><i class="bi bi-tags"></i></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Répartition par catégorie ── #}
+    {% if by_categorie is not empty %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0"><i class="bi bi-pie-chart text-warning"></i> Répartition par catégorie</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="categorieChart" height="200"></canvas>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Tableau des dépenses ── #}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-table text-secondary"></i> Détail des dépenses</h5>
+            <span class="badge text-bg-secondary">{{ (depenses|default([]))|length }}</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Titre</th>
+                            <th>Catégorie</th>
+                            <th class="text-end">Montant</th>
+                            <th>Magasin</th>
+                            <th>Enregistré par</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in depenses|default([]) %}
+                            <tr>
+                                <td>{{ date_fr(d.date_depense) }}</td>
+                                <td class="fw-semibold">{{ d.titre|e }}</td>
+                                <td><span class="badge text-bg-light">{{ d.categorie|e }}</span></td>
+                                <td class="text-end fw-bold text-danger">{{ money(d.montant) }}</td>
+                                <td>{{ d.magasin_nom|e ?: '—' }}</td>
+                                <td>{{ d.utilisateur_nom|e ?: 'Système' }}</td>
+                                <td class="text-center">
+                                    {% if is_directeur|default(false) %}
+                                    <form method="post" class="d-inline"
+                                          onsubmit="return confirm('Supprimer cette dépense ?')">
+                                        {{ csrf_field() }}
+                                        <input type="hidden" name="action" value="supprimer">
+                                        <input type="hidden" name="depense_id" value="{{ d.id }}">
+                                        <button class="btn btn-outline-danger btn-sm" title="Supprimer">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1 d-block mb-2"></i> Aucune dépense enregistrée sur cette période.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if (depenses|default([])) is not empty %}
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold">Total</td>
+                            <td class="text-end fw-bold text-danger">{{ money(total_depenses|default(0)) }}</td>
+                            <td colspan="3"></td>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal : Ajout rapide ── #}
+    <div class="modal fade" id="modalDepense" tabindex="-1">
+        <div class="modal-dialog">
+            <form method="post" class="modal-content">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="ajouter">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-wallet2"></i> Nouvelle dépense</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Titre *</label>
+                        <input type="text" name="titre" class="form-control" required
+                               placeholder="ex : Facture Électricité" maxlength="200">
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label">Catégorie *</label>
+                            <select name="categorie" class="form-select" required>
+                                {% for cat in categories|default([]) %}
+                                    <option value="{{ cat }}">{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Montant (FCFA) *</label>
+                            <input type="number" name="montant" class="form-control" required
+                                   min="0.01" step="0.01" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-6">
+                            <label class="form-label">Date *</label>
+                            <input type="date" name="date_depense" class="form-control" required
+                                   value="{{ 'now'|date('Y-m-d') }}">
+                        </div>
+                        {% if is_directeur|default(false) and (magasins|default([])) is not empty %}
+                        <div class="col-6">
+                            <label class="form-label">Magasin</label>
+                            <select name="magasin_id" class="form-select">
+                                <option value="0">— Tous —</option>
+                                {% for m in magasins|default([]) %}
+                                    <option value="{{ m.id }}" {{ m.id == (magasin_id|default(0)) ? 'selected' : '' }}>
+                                        {{ m.nom|e }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control" rows="2"
+                                  placeholder="Détails optionnels..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button class="btn btn-primary"><i class="bi bi-check-lg"></i> Enregistrer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# ── Graphique catégories (Chart.js) ── #}
+    {% if by_categorie is not empty %}
+    <script nonce="{{ csp_nonce() }}" src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script nonce="{{ csp_nonce() }}">
+    (function () {
+        const ctx = document.getElementById('categorieChart');
+        if (!ctx) return;
+        new Chart(ctx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: {{ by_categorie|column('categorie')|json_encode }},
+                datasets: [{
+                    data: {{ by_categorie|column('total')|map(v => v + 0)|json_encode|raw }},
+                    backgroundColor: [
+                        '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9',
+                        '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#64748b'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { padding: 12, usePointStyle: true } }
+                }
+            }
+        });
+    })();
+    </script>
+    {% endif %}
+{% endblock %}

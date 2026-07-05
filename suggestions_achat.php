@@ -1,0 +1,28 @@
+<?php
+/**
+ * suggestions_achat.php - Articles en alerte de stock regroupes par fournisseur.
+ *
+ * Permet au Directeur et au Magasinier de visualiser les articles necessitant
+ * un reapprovisionnement, avec les coordonnees du fournisseur associe.
+ */
+// Guard: compatible avec le routeur front controller (index.php)
+if (!function_exists('est_connecte')) { require_once __DIR__ . '/config/connexion.php'; }
+if (!function_exists('db_article_insert')) { require_once __DIR__ . '/includes/db_functions.php'; }
+if (!function_exists('csrf_guard')) { require_once __DIR__ . '/includes/helpers.php'; }
+require_once __DIR__ . '/config/connexion.php';
+require_once __DIR__ . '/includes/db_functions.php';
+require_once __DIR__ . '/includes/helpers.php';
+exiger_role(ROLE_DIRECTEUR, ROLE_MAGASINIER);
+
+$u = user_courant();
+$magasin_id = (int)($u['magasin_id'] ?? 0);
+$articles = db_articles_low_stock_with_supplier($pdo, 100, $magasin_id);
+$groupes  = generate_restock_list_by_supplier(is_array($articles) ? $articles : []);
+$nb_total = is_array($articles) ? count($articles) : 0;
+
+echo $twig->render('suggestions_achat.html.twig', [
+    'titre_page' => "Alertes Stock — Suggestions d'achat",
+    'articles'   => $articles,
+    'groupes'    => $groupes,
+    'nb_total'   => $nb_total,
+]);

@@ -1,0 +1,86 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="text-end">
+            <span class="badge bg-primary">{{ (permissions_data|default({})).total_permissions|default(0) }} permissions</span>
+            <span class="badge bg-secondary">{{ (permissions_data|default({})).roles|default([])|length }} rôles</span>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <form method="POST" action="{{ base_url }}parametres.php?tab=droits" id="permissionsForm">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="save_permissions">
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0 align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="col-permission">Permission</th>
+                                {% for role in (permissions_data|default({})).roles|default([]) %}
+                                    <th class="text-center col-role">
+                                        <i class="bi bi-person-badge"></i> {{ h(role) }}
+                                    </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for categorie, perms in (permissions_data|default({})).grouped|default({}) %}
+                                <tr class="table-light">
+                                    <td colspan="{{ (permissions_data|default({})).roles|default([])|length + 1 }}" class="fw-bold text-uppercase small">
+                                        <i class="bi bi-folder2-open"></i> {{ h(categorie) }}
+                                    </td>
+                                </tr>
+                                {% for perm in perms %}
+                                    <tr>
+                                        <td>
+                                            <span class="fw-semibold">{{ h(perm.description) }}</span>
+                                            <br>
+                                            <small class="text-muted"><code>{{ h(perm.cle_permission) }}</code></small>
+                                        </td>
+                                {% for role in (permissions_data|default({})).roles|default([]) %}
+                                            <td class="text-center">
+                                                <div class="form-check form-switch d-inline-block">
+                                                    <input type="checkbox"
+                                                           class="form-check-input permission-check"
+                                                           name="permissions[{{ role }}][]"
+                                                           value="{{ perm.id }}"
+                                                           {{ perm.active[role] ? 'checked' : '' }}
+                                                           data-role="{{ role }}"
+                                                           data-perm="{{ perm.cle_permission }}">
+                                                </div>
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card-footer bg-light d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i> 
+                        Les modifications prennent effet immédiatement.
+                    </small>
+                    <button type="submit" class="btn btn-primary btn-sm" id="btnSave">
+                        <i class="bi bi-check-lg"></i> Sauvegarder
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('permissionsForm');
+    const btn = document.getElementById('btnSave');
+    form.addEventListener('submit', function() {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sauvegarde...';
+    });
+});
+</script>
+{% endblock %}

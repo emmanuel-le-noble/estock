@@ -1,0 +1,105 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+{# ---- Filtres ---- #}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" action="audit.php" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small">Recherche</label>
+                <input type="text" name="search" class="form-control" placeholder="Action, détail, utilisateur..."
+                       value="{{ search|default('') }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Type d'action</label>
+                <select name="action_filter" class="form-select">
+                    <option value="">Toutes</option>
+                    {% for a in actions_distinct|default([]) %}
+                        <option value="{{ a }}" {{ (f_action|default('')) == a ? 'selected' : '' }}>{{ a }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Du</label>
+                <input type="date" name="debut" class="form-control" value="{{ debut|default('') }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Au</label>
+                <input type="date" name="fin" class="form-control" value="{{ fin|default('') }}">
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Filtrer</button>
+                <a href="audit.php" class="btn btn-outline-secondary">Réinitialiser</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ---- Compteur ---- #}
+<div class="mb-3">
+    <span class="badge text-bg-secondary fs-6">{{ total|default(0) }} entrée{{ (total|default(0)) > 1 ? 's' : '' }}</span>
+</div>
+
+{# ---- Tableau ---- #}
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="col-date">Date</th>
+                        <th class="col-action">Action</th>
+                        <th>Utilisateur</th>
+                        <th>Détails</th>
+                        <th class="col-ip">IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% if (logs|default([]))|length == 0 %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">Aucune activité enregistrée.</td></tr>
+                {% endif %}
+                {% for log in logs|default([]) %}
+                    {% set color = 'primary' %}
+                    {% if 'SUPPRESSION' in log.action or 'ECHEC' in log.action or 'DESACTIV' in log.action %}
+                        {% set color = 'danger' %}
+                    {% elseif 'VENTE' in log.action or 'CONNEXION' in log.action %}
+                        {% set color = 'success' %}
+                    {% endif %}
+                    <tr>
+                        <td class="text-muted small">{{ date_fr(log.date_action) }}</td>
+                        <td><span class="badge text-bg-{{ color }}">{{ log.action }}</span></td>
+                        <td>{{ log.utilisateur_nom|default('Système') }}</td>
+                        <td class="small">{{ log.details|default('—') }}</td>
+                        <td><code class="small">{{ log.ip_address|default('—') }}</code></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{# ---- Pagination ---- #}
+{% if (total_pages|default(1)) > 1 %}
+    {% set qs = '' %}
+    {% if search|default('') %}{% set qs = qs ~ 'search=' ~ search ~ '&' %}{% endif %}
+    {% if f_action|default('') %}{% set qs = qs ~ 'action_filter=' ~ f_action ~ '&' %}{% endif %}
+    {% if debut|default('') %}{% set qs = qs ~ 'debut=' ~ debut ~ '&' %}{% endif %}
+    {% if fin|default('') %}{% set qs = qs ~ 'fin=' ~ fin ~ '&' %}{% endif %}
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center">
+            {% if (page|default(1)) > 1 %}
+                <li class="page-item"><a class="page-link" href="audit.php?{{ qs }}page={{ (page|default(1)) - 1 }}">«</a></li>
+            {% endif %}
+            {% for i in 1..(total_pages|default(1)) %}
+                <li class="page-item {{ i == (page|default(1)) ? 'active' : '' }}">
+                    <a class="page-link" href="audit.php?{{ qs }}page={{ i }}">{{ i }}</a>
+                </li>
+            {% endfor %}
+            {% if (page|default(1)) < (total_pages|default(1)) %}
+                <li class="page-item"><a class="page-link" href="audit.php?{{ qs }}page={{ (page|default(1)) + 1 }}">»</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+{% endif %}
+{% endblock %}

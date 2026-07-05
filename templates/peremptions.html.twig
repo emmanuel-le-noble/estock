@@ -1,0 +1,242 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+{# ── Variables ── #}
+{% set alertes_data = alertes|default({}) %}
+{% set nb_expired = alertes_data.expired|default([])|length %}
+{% set nb_expiring = alertes_data.expiring|default([])|length %}
+{% set nb_total = nb_expired + nb_expiring %}
+{% set nb_conformes = lots_conformes|default(0) %}
+{% set nb_all = nb_total + nb_conformes %}
+
+{# ── Onglets ── #}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link active" href="peremptions.php">
+            <i class="bi bi-calendar-week"></i> Péremptions
+        </a>
+    </li>
+    {% if peut('stock_consulter') %}
+    <li class="nav-item">
+        <a class="nav-link" href="suggestions_achat.php">
+            <i class="bi bi-exclamation-triangle"></i> Alertes Stock
+        </a>
+    </li>
+    {% endif %}
+</ul>
+
+{# ═══════════════════════════════════════════════════════
+   COMPTEURS — Stat Cards Liquid Glass (clone Statistiques)
+   ═══════════════════════════════════════════════════════ #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-card is-danger">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">Périmé(s)</div>
+                    <div class="stat-value">{{ nb_expired }}</div>
+                </div>
+                <span class="stat-icon"><i class="bi bi-exclamation-triangle"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card is-warning">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">Expirent bientôt</div>
+                    <div class="stat-value">{{ nb_expiring }}</div>
+                </div>
+                <span class="stat-icon"><i class="bi bi-clock-history"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card is-success">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">Conforme(s)</div>
+                    <div class="stat-value">{{ nb_conformes }}</div>
+                </div>
+                <span class="stat-icon"><i class="bi bi-check-circle"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card is-primary">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">Total lots</div>
+                    <div class="stat-value">{{ nb_all }}</div>
+                </div>
+                <span class="stat-icon"><i class="bi bi-box-seam"></i></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════
+   FORMULAIRE — Carte Glass inline (remplace le modal)
+   ═══════════════════════════════════════════════════════ #}
+<div class="glass-card mb-4">
+    <div class="glass-header">
+        <i class="bi bi-box-seam"></i>
+        <span>Enregistrer un lot</span>
+    </div>
+    <div class="card-body">
+        <form method="post" class="row g-3 align-items-end">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="ajouter_lot">
+            <div class="col-md-4">
+                <label class="form-label">Article *</label>
+                <select name="article_id" class="form-select" required>
+                    <option value="">— Sélectionner un article —</option>
+                    {% for art in articles|default([]) %}
+                        <option value="{{ art.id }}">
+                            {{ art.nom|e }} {% if art.code_barre %}({{ art.code_barre|e }}){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Numéro de lot *</label>
+                <input type="text" name="numero_lot" class="form-control" required
+                       placeholder="ex : LOT-2026-ABC" maxlength="100">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Quantité *</label>
+                <input type="number" name="quantite" class="form-control" required
+                       min="1" step="1" placeholder="0">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">DLC / DDM</label>
+                <input type="date" name="date_peremption" class="form-control">
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-primary w-100" title="Enregistrer le lot">
+                    <i class="bi bi-check-lg"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════
+   ZONE 1 : Lots périmés — Glass Card
+   ═══════════════════════════════════════════════════════ #}
+{% if nb_expired > 0 %}
+<div class="glass-card is-danger mb-4">
+    <div class="glass-header">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span>Lots périmés ({{ nb_expired }})</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Article</th>
+                        <th>Lot</th>
+                        <th>Magasin</th>
+                        <th class="text-center">Qté</th>
+                        <th class="text-center">DLC</th>
+                        <th class="text-center">Jours dépassés</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lot in alertes_data.expired|default([]) %}
+                    <tr>
+                        <td>
+                            <strong>{{ h(lot.article_nom|default('')) }}</strong><br>
+                            <small class="text-muted">{{ h(lot.code_barre|default('')) }}</small>
+                        </td>
+                        <td><code>{{ h(lot.numero_lot|default('')) }}</code></td>
+                        <td>{{ h(lot.magasin_nom|default('')) }}</td>
+                        <td class="text-center">
+                            <span class="glass-badge-qty is-danger">{{ lot.quantite|default(0) }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% if lot.date_peremption is not empty %}
+                                {{ lot.date_peremption|date('d/m/Y') }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <strong class="text-danger">+{{ lot.jours_depasse|default(0) }}j</strong>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════
+   ZONE 2 : Lots expirant bientôt — Glass Card
+   ═══════════════════════════════════════════════════════ #}
+{% if nb_expiring > 0 %}
+<div class="glass-card is-warning mb-4">
+    <div class="glass-header">
+        <i class="bi bi-clock-history"></i>
+        <span>Expirent bientôt ({{ nb_expiring }})</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Article</th>
+                        <th>Lot</th>
+                        <th>Magasin</th>
+                        <th class="text-center">Qté</th>
+                        <th class="text-center">DLC</th>
+                        <th class="text-center">Jours restants</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lot in alertes_data.expiring|default([]) %}
+                    {% set jr = lot.jours_restants|default(30) %}
+                    {% set urg_class = jr <= 7 ? 'is-danger' : (jr <= 14 ? 'is-warning' : 'is-info') %}
+                    <tr>
+                        <td>
+                            <strong>{{ h(lot.article_nom|default('')) }}</strong><br>
+                            <small class="text-muted">{{ h(lot.code_barre|default('')) }}</small>
+                        </td>
+                        <td><code>{{ h(lot.numero_lot|default('')) }}</code></td>
+                        <td>{{ h(lot.magasin_nom|default('')) }}</td>
+                        <td class="text-center">
+                            <span class="glass-badge-qty {{ urg_class }}">{{ lot.quantite|default(0) }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% if lot.date_peremption is not empty %}
+                                {{ lot.date_peremption|date('d/m/Y') }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="glass-badge-qty {{ urg_class }}">
+                                {% if jr <= 7 %}⚠ {% endif %}{{ jr }}j
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── État vide ── #}
+{% if nb_total == 0 %}
+<div class="text-center py-5">
+    <i class="bi bi-check-circle text-success display-1"></i>
+    <h4 class="mt-3 text-success">Aucune alerte de péremption</h4>
+    <p class="text-muted">Tous les lots sont conformes.</p>
+</div>
+{% endif %}
+{% endblock %}

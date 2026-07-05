@@ -1,0 +1,231 @@
+{# templates/cloture.html.twig - Clôture de Caisse Journalière (Z de Caisse) #}
+{% extends "base.html.twig" %}
+
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+
+        {% if deja_ferme|default(false) and not (recap_mode|default(false)) %}
+            {# ── CAISSE DÉJÀ FERMÉE ── #}
+            <div class="card shadow-sm border-warning">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-lock-fill text-warning fs-1 d-block mb-3"></i>
+                    <h4 class="text-warning">Caisse déjà clôturée</h4>
+                    <p class="text-muted mb-4">
+                        Vous avez déjà effectué la clôture de caisse pour aujourd'hui.<br>
+                        La prochaine session sera disponible demain ou lors d'une nouvelle ouverture.
+                    </p>
+                    <a href="caisse.php" class="btn btn-primary">
+                        <i class="bi bi-arrow-left"></i> Retour à la Caisse
+                    </a>
+                </div>
+            </div>
+
+        {% elseif recap_mode|default(false) and derniere_cloture|default(null) %}
+            {# ── RÉCAPITULATIF APRÈS CLÔTURE ── #}
+            <div class="card shadow-sm border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-check-circle"></i> Clôture enregistrée avec succès</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-4">
+                        <div class="col-md-4">
+                            <div class="p-3 rounded bg-light">
+                                <small class="text-muted d-block">Montant attendu</small>
+                                <span class="fs-4 fw-bold text-primary">{{ money(derniere_cloture.montant_attendu) }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded bg-light">
+                                <small class="text-muted d-block">Montant réel</small>
+                                <span class="fs-4 fw-bold text-success">{{ money(derniere_cloture.montant_reel) }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded bg-light">
+                                <small class="text-muted d-block">Écart</small>
+                                {% set ecart = derniere_cloture.ecart %}
+                                {% if ecart == 0 %}
+                                    <span class="fs-4 fw-bold text-success">0,00</span>
+                                {% else %}
+                                    <span class="fs-4 fw-bold text-danger">
+                                        {{ ecart > 0 ? '+' : '' }}{{ money(ecart) }}
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <th class="text-muted">Date de clôture :</th>
+                            <td>{{ date_fr(derniere_cloture.date_creation) }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">Vendeur :</th>
+                            <td>{{ h(derniere_cloture.vendeur_nom) }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted">Statut :</th>
+                            <td><span class="badge text-bg-success">VALIDÉ</span></td>
+                        </tr>
+                    </table>
+
+                    {% if ecart != 0 %}
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Écart détecté :</strong> Un écart de
+                        {{ ecart > 0 ? '+' : '' }}{{ money(ecart) }}
+                        a été enregistré dans le journal d'audit.
+                    </div>
+                    {% endif %}
+
+                    <div class="text-center mt-4">
+                        <a href="caisse.php" class="btn btn-primary">
+                            <i class="bi bi-arrow-left"></i> Retour à la Caisse
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+        {% else %}
+            {# ── FORMULAIRE DE CLÔTURE ── #}
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-cash-stack text-primary"></i> Clôture de Caisse — {{ "now"|date("d/m/Y") }}</h5>
+                </div>
+                <div class="card-body">
+
+                    {# Récapitulatif des ventes #}
+                    <div class="row text-center mb-4">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded bg-light border">
+                                <small class="text-muted d-block">Nombre de ventes</small>
+                                <span class="fs-2 fw-bold text-dark">{{ nb_ventes|default(0) }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 rounded bg-light border">
+                                <small class="text-muted d-block">Montant théorique en caisse</small>
+                                <span class="fs-2 fw-bold text-primary" id="montantAttendu">
+                                    {{ money(montant_attendu|default(0)) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if (nb_ventes|default(0)) == 0 %}
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle"></i>
+                            Aucune vente enregistrée aujourd'hui. Le montant attendu est de 0.
+                        </div>
+                    {% else %}
+                        {# Formulaire de saisie #}
+                        <form method="post" action="cloture.php" id="formCloture">
+                            {{ csrf_field() }}
+
+                            <div class="mb-4">
+                                <label for="montant_reel" class="form-label fw-bold">
+                                    <i class="bi bi-cash"></i> Montant réellement présent dans le tiroir
+                                </label>
+                                <div class="input-group input-group-lg">
+                                    <input type="number"
+                                           step="0.01"
+                                           min="0"
+                                           id="montant_reel"
+                                           name="montant_reel"
+                                           class="form-control form-control-lg"
+                                           placeholder="Saisissez le montant compté..."
+                                           required
+                                           autofocus>
+                                    <span class="input-group-text fs-5">{{ h(devise_symbole|default('FCFA')) }}</span>
+                                </div>
+                                <div class="form-text">Comptez le contenu du tiroir et saisissez le montant exact.</div>
+                            </div>
+
+                            {# Affichage de l'écart en temps réel #}
+                            <div class="p-3 rounded mb-4 border" id="zoneEcart" style="display:none;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="fw-bold">Écart calculé :</span>
+                                    <span id="ecartAffichage" class="fs-4 fw-bold"></span>
+                                </div>
+                                <div id="ecartMessage" class="mt-2 small"></div>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button type="submit" id="btnValider" class="btn btn-success btn-lg flex-grow-1" disabled>
+                                    <i class="bi bi-lock-fill"></i> Valider la Clôture
+                                </button>
+                                <a href="caisse.php" class="btn btn-outline-secondary btn-lg">
+                                    <i class="bi bi-x-circle"></i> Annuler
+                                </a>
+                            </div>
+
+                            <div class="form-text text-center mt-3">
+                                <i class="bi bi-shield-lock"></i>
+                                Attention : cette action est irréversible. Les ventes seront verrouillées.
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script nonce="{{ csp_nonce_val }}">
+(function() {
+    const inputReel = document.getElementById('montant_reel');
+    const zoneEcart = document.getElementById('zoneEcart');
+    const ecartAffichage = document.getElementById('ecartAffichage');
+    const ecartMessage = document.getElementById('ecartMessage');
+    const btnValider = document.getElementById('btnValider');
+    const montantAttendu = {{ montant_attendu|default(0) }};
+
+    if (!inputReel) return;
+
+    inputReel.addEventListener('input', function() {
+        const reel = parseFloat(this.value) || 0;
+        const ecart = reel - montantAttendu;
+
+        if (this.value === '') {
+            zoneEcart.style.display = 'none';
+            btnValider.disabled = true;
+            return;
+        }
+
+        zoneEcart.style.display = 'block';
+        btnValider.disabled = false;
+
+        const ecartArrondi = Math.round(ecart * 100) / 100;
+
+        if (ecartArrondi === 0) {
+            ecartAffichage.textContent = '0,00';
+            ecartAffichage.className = 'fs-4 fw-bold text-success';
+            ecartMessage.textContent = 'La caisse est équilibrée. Vous pouvez valider la clôture.';
+            ecartMessage.className = 'mt-2 small text-success';
+        } else if (ecartArrondi < 0) {
+            ecartAffichage.textContent = ecartArrondi.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' FCFA';
+            ecartAffichage.className = 'fs-4 fw-bold text-danger';
+            ecartMessage.textContent = 'Il manque ' + Math.abs(ecartArrondi).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' FCFA dans le tiroir.';
+            ecartMessage.className = 'mt-2 small text-danger';
+        } else {
+            ecartAffichage.textContent = '+' + ecartArrondi.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' FCFA';
+            ecartAffichage.className = 'fs-4 fw-bold text-warning';
+            ecartMessage.textContent = 'Excédent de ' + ecartArrondi.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' FCFA dans le tiroir.';
+            ecartMessage.className = 'mt-2 small text-warning';
+        }
+    });
+
+    // Confirmation avant soumission
+    document.getElementById('formCloture').addEventListener('submit', function(e) {
+        if (!confirm('Êtes-vous sûr de vouloir clôturer la caisse ? Cette action est irréversible.')) {
+            e.preventDefault();
+        }
+    });
+})();
+</script>
+{% endblock %}
