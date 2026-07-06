@@ -16,7 +16,6 @@ $action = $_GET['action'] ?? 'liste';
 // ---- Enregistrement ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     csrf_guard('utilisateurs.php');
-
     $data = extract_post_data([
         'id'            => ['type' => 'int'],
         'nom'           => ['type' => 'string', 'trim' => true, 'required' => true, 'max' => 150, 'redirect' => ''],
@@ -27,10 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     ], 'utilisateurs.php');
 
     $form_url = $data['id'] ? page_url('utilisateurs', ['id' => $data['id'], 'action' => 'editer']) : page_url('utilisateurs', ['action' => 'nouveau']);
+    
     validate_field_lengths($data, [
         'nom'   => ['label' => 'Nom', 'max' => 150],
         'login' => ['label' => 'Identifiant', 'max' => 60],
     ], $form_url);
+
     validate_uniqueness(
         fn() => db_user_login_exists($pdo, $data['login'], $data['id']),
         'Cet identifiant existe déjà.',
@@ -39,42 +40,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
 
     $mdp = $data['mot_de_passe'];
 
-    // Vérifier la hiérarchie des rôles pour modification
+    // Vérifier la hiérarchie pour modification
     if ($data['id'] > 0 && !user_can_edit_user($pdo, $data['id'])) {
         flash_error('Vous ne pouvez pas modifier un utilisateur de niveau égal ou supérieur.');
         redirect('utilisateurs.php');
     }
 
-    // Hiérarchie des rôles : empêcher la création d'un rôle supérieur ou égal
+    // Hiérarchie des rôles à la création
     $role_hierarchy = [
-        ROLE_VENDEUR   => 1,
+        ROLE_VENDEUR    => 1,
         ROLE_MAGASINIER => 2,
-        ROLE_ADMIN     => 3,
-        ROLE_DIRECTEUR => 4,
+        ROLE_ADMIN      => 3,
+        ROLE_DIRECTEUR  => 4,
     ];
     $current = user_courant();
     $current_role_level = $role_hierarchy[$current['role']] ?? 0;
     $target_role_level = $role_hierarchy[$data['role']] ?? 0;
+
     if ($data['id'] === 0 && $target_role_level >= $current_role_level) {
-        flash_error('Vous ne pouvez pas créer un utilisateur avec un rôle égal ou supérieur au vôtre.');
+        flash_error('Vous ne pouvez pas créer un utilisateur avec un rang égal ou supérieur au vôtre.');
         redirect('utilisateurs.php');
     }
 
     db_transaction(
         function(PDO $pdo) use ($data, $mdp) {
             if ($data['id'] > 0) {
+                // Modification sans toucher au mot de passe
                 db_user_update_without_password($pdo, $data['id'], $data['nom'], $data['login'], $data['role'], $data['actif'] ? 1 : 0);
             } else {
-                if ($mdp === '') throw new RuntimeException('Mot de passe obligatoire à la création.');
-                if (mb_strlen($mdp) < 8) throw new RuntimeException('Le mot de passe doit contenir au moins 8 caractères.');
+                // Création : Mot de passe requis
+                if (trim($mdp) === '') { 
+                    throw new RuntimeException('Mot de passe obligatoire à la création.'); 
+                }
+                if (mb_strlen($mdp) < 8) { 
+                    throw new RuntimeException('Le mot de passe doit contenir au moins 8 caractères.'); 
+                }
                 $mdp_hash = password_hash($mdp, PASSWORD_BCRYPT);
                 db_user_insert($pdo, $data['nom'], $data['login'], $mdp_hash, $data['role'], $data['actif'] ? 1 : 0);
             }
         },
-        'Utilisateur enregistré.',
+        'Utilisateur enregistré avec succès.',
         'Une erreur est survenue lors de l\'enregistrement.',
         'utilisateurs.php'
     );
+
     suivre_activite('MODIFICATION_UTILISATEUR', ($data['id'] > 0 ? 'Modification' : 'Création') . ' utilisateur "' . $data['login'] . '" (' . $data['role'] . ')');
 }
 
@@ -82,14 +91,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'toggle') {
     csrf_guard('utilisateurs.php');
     $target_id = (int)($_POST['id'] ?? 0);
+
     if ($target_id === (int)(user_courant()['id'] ?? 0)) {
         flash_error('Vous ne pouvez pas désactiver votre propre compte.');
         redirect('utilisateurs.php');
     }
+
     if (!user_can_edit_user($pdo, $target_id)) {
         flash_error('Vous ne pouvez pas modifier un utilisateur de niveau égal ou supérieur.');
         redirect('utilisateurs.php');
     }
+
     db_user_toggle_active($pdo, $target_id);
     suivre_activite('MODIFICATION_UTILISATEUR', 'Activation/Désactivation utilisateur #' . $target_id);
     redirect('utilisateurs.php');
@@ -97,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'toggle') {
 
 // ---- Formulaire ----
 if ($action === 'nouveau' || $action === 'editer') {
-    $u = ['id'=>'','nom'=>'','login'=>'','role'=>ROLE_VENDEUR,'actif'=>1];
+    $u = ['id' => '', 'nom' => '', 'login' => '', 'role' => ROLE_VENDEUR, 'actif' => 1];
     if ($action === 'editer') {
         $get_id = (int)($_GET['id'] ?? 0);
         if (!verify_url_signature($get_id, $_GET['token'] ?? '', ['action' => 'editer'])) {
@@ -106,6 +118,7 @@ if ($action === 'nouveau' || $action === 'editer') {
         }
         $u = db_user_get_by_id($pdo, $get_id) ?: $u;
     }
+
     $titre_page = ($action === 'nouveau' ? 'Nouvel utilisateur' : 'Modifier l\'utilisateur');
     include __DIR__ . '/includes/header.php';
     ?>
@@ -131,7 +144,7 @@ if ($action === 'nouveau' || $action === 'editer') {
                             <label class="form-label">Rôle *</label>
                             <select name="role" class="form-select">
                                 <?php foreach ([ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER, ROLE_VENDEUR] as $r): ?>
-                                    <option value="<?= $r ?>" <?= $u['role']===$r?'selected':'' ?>><?= $r ?></option>
+                                    <option value="<?= $r ?>" <?= $u['role'] === $r ? 'selected' : '' ?>><?= $r ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -144,8 +157,7 @@ if ($action === 'nouveau' || $action === 'editer') {
                         </div>
                         <?php endif; ?>
                         <div class="form-check mb-3">
-                            <input type="checkbox" name="actif" class="form-check-input" id="actif"
-                                   <?= !empty($u['actif']) ? 'checked' : '' ?>>
+                            <input type="checkbox" name="actif" class="form-check-input" id="actif" <?= !empty($u['actif']) ? 'checked' : '' ?>>
                             <label class="form-check-label" for="actif">Compte actif</label>
                         </div>
                         <button class="btn btn-primary"><i class="bi bi-save"></i> Enregistrer</button>
@@ -168,7 +180,6 @@ include __DIR__ . '/includes/header.php';
 <div class="d-flex flex-wrap justify-content-end align-items-center mb-3 gap-2">
     <a href="<?= h(page_url('utilisateurs', ['action' => 'nouveau'])) ?>" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nouvel utilisateur</a>
 </div>
-
 <div class="card shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -180,7 +191,7 @@ include __DIR__ . '/includes/header.php';
                     </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($utilisateurs as $u):
+                <?php foreach ($utilisateurs as $u): 
                     $couleur = role_badge_color($u['role']);
                 ?>
                     <tr class="<?= !$u['actif'] ? 'table-secondary' : '' ?>">

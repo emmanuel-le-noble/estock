@@ -7,6 +7,9 @@
  * Sécurisé : requiert authentification OU signature HMAC valide.
  */
 
+if (!function_exists('est_connecte')) { require_once __DIR__ . '/config/connexion.php'; }
+if (!function_exists('db_article_insert')) { require_once __DIR__ . '/includes/db_functions.php'; }
+if (!function_exists('csrf_guard')) { require_once __DIR__ . '/includes/helpers.php'; }
 require_once __DIR__ . '/config/connexion.php';
 require_once __DIR__ . '/includes/db_functions.php';
 require_once __DIR__ . '/includes/helpers.php';
@@ -20,16 +23,19 @@ if ($factureId <= 0) {
 
 // Sécurité : exiger l'authentification OU signature HMAC valide
 $token = $_GET['token'] ?? '';
+$print_param = $_GET['print'] ?? '';
+$verify_extra = $print_param !== '' ? ['print' => $print_param] : [];
+
 if (!est_connecte()) {
-    if (!verify_url_signature($factureId, $token)) {
+    if (!verify_url_signature($factureId, $token, $verify_extra)) {
         http_response_code(403);
         exit('Accès non autorisé.');
     }
 } else {
-    // CORRECTION : Autorise si la permission existe OU si l'utilisateur possède un rôle habilité à voir les ventes
+    // Autorise si la permission RBAC existe OU si l'utilisateur possède un rôle habilité
     $role_valide = in_array(user_role(), [ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_VENDEUR], true);
     
-    if (!peut('ventes_consulter') && !$role_valide) {
+    if (!peut('facturation_consulter') && !peut('caisse_gerer') && !$role_valide) {
         http_response_code(403);
         exit('Droits insuffisants.');
     }
