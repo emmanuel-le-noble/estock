@@ -14,11 +14,25 @@ require_once __DIR__ . '/../vendor/autoload.php';
 // ============================================================
 define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');
 define('DB_NAME', getenv('DB_NAME') ?: 'estock_db');
-define('DB_USER', getenv('DB_USER') ?: 'root');
-if (!getenv('DB_PASS')) {
-    error_log('[SECURITE] DB_PASS non défini — utilizing fallback password. Set DB_PASS in production!');
+
+$dbUser = getenv('DB_USER');
+if ($dbUser === false || $dbUser === '') {
+    error_log('[CRITIQUE] DB_USER non défini dans l\'environnement.');
+    $dbUser = 'root';
 }
-define('DB_PASS', getenv('DB_PASS') ?: 'admin');
+define('DB_USER', $dbUser);
+
+$dbPass = getenv('DB_PASS');
+if ($dbPass === false || $dbPass === '') {
+    error_log('[CRITIQUE] DB_PASS non défini dans l\'environnement. Connexion refusée en prod.');
+    if (getenv('APP_ENV') === 'production') {
+        http_response_code(500);
+        die('Configuration manquante.');
+    }
+    $dbPass = 'admin';
+}
+define('DB_PASS', $dbPass);
+
 define('DB_CHARSET', 'utf8mb4');
 
 define('ROLE_DIRECTEUR', 'Directeur');
@@ -26,10 +40,16 @@ define('ROLE_ADMIN', 'Admin');
 define('ROLE_MAGASINIER', 'Magasinier');
 define('ROLE_VENDEUR', 'Vendeur');
 
-if (!getenv('SECRET_URL_KEY')) {
-    error_log('[SECURITE] SECRET_URL_KEY non défini — utilizing default. Set SECRET_URL_KEY in production!');
+$secretKey = getenv('SECRET_URL_KEY');
+if ($secretKey === false || $secretKey === '') {
+    error_log('[CRITIQUE] SECRET_URL_KEY non défini. Tokens HMAC non sécurisés.');
+    if (getenv('APP_ENV') === 'production') {
+        http_response_code(500);
+        die('Configuration manquante.');
+    }
+    $secretKey = 'estock_hmac_changez_moi_en_prod_2024';
 }
-define('SECRET_URL_KEY', getenv('SECRET_URL_KEY') ?: 'estock_hmac_changez_moi_en_prod_2024');
+define('SECRET_URL_KEY', $secretKey);
 
 // ============================================================
 //  1bis. URL RACINE DYNAMIQUE (s'adapte au sous-dossier Wamp)
@@ -71,10 +91,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Générer un nonce CSP par requête
-if (empty($_SESSION['csp_nonce'])) {
-    $_SESSION['csp_nonce'] = bin2hex(random_bytes(16));
-}
+// Générer un nonce CSP par requête (plus de réutilisation inter-requests)
+$_SESSION['csp_nonce'] = bin2hex(random_bytes(16));
 
 // ============================================================
 //  3bis. EN-TÊTES DE SÉCURITÉ
@@ -173,7 +191,7 @@ function afficher_flash(): void {
 function json_out($data, int $code = 200): void {
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP);
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     exit;
 }
 
@@ -357,7 +375,9 @@ function paginate(string $sql, array $params = [], int $par_page = 25): array {
     $page = min($page, $total_pages);
     $offset = ($page - 1) * $par_page;
 
-    $sql .= " LIMIT $par_page OFFSET $offset";
+    $sql .= " LIMIT ? OFFSET ?";
+    $params[] = $par_page;
+    $params[] = $offset;
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $items = $stmt->fetchAll();
@@ -370,16 +390,16 @@ function pagination_links(int $page, int $total_pages, string $base_url = '?'): 
     echo '<nav><ul class="pagination pagination-sm justify-content-center mt-3">';
     if ($page > 1) {
         $sep = str_contains($base_url, '?') ? '&' : '?';
-        echo "<li class=\"page-item\"><a class=\"page-link\" href=\"{$base_url}{$sep}page=" . ($page - 1) . "\">&laquo;</a></li>";
+        echo '<li class="page-item"><a class="page-link" href="' . h($base_url . $sep . 'page=' . ($page - 1)) . '">&laquo;</a></li>';
     }
     for ($i = 1; $i <= $total_pages; $i++) {
         $active = $i === $page ? ' active' : '';
         $sep = str_contains($base_url, '?') ? '&' : '?';
-        echo "<li class=\"page-item$active\"><a class=\"page-link\" href=\"{$base_url}{$sep}page=$i\">$i</a></li>";
+        echo '<li class="page-item' . $active . '"><a class="page-link" href="' . h($base_url . $sep . 'page=' . $i) . '">' . $i . '</a></li>';
     }
     if ($page < $total_pages) {
         $sep = str_contains($base_url, '?') ? '&' : '?';
-        echo "<li class=\"page-item\"><a class=\"page-link\" href=\"{$base_url}{$sep}page=" . ($page + 1) . "\">&raquo;</a></li>";
+        echo '<li class="page-item"><a class="page-link" href="' . h($base_url . $sep . 'page=' . ($page + 1)) . '">&raquo;</a></li>';
     }
     echo '</ul></nav>';
 }

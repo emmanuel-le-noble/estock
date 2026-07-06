@@ -278,11 +278,11 @@ include __DIR__ . '/includes/header.php';
     const caMap = <?= json_encode(array_combine(
         array_map(fn($d) => $d['jour'] ?? '', $daily),
         array_map('floatval', array_column($daily, 'ca_jour'))
-    ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     const depMap = <?= json_encode(array_combine(
         array_map(fn($d) => $d['jour'] ?? '', $dep_daily),
         array_map('floatval', array_column($dep_daily, 'total'))
-    ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     const allDates = [...new Set([...Object.keys(caMap), ...Object.keys(depMap)])].sort();
     const labels = allDates.map(d => { const p = d.split('-'); return p[2] + '/' + p[1]; });
 
@@ -337,10 +337,10 @@ include __DIR__ . '/includes/header.php';
         new Chart(ctx2.getContext('2d'), {
             type: 'bar',
             data: {
-                labels: <?= json_encode(array_map(fn($a) => mb_strimwidth($a['nom'] ?? '', 0, 15, '…'), $top), JSON_UNESCAPED_UNICODE) ?>,
+                labels: <?= json_encode(array_map(fn($a) => mb_strimwidth($a['nom'] ?? '', 0, 15, '…'), $top), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
                 datasets: [{
                     label: 'Quantité vendue',
-                    data: <?= json_encode(array_map('intval', array_column($top, 'total_qte'))) ?>,
+                    data: <?= json_encode(array_map('intval', array_column($top, 'total_qte')), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
                     backgroundColor: ['#6366f1','#10b981','#f59e0b','#ef4444','#0ea5e9'],
                     borderRadius: 6
                 }]

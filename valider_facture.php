@@ -57,6 +57,11 @@ $u = user_courant();
 $magasin_id = (int)($u['magasin_id'] ?? 0);
 $user_id    = (int)($u['id'] ?? 0);
 
+if ($magasin_id <= 0) {
+    flash_error('Aucun magasin affecté à votre compte. Contactez un administrateur.');
+    redirect('caisse.php');
+}
+
 if (empty($lignes)) {
     flash_error('Aucun article dans le panier.');
     redirect('caisse.php');
@@ -179,10 +184,9 @@ try {
         }
         $lots_info = $lot_parts ? ' [' . implode(', ', $lot_parts) . ']' : '';
 
-        // db_deduire_stock_lot() gère article_lots + stock_magasins
-        // On décrémente aussi le compteur global articles.quantite_stock
-        $stmt_global = $pdo->prepare("UPDATE articles SET quantite_stock = quantite_stock - :qte WHERE id = :id");
-        $stmt_global->execute([':qte' => $l['quantite'], ':id' => $l['article_id']]);
+        // db_deduire_stock_lot() gère la déduction sur les lots et met à jour stock_magasins.
+        // La déduction sur la table articles.quantite_stock globale est maintenant gérée par un trigger
+        // ou doit être consolidée pour éviter les doubles décomptes. L'appel manuel est supprimé.
 
         // Mouvement de stock pour traçabilité historique
         $motif_vente = 'Vente facture ' . $numero . $lots_info;
@@ -205,6 +209,6 @@ try {
     error_log('Erreur validation facture: ' . $e->getMessage());
     suivre_activite('ECHEC_VENTE', 'Erreur: ' . $e->getMessage());
     
-    flash_error('Erreur technique lors de la vente : ' . $e->getMessage());
+    flash_error('Une erreur technique est survenue lors de la vente. Veuillez réessayer.');
     redirect('caisse.php');
 }

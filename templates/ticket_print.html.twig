@@ -172,7 +172,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
     try {
-        JsBarcode('#barcodeFacture', '{{ facture.numero_facture }}', {
+        JsBarcode('#barcodeFacture', '{{ facture.numero_facture|e('js') }}', {
             format: 'CODE128',
             width: 1.2,
             height: 30,

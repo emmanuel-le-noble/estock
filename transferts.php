@@ -42,7 +42,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'trans
             $data['magasin_source_id'],
             $data['magasin_destination_id'],
             $data['quantite'],
-            $u['id'] ?? null,
             $data['motif'] !== '' ? $data['motif'] : null
         );
         $pdo->commit();

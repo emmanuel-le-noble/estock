@@ -39,6 +39,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
     }
 
     try {
+        // Vérifier que l'article existe et est actif
+        $art_check = $pdo->prepare("SELECT id FROM articles WHERE id = ? AND actif = 1");
+        $art_check->execute([$data['article_id']]);
+        if (!$art_check->fetch()) {
+            flash_error('Article introuvable ou inactif.');
+            redirect('peremptions.php');
+        }
+
         $lot_id = db_lot_upsert($pdo, $data['article_id'], $magasin_id, $data['numero_lot'], $data['quantite'], $dlc);
         db_stock_magasin_increment($pdo, $magasin_id, $data['article_id'], $data['quantite']);
         suivre_activite('LOT_AJOUTE', 'Lot ' . $data['numero_lot'] . ' — Qté ' . $data['quantite'] . ($dlc ? ' — DLC ' . $dlc : ''));

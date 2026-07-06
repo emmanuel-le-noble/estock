@@ -22,6 +22,21 @@ $user_id = (int)($user['id'] ?? 0);
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'changer_mdp') {
     csrf_guard('profil.php');
 
+    // Rate limiting : max 5 tentatives par 15 minutes
+    $rateKey = 'mdp_change_' . $user_id;
+    $rateCount = (int)(($_SESSION[$rateKey . '_count'] ?? 0));
+    $rateTime = (int)($_SESSION[$rateKey . '_time'] ?? 0);
+    if (time() - $rateTime > 900) {
+        $_SESSION[$rateKey . '_count'] = 0;
+        $rateCount = 0;
+    }
+    if ($rateCount >= 5) {
+        flash_error('Trop de tentatives. Réessayez dans 15 minutes.');
+        redirect('profil.php');
+    }
+    $_SESSION[$rateKey . '_count'] = $rateCount + 1;
+    if ($rateTime === 0) $_SESSION[$rateKey . '_time'] = time();
+
     $mdp_actuel  = $_POST['mdp_actuel']  ?? '';
     $mdp_nouveau  = $_POST['mdp_nouveau']  ?? '';
     $mdp_confirme = $_POST['mdp_confirme'] ?? '';
@@ -59,6 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
     $hash = password_hash($mdp_nouveau, PASSWORD_DEFAULT);
     db_user_change_password($pdo, $user_id, $hash);
     suivre_activite('CHANGEMENT_MDP', 'Changement de mot de passe personnel');
+
+    // Régénérer l'ID de session pour prévenir le session fixation
+    session_regenerate_id(true);
+
+    // Reset rate limiting
+    unset($_SESSION['mdp_change_' . $user_id . '_count'], $_SESSION['mdp_change_' . $user_id . '_time']);
 
     flash_success('Mot de passe modifié avec succès.');
     redirect('profil.php');

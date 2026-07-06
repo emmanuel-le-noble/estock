@@ -219,9 +219,9 @@
         new Chart(ctx.getContext('2d'), {
             type: 'doughnut',
             data: {
-                labels: {{ by_categorie|column('categorie')|json_encode }},
+                labels: {{ by_categorie|column('categorie')|json_encode(constant('JSON_UNESCAPED_UNICODE') b-or constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT'))|raw }},
                 datasets: [{
-                    data: {{ by_categorie|column('total')|map(v => v + 0)|json_encode|raw }},
+                    data: {{ by_categorie|column('total')|map(v => v + 0)|json_encode(constant('JSON_UNESCAPED_UNICODE') b-or constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT'))|raw }},
                     backgroundColor: [
                         '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9',
                         '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#64748b'

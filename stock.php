@@ -10,17 +10,23 @@ if (!function_exists('csrf_guard')) { require_once __DIR__ . '/includes/helpers.
 require_once __DIR__ . '/config/connexion.php';
 require_once __DIR__ . '/includes/db_functions.php';
 require_once __DIR__ . '/includes/helpers.php';
-exiger_connexion();
+exiger_permission('stock_consulter');
 
 $search = trim($_GET['q'] ?? '');
 $u = user_courant();
 
 // Déterminer le magasin à filtrer : choix de l'utilisateur via paramètre GET, 
 // sinon le magasin affecté à son profil utilisateur.
-if (peut_administrer() || !empty($u['magasin_id']) === false) {
+if (peut_administrer()) {
+    // L'admin peut filtrer par n'importe quel magasin via GET
     $magasin_id = isset($_GET['magasin_id']) ? (int)$_GET['magasin_id'] : (int)($u['magasin_id'] ?? 0);
 } else {
+    // Les autres utilisateurs sont restreints à leur magasin assigné
     $magasin_id = (int)($u['magasin_id'] ?? 0);
+    if ($magasin_id <= 0) {
+        flash_error('Aucun magasin affecté à votre compte.');
+        redirect('tableau_bord.php');
+    }
 }
 
 // Récupération de la liste complète des magasins pour le filtre de sélection (si Admin/Directeur)

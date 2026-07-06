@@ -35,6 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
         $u = user_courant();
         $magasin_id = (int)($u['magasin_id'] ?? 0);
         $numero_lot = !empty($_POST['numero_lot']) ? trim($_POST['numero_lot']) : null;
+        if ($numero_lot !== null && mb_strlen($numero_lot) > 100) {
+            $numero_lot = mb_substr($numero_lot, 0, 100);
+        }
         $date_peremption = !empty($_POST['date_peremption']) ? $_POST['date_peremption'] : null;
         $art = process_stock_movement($pdo, $data['article_id'], $data['type'], $data['quantite'], $data['motif'], $u['id'] ?? 0, $magasin_id, $numero_lot, $date_peremption);
         $pdo->commit();

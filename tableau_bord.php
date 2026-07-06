@@ -14,11 +14,11 @@ exiger_connexion();
 $u = user_courant();
 $magasin_id = (int)($u['magasin_id'] ?? 0);
 
-// ---- Statistiques rapides ----
-$nb_articles   = db_articles_count_active($pdo);
+// ---- Statistiques rapides (filtrées par magasin pour les non-admins) ----
+$nb_articles   = db_articles_count_active($pdo, $magasin_id);
 $valeur_stock  = db_articles_stock_value($pdo, $magasin_id);
-$nb_ventes_jour = db_factures_count_today($pdo);
-$ca_jour       = db_factures_revenue_today($pdo);
+$nb_ventes_jour = db_factures_count_today($pdo, $magasin_id);
+$ca_jour       = db_factures_revenue_today($pdo, $magasin_id);
 
 // ---- Articles en alerte (stock <= seuil) ----
 $alertes = db_articles_low_stock($pdo, 50, $magasin_id);

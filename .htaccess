@@ -12,9 +12,14 @@ AddDefaultCharset utf-8
 </IfModule>
 
 # Protéger les dossiers sensibles
-<DirectoryMatch "^\.|config|includes|database|vendor|templates">
-    Require all denied
-</DirectoryMatch>
+<FilesMatch "\.(php|sql|log|ini|env)$">
+    <If "%{REQUEST_URI} =~ m#/(config|includes|database|vendor|templates)/#">
+        Require all denied
+    </If>
+</FilesMatch>
+
+# Blocage complémentaire via RewriteRule pour les sous-dossiers
+RewriteRule ^(config|includes|database|vendor|templates)/ - [F,L]
 
 # Autoriser l'accès public uniquement
 <DirectoryMatch "^(assets|api|uploads|img)">

@@ -197,20 +197,8 @@ function handle_article_create(): void {
     try {
         $pdo->beginTransaction();
         $new_id = db_article_insert($pdo, $data);
-        
-        // [CORRECTION BUG 2 - Utilisation du helper central process_stock_movement]
-        if ($data['quantite_stock'] > 0) {
-            $u = user_courant();
-            process_stock_movement(
-                $pdo, 
-                $new_id, 
-                'Entree', 
-                $data['quantite_stock'], 
-                'Stock initial via API', 
-                (int)($u['id'] ?? 0), 
-                (int)($u['magasin_id'] ?? 0)
-            );
-        }
+        // db_article_insert() initialise déjà le stock via db_stock_magasin_init_for_article().
+        // Aucun mouvement 'Entree' supplémentaire ne doit être créé ici.
         $pdo->commit();
         suivre_activite('MODIFICATION_ARTICLE', 'Création article #' . $new_id . ' via API — ' . $nom);
         json_out(['success' => true, 'id' => $new_id, 'message' => 'Article créé.'], 201);
@@ -400,6 +388,12 @@ function handle_caisse_sync(): void {
     $magasinId    = (int)($input['magasin_id'] ?? 0);
     $userId       = (int)($input['user_id'] ?? 0);
 
+    // Valider que le magasin soumis correspond au magasin de l'utilisateur authentifié
+    $userMagasinId = (int)(user_courant()['magasin_id'] ?? 0);
+    if ($userMagasinId > 0 && $magasinId !== $userMagasinId) {
+        json_out(['success' => false, 'error' => 'Magasin non autorisé.'], 403);
+    }
+
     if ($clientSaleId === '' || empty($lignes) || $montantPaye <= 0) {
         json_out(['success' => false, 'error' => 'Données invalides.'], 422);
     }
@@ -514,7 +508,8 @@ function handle_caisse_sync(): void {
 
     } catch (Throwable $e) {
         $pdo->rollBack();
-        json_out(['success' => false, 'error' => $e->getMessage()], 409);
+        error_log('API caisse sync error: ' . $e->getMessage());
+        json_out(['success' => false, 'error' => 'Erreur lors de la synchronisation de la vente.'], 409);
     }
 }
 

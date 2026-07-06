@@ -120,19 +120,21 @@ function db_article_get_by_barcode(PDO $pdo, string $code, int $magasin_id = 0):
  * Lock la ligne stock_magasins si magasin_id fourni.
  */
 function db_article_get_for_update(PDO $pdo, int $id, int $magasin_id = 0): ?array {
+    // Verrouiller la ligne articles
+    $stmt = $pdo->prepare("SELECT id, nom, quantite_stock, prix_vente FROM articles WHERE id = ? FOR UPDATE");
+    $stmt->execute([$id]);
+    $article = $stmt->fetch();
+    if (!$article) return null;
+
     if ($magasin_id > 0) {
-        $stmt = $pdo->prepare("
-            SELECT a.id, a.nom, a.prix_vente, COALESCE(sm.quantite, 0) AS quantite_stock
-            FROM articles a
-            LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = ?
-            WHERE a.id = ? FOR UPDATE
-        ");
-        $stmt->execute([$magasin_id, $id]);
-    } else {
-        $stmt = $pdo->prepare("SELECT id, nom, quantite_stock, prix_vente FROM articles WHERE id = ? FOR UPDATE");
-        $stmt->execute([$id]);
+        // Verrouiller séparément la ligne stock_magasins
+        $stmt2 = $pdo->prepare("SELECT quantite FROM stock_magasins WHERE magasin_id = ? AND article_id = ? FOR UPDATE");
+        $stmt2->execute([$magasin_id, $id]);
+        $sm = $stmt2->fetch();
+        $article['quantite_stock'] = $sm ? (int)$sm['quantite'] : 0;
     }
-    return $stmt->fetch() ?: null;
+
+    return $article;
 }
 
 /**
@@ -186,8 +188,8 @@ function db_article_decrement_stock(PDO $pdo, int $id, int $quantite, int $magas
  */
 function db_articles_list_active(PDO $pdo, int $limit = 500): array {
     $limit = max(1, min(1000, (int)$limit));
-    $stmt = $pdo->prepare("SELECT id, nom, code_barre FROM articles WHERE actif=1 ORDER BY nom LIMIT $limit");
-    $stmt->execute();
+    $stmt = $pdo->prepare("SELECT id, nom, code_barre FROM articles WHERE actif=1 ORDER BY nom LIMIT ?");
+    $stmt->execute([$limit]);
     return $stmt->fetchAll();
 }
 
@@ -218,7 +220,8 @@ function db_articles_search_stock(PDO $pdo, string $search = '', int $limit = 20
         $params[] = "%$search%";
         $params[] = "%$search%";
     }
-    $sql .= " ORDER BY a.nom LIMIT $limit";
+    $sql .= " ORDER BY a.nom LIMIT ?";
+    $params[] = $limit;
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();
@@ -245,7 +248,16 @@ function db_articles_search_sql(string $search = ''): array {
 /**
  * Compter les articles actifs.
  */
-function db_articles_count_active(PDO $pdo): int {
+function db_articles_count_active(PDO $pdo, int $magasin_id = 0): int {
+    if ($magasin_id > 0) {
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(DISTINCT a.id) FROM articles a
+             JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = :mid
+             WHERE a.actif = 1"
+        );
+        $stmt->execute([':mid' => $magasin_id]);
+        return (int)$stmt->fetchColumn();
+    }
     return (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE actif = 1")->fetchColumn();
 }
 
@@ -281,9 +293,9 @@ function db_articles_low_stock(PDO $pdo, int $limit = 50, int $magasin_id = 0): 
             LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = :mid
             WHERE a.actif = 1 AND COALESCE(sm.quantite, 0) <= COALESCE(sm.stock_alerte, a.seuil_alerte)
             ORDER BY (COALESCE(sm.quantite, 0) - COALESCE(sm.stock_alerte, a.seuil_alerte)) ASC, a.nom ASC
-            LIMIT $limit
+            LIMIT ?
         ");
-        $stmt->execute([':mid' => $magasin_id]);
+        $stmt->execute([$magasin_id, $limit]);
         return $stmt->fetchAll();
     }
     $stmt = $pdo->prepare("
@@ -291,9 +303,9 @@ function db_articles_low_stock(PDO $pdo, int $limit = 50, int $magasin_id = 0): 
         FROM articles
         WHERE actif = 1 AND quantite_stock <= seuil_alerte
         ORDER BY (quantite_stock - seuil_alerte) ASC, nom ASC
-        LIMIT $limit
+        LIMIT ?
     ");
-    $stmt->execute();
+    $stmt->execute([$limit]);
     return $stmt->fetchAll();
 }
 
@@ -315,9 +327,9 @@ function db_articles_low_stock_with_supplier(PDO $pdo, int $limit = 100, int $ma
             LEFT JOIN fournisseurs f ON f.id = a.fournisseur_id
             WHERE a.actif = 1 AND COALESCE(sm.quantite, 0) <= COALESCE(sm.stock_alerte, a.seuil_alerte)
             ORDER BY (COALESCE(sm.quantite, 0) - COALESCE(sm.stock_alerte, a.seuil_alerte)) ASC, a.nom ASC
-            LIMIT $limit
+            LIMIT :limit
         ");
-        $stmt->execute([':mid' => $magasin_id]);
+        $stmt->execute([':mid' => $magasin_id, ':limit' => $limit]);
         return $stmt->fetchAll();
     }
     $stmt = $pdo->prepare("
@@ -329,9 +341,9 @@ function db_articles_low_stock_with_supplier(PDO $pdo, int $limit = 100, int $ma
         LEFT JOIN fournisseurs f ON f.id = a.fournisseur_id
         WHERE a.actif = 1 AND a.quantite_stock <= a.seuil_alerte
         ORDER BY (a.quantite_stock - a.seuil_alerte) ASC, a.nom ASC
-        LIMIT $limit
+        LIMIT ?
     ");
-    $stmt->execute();
+    $stmt->execute([$limit]);
     return $stmt->fetchAll();
 }
 
@@ -403,9 +415,9 @@ function db_fournisseurs_list_with_count(PDO $pdo, int $limit = 500): array {
         LEFT JOIN articles a ON a.fournisseur_id = f.id
         GROUP BY f.id
         ORDER BY f.nom
-        LIMIT $limit
+        LIMIT ?
     ");
-    $stmt->execute();
+    $stmt->execute([$limit]);
     return $stmt->fetchAll();
 }
 
@@ -514,8 +526,8 @@ function db_user_get_by_login(PDO $pdo, string $login): ?array {
  */
 function db_users_list(PDO $pdo, int $limit = 200): array {
     $limit = max(1, min(1000, (int)$limit));
-    $stmt = $pdo->prepare("SELECT id, nom, login, role, actif, date_creation FROM utilisateurs ORDER BY nom LIMIT $limit");
-    $stmt->execute();
+    $stmt = $pdo->prepare("SELECT id, nom, login, role, actif, date_creation FROM utilisateurs ORDER BY nom LIMIT ?");
+    $stmt->execute([$limit]);
     return $stmt->fetchAll();
 }
 
@@ -614,6 +626,7 @@ function db_factures_search_sql(array $filters = []): array {
     $statut = $filters['statut'] ?? '';
     $debut  = $filters['debut'] ?? '';
     $fin    = $filters['fin'] ?? '';
+    $utilisateur_id = (int)($filters['utilisateur_id'] ?? 0);
 
     if ($search !== '') {
         $where[] = "(f.numero_facture LIKE ? OR u.nom LIKE ?)";
@@ -632,6 +645,10 @@ function db_factures_search_sql(array $filters = []): array {
         $where[] = "DATE(f.date_facture) <= ?";
         $params[] = $fin;
     }
+    if ($utilisateur_id > 0) {
+        $where[] = "f.utilisateur_id = ?";
+        $params[] = $utilisateur_id;
+    }
 
     $sql = "
         SELECT f.*, u.nom AS vendeur_nom,
@@ -648,14 +665,30 @@ function db_factures_search_sql(array $filters = []): array {
 /**
  * Compter les ventes du jour.
  */
-function db_factures_count_today(PDO $pdo): int {
+function db_factures_count_today(PDO $pdo, int $magasin_id = 0): int {
+    if ($magasin_id > 0) {
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM factures
+             WHERE DATE(date_facture) = CURDATE() AND statut = 'Payee' AND magasin_id = :mid"
+        );
+        $stmt->execute([':mid' => $magasin_id]);
+        return (int)$stmt->fetchColumn();
+    }
     return (int)$pdo->query("SELECT COUNT(*) FROM factures WHERE DATE(date_facture)=CURDATE() AND statut='Payee'")->fetchColumn();
 }
 
 /**
  * Chiffre d'affaires du jour.
  */
-function db_factures_revenue_today(PDO $pdo): float {
+function db_factures_revenue_today(PDO $pdo, int $magasin_id = 0): float {
+    if ($magasin_id > 0) {
+        $stmt = $pdo->prepare(
+            "SELECT COALESCE(SUM(total_ttc), 0) FROM factures
+             WHERE DATE(date_facture) = CURDATE() AND statut = 'Payee' AND magasin_id = :mid"
+        );
+        $stmt->execute([':mid' => $magasin_id]);
+        return (float)$stmt->fetchColumn();
+    }
     return (float)$pdo->query("SELECT COALESCE(SUM(total_ttc),0) FROM factures WHERE DATE(date_facture)=CURDATE() AND statut='Payee'")->fetchColumn();
 }
 
@@ -687,8 +720,8 @@ function db_stats_top_articles(PDO $pdo, string $debut, string $fin, int $limit 
         WHERE DATE(f.date_facture) BETWEEN ? AND ? AND f.statut = 'Payee'
         GROUP BY a.id, a.nom, a.code_barre
         ORDER BY total_qte DESC
-        LIMIT $limit");
-    $stmt->execute([$debut, $fin]);
+        LIMIT ?");
+    $stmt->execute([$debut, $fin, $limit]);
     return $stmt->fetchAll();
 }
 
@@ -748,9 +781,9 @@ function db_mouvements_recent(PDO $pdo, int $limit = 8): array {
         JOIN articles a ON a.id = m.article_id
         LEFT JOIN utilisateurs u ON u.id = m.utilisateur_id
         ORDER BY m.date_mouvement DESC
-        LIMIT $limit
+        LIMIT ?
     ");
-    $stmt->execute();
+    $stmt->execute([$limit]);
     return $stmt->fetchAll();
 }
 
@@ -941,8 +974,9 @@ function db_magasin_toggle_active(PDO $pdo, int $id): void {
 /**
  * Initialiser le stock d'un magasin pour tous les articles actifs (bulk, appelé à la création du magasin).
  */
-function db_stock_magasin_init_for_articleBulk(PDO $pdo, int $magasin_id, int $quantite = 0, int $alerte = 5): void {
-    $articles = $pdo->query("SELECT id FROM articles WHERE actif = 1")->fetchAll(PDO::FETCH_COLUMN);
+function db_stock_magasin_init_for_articleBulk(PDO $pdo, int $magasin_id, int $quantite = 0, ?int $alerte = null): void {
+    // Récupérer chaque article avec son seuil_alerte personnel
+    $articles = $pdo->query("SELECT id, seuil_alerte FROM articles WHERE actif = 1")->fetchAll(PDO::FETCH_ASSOC);
     if (empty($articles)) return;
 
     $stmt = $pdo->prepare(
@@ -950,12 +984,13 @@ function db_stock_magasin_init_for_articleBulk(PDO $pdo, int $magasin_id, int $q
          VALUES (:mag, :art, :qte, :alerte)
          ON DUPLICATE KEY UPDATE quantite = :qte2"
     );
-    foreach ($articles as $article_id) {
+    foreach ($articles as $article) {
+        $seuil = $alerte ?? (int)$article['seuil_alerte'];
         $stmt->execute([
             ':mag'    => $magasin_id,
-            ':art'    => (int)$article_id,
+            ':art'    => (int)$article['id'],
             ':qte'    => $quantite,
-            ':alerte' => $alerte,
+            ':alerte' => $seuil,
             ':qte2'   => $quantite,
         ]);
     }
@@ -1122,7 +1157,8 @@ function db_transferts_list(PDO $pdo, int $magasin_id = 0, int $limit = 50): arr
         $params[':mid']  = $magasin_id;
         $params[':mid2'] = $magasin_id;
     }
-    $sql .= " ORDER BY t.date_transfert DESC LIMIT $limit";
+    $sql .= " ORDER BY t.date_transfert DESC LIMIT ?";
+    $params[] = $limit;
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();
@@ -1405,7 +1441,7 @@ function db_clotures_list(PDO $pdo, int $magasin_id, string $date_debut = '', st
  * Retourne un tableau de ['id', 'cle_permission', 'description', 'categorie', 'active']
  */
 function db_permissions_get_for_role(PDO $pdo, string $role_nom): array {
-    $stmt = $pdo->query(
+    $stmt = $pdo->prepare(
         'SELECT p.id, p.cle_permission, p.description, p.categorie,
                 CASE WHEN rp.role_nom IS NOT NULL THEN 1 ELSE 0 END AS active
          FROM permissions p

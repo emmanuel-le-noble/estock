@@ -307,19 +307,24 @@ function generate_signed_url(string $base_url, int $id, array $extra = []): stri
     $payload = (string)$id;
     ksort($extra);
     foreach ($extra as $k => $v) { $payload .= '|' . $k . '=' . $v; }
+    // Inclure le timestamp dans le payload pour expiration (24h)
+    $ts = time();
+    $payload .= '|ts=' . $ts;
     $token = hash_hmac('sha256', $payload, SECRET_URL_KEY);
     $sep = str_contains($base_url, '?') ? '&' : '?';
     $url = $base_url . $sep . 'id=' . $id;
-    // CORRECTION : Correction de la concatenation des variables extra
     foreach ($extra as $k => $v) { $url .= '&' . $k . '=' . urlencode((string)$v); }
-    return $url . '&token=' . $token;
+    return $url . '&ts=' . $ts . '&token=' . $token;
 }
 
 function verify_url_signature(int $id, string $token, array $extra = []): bool {
     if ($token === '' || $id <= 0) return false;
+    $ts = (int)($_GET['ts'] ?? 0);
+    if ($ts <= 0 || (time() - $ts) > 86400) return false; // Expiration 24h
     $payload = (string)$id;
     ksort($extra);
     foreach ($extra as $k => $v) { $payload .= '|' . $k . '=' . $v; }
+    $payload .= '|ts=' . $ts;
     $expected = hash_hmac('sha256', $payload, SECRET_URL_KEY);
     return hash_equals($expected, $token);
 }

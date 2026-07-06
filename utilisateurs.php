@@ -39,8 +39,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
 
     $mdp = $data['mot_de_passe'];
 
+    // Vérifier la hiérarchie des rôles pour modification
     if ($data['id'] > 0 && !user_can_edit_user($pdo, $data['id'])) {
         flash_error('Vous ne pouvez pas modifier un utilisateur de niveau égal ou supérieur.');
+        redirect('utilisateurs.php');
+    }
+
+    // Hiérarchie des rôles : empêcher la création d'un rôle supérieur ou égal
+    $role_hierarchy = [
+        ROLE_VENDEUR   => 1,
+        ROLE_MAGASINIER => 2,
+        ROLE_ADMIN     => 3,
+        ROLE_DIRECTEUR => 4,
+    ];
+    $current_role_level = $role_hierarchy[$u['role']] ?? 0;
+    $target_role_level = $role_hierarchy[$data['role']] ?? 0;
+    if ($data['id'] === 0 && $target_role_level >= $current_role_level) {
+        flash_error('Vous ne pouvez pas créer un utilisateur avec un rôle égal ou supérieur au vôtre.');
         redirect('utilisateurs.php');
     }
 
