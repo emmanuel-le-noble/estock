@@ -22,7 +22,11 @@ $magasin_id = (int)($u['magasin_id'] ?? 0);
 
 // ---- Traitement formulaire : ajout de lot ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajouter_lot') {
-    csrf_guard('peremptions.php');
+    // Correction SEC-12 : Utilisation de la validation CSRF standard du projet
+    if (!csrf_validate()) {
+        flash_error('Token de sécurité invalide ou session expirée.');
+        redirect('peremptions.php');
+    }
 
     $data = extract_post_data([
         'article_id'       => ['type' => 'int', 'required' => true, 'redirect' => 'peremptions.php'],
@@ -49,7 +53,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
 
         $lot_id = db_lot_upsert($pdo, $data['article_id'], $magasin_id, $data['numero_lot'], $data['quantite'], $dlc);
         db_stock_magasin_increment($pdo, $magasin_id, $data['article_id'], $data['quantite']);
-        suivre_activite('LOT_AJOUTE', 'Lot ' . $data['numero_lot'] . ' — Qté ' . $data['quantite'] . ($dlc ? ' — DLC ' . $dlc : ''));
+        
+        if (function_exists('suivre_activite')) {
+            suivre_activite('LOT_AJOUTE', 'Lot ' . $data['numero_lot'] . ' — Qté ' . $data['quantite'] . ($dlc ? ' — DLC ' . $dlc : ''));
+        }
+        
         flash_success('Lot "' . h($data['numero_lot']) . '" enregistré avec succès (+' . $data['quantite'] . ' unités).');
     } catch (Throwable $e) {
         error_log('Erreur ajout lot: ' . $e->getMessage());
@@ -60,7 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
 
 // ---- Données pour le template ----
 $alertes = db_get_expiring_lots($pdo, 30, $magasin_id);
-$lots_conformes = db_lots_count($pdo, $magasin_id) - $alertes['count'];
+$total_lots_magasin = db_lots_count($pdo, $magasin_id);
+$lots_conformes = $total_lots_magasin - ($alertes['count'] ?? 0);
 $articles = db_articles_list_active($pdo);
 
 echo $twig->render('peremptions.html.twig', [
@@ -70,4 +79,5 @@ echo $twig->render('peremptions.html.twig', [
     'lots_conformes' => max(0, $lots_conformes),
     'magasin_id'     => $magasin_id,
     'articles'       => $articles,
+    'csp_nonce_val'  => csp_nonce() // Ajout crucial pour valider le script de soumission Twig sous CSP
 ]);

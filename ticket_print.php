@@ -25,9 +25,11 @@ if (!est_connecte()) {
         http_response_code(403);
         exit('Accès non autorisé.');
     }
-    // Si non authentifié mais HMAC valide, vérifier les droits RBAC basiques
 } else {
-    if (!peut('ventes_consulter')) {
+    // CORRECTION : Autorise si la permission existe OU si l'utilisateur possède un rôle habilité à voir les ventes
+    $role_valide = in_array(user_role(), [ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_VENDEUR], true);
+    
+    if (!peut('ventes_consulter') && !$role_valide) {
         http_response_code(403);
         exit('Droits insuffisants.');
     }
