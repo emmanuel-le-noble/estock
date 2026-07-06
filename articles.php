@@ -1,28 +1,31 @@
 <?php
 /**
  * articles.php - CRUD des articles (Directeur / Admin / Magasinier).
- *
  * Actions gérées via ?action= :
  *   - liste (défaut)
  *   - nouveau / editer (formulaire)
- *   - enregistrer (POST : insert ou update + mouvement d'entrée si création)
+ *   - enregistrer (POST : insert ou update)
  *   - supprimer (désactive l'article)
  */
-// Guard: compatible avec le routeur front controller (index.php)
-if (!function_exists('est_connecte')) { require_once __DIR__ . '/config/connexion.php'; }
-if (!function_exists('db_article_insert')) { require_once __DIR__ . '/includes/db_functions.php'; }
-if (!function_exists('csrf_guard')) { require_once __DIR__ . '/includes/helpers.php'; }
-require_once __DIR__ . '/config/connexion.php';
-require_once __DIR__ . '/includes/db_functions.php';
-require_once __DIR__ . '/includes/helpers.php';
-exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER);
 
+if (!function_exists('est_connecte')) {
+    require_once __DIR__ . '/config/connexion.php';
+}
+if (!function_exists('db_article_insert')) {
+    require_once __DIR__ . '/includes/db_functions.php';
+}
+if (!function_exists('csrf_guard')) {
+    require_once __DIR__ . '/includes/helpers.php';
+}
+
+exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER);
 $action = $_GET['action'] ?? 'liste';
 
 // ---- Traitement POST (enregistrement) ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     csrf_guard('articles.php');
-
+    
+    // Extraction des données en amont pour éviter l'alerte de variable indéfinie dans le callback
     $data = extract_post_data([
         'id'            => ['type' => 'int'],
         'code_barre'    => ['type' => 'string', 'trim' => true, 'required' => true, 'max' => 64, 'redirect' => ''],
@@ -35,22 +38,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'emplacement'   => ['type' => 'string', 'trim' => true, 'nullable' => true, 'max' => 100, 'redirect' => ''],
         'fournisseur_id'=> ['type' => 'int', 'default' => 0],
     ], 'articles.php');
-
+    
     $redirect_form = fn() => ($data['id'] ?? 0) ? generate_signed_url('articles.php', $data['id'], ['action' => 'editer']) : page_url('articles', ['action' => 'nouveau']);
-
     $form_url = $redirect_form();
+    
     validate_field_lengths($data, [
-        'code_barre' => ['label' => 'Code-barres', 'max' => 64],
-        'nom'        => ['label' => 'Nom', 'max' => 200],
-        'sku'        => ['label' => 'SKU', 'max' => 64],
-        'emplacement'=> ['label' => 'Emplacement', 'max' => 100],
+        'code_barre'  => ['label' => 'Code-barres', 'max' => 64],
+        'nom'         => ['label' => 'Nom', 'max' => 200],
+        'sku'         => ['label' => 'SKU', 'max' => 64],
+        'emplacement' => ['label' => 'Emplacement', 'max' => 100],
     ], $form_url);
+    
     validate_uniqueness(
         fn() => db_article_code_barre_exists($pdo, $data['code_barre'], $data['id']),
         'Ce code-barres existe déjà.',
         $form_url
     );
-
+    
     $id          = $data['id'];
     $quantite    = $data['quantite_stock'];
     $articleData = [
@@ -64,24 +68,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'emplacement'    => $data['emplacement'],
         'fournisseur_id' => $data['fournisseur_id'] ?: null,
     ];
-
+    
     db_transaction(
         function(PDO $pdo) use (&$articleData, &$id, $quantite) {
             if ($id > 0) {
                 db_article_update($pdo, $id, $articleData);
             } else {
                 $id = db_article_insert($pdo, $articleData);
-                // NOTE: db_article_insert() initialise déjà le stock dans
-                // stock_magasins via db_stock_magasin_init_for_article().
-                // Aucun mouvement 'Entree' supplémentaire ne doit être créé ici
-                // pour éviter la double décrémentation du stock.
             }
         },
         'Article enregistré avec succès.',
         'Une erreur est survenue lors de l\'enregistrement.',
         'articles.php'
     );
-    suivre_activite('MODIFICATION_ARTICLE', ($data['id'] > 0 ? 'Modification' : 'Création') . ' article #' . $id . ' — ' . $data['nom']);
+    
+    suivre_activite('MODIFICATION_ARTICLE', ($data['id'] > 0 ? 'Modification' : 'Création') . ' article #' . $id . ' - ' . $data['nom']);
+    flash_success('Article enregistré avec succès.');
+    redirect('articles.php');
 }
 
 // ---- Suppression (désactivation) ----
@@ -111,7 +114,6 @@ if ($action === 'nouveau' || $action === 'editer') {
     }
     $fournisseurs = db_fournisseurs_list($pdo);
     $devise_symbole = param('devise_symbole', 'FCFA');
-
     $titre_page = ($action === 'nouveau' ? 'Nouvel article' : 'Modifier l\'article');
     include __DIR__ . '/includes/header.php';
     ?>
@@ -125,7 +127,6 @@ if ($action === 'nouveau' || $action === 'editer') {
                     <form method="post" action="<?= h(page_url('articles', ['action' => 'enregistrer'])) ?>">
                         <?= csrf_field() ?>
                         <input type="hidden" name="id" value="<?= (int)($article['id'] ?? 0) ?>">
-
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Code-barres *</label>
@@ -133,7 +134,7 @@ if ($action === 'nouveau' || $action === 'editer') {
                                     <input type="text" name="code_barre" id="codeBarreInput" class="form-control" required
                                            value="<?= h($article['code_barre']) ?>" maxlength="64">
                                     <button type="button" class="btn btn-outline-secondary" id="btnGenererCode"
-                                            title="Générer un code-barres EAN-13">
+                                            title="Gérer un code-barres EAN-13">
                                         <i class="bi bi-upc-scan"></i> Générer
                                     </button>
                                 </div>
@@ -178,10 +179,9 @@ if ($action === 'nouveau' || $action === 'editer') {
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Fournisseur</label>
-                                <?= render_dropdown('fournisseur_id', $fournisseurs, $article['fournisseur_id'] ?? '', '—') ?>
+                                <?= render_dropdown('fournisseur_id', $fournisseurs, $article['fournisseur_id'] ?? '', ' ') ?>
                             </div>
                         </div>
-
                         <div class="mt-4 d-flex gap-2">
                             <button class="btn btn-primary"><i class="bi bi-save"></i> Enregistrer</button>
                             <a href="<?= h('articles.php') ?>" class="btn btn-outline-secondary">Annuler</a>
@@ -201,7 +201,7 @@ if ($action === 'nouveau' || $action === 'editer') {
         var svg = document.getElementById('barcodeSvg');
         var btn = document.getElementById('btnGenererCode');
         var BASE = window.BASE_URL || '/eSotck/';
-
+        
         function renderBarcode(code) {
             if (!code || code.length < 12 || typeof JsBarcode === 'undefined') {
                 preview.style.display = 'none';
@@ -221,59 +221,58 @@ if ($action === 'nouveau' || $action === 'editer') {
                 preview.style.display = 'none';
             }
         }
-
-        if (input.value.trim()) {
+        
+        if (input && input.value.trim()) {
             renderBarcode(input.value.trim());
         }
-
-        input.addEventListener('input', function() {
-            var v = this.value.trim();
-            if (v.length >= 12) {
-                renderBarcode(v);
-            } else {
-                preview.style.display = 'none';
-            }
-        });
-
-        btn.addEventListener('click', function() {
-            fetch(BASE + 'api/generer_code_barre', {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.code_barre) {
-                    input.value = data.code_barre;
-                    renderBarcode(data.code_barre);
+        
+        if (input) {
+            input.addEventListener('input', function() {
+                var v = this.value.trim();
+                if (v.length >= 12) {
+                    renderBarcode(v);
+                } else {
+                    preview.style.display = 'none';
                 }
-            })
-            .catch(function() {
-                alert('Erreur lors de la génération du code-barres.');
             });
-        });
+        }
+        
+        if (btn) {
+            btn.addEventListener('click', function() {
+                fetch(BASE + 'api/generer_code_barre', {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.code_barre) {
+                        input.value = data.code_barre;
+                        renderBarcode(data.code_barre);
+                    }
+                })
+                .catch(function() {
+                    alert('Erreur lors de la génération du code-barres.');
+                });
+            });
+        }
     })();
     </script>
     <?php
     exit;
 }
 
-// =========================================================
-//  LISTE des articles (vue par défaut)
-// =========================================================
+// ---- LISTE des articles (vue par défaut) ----
 $search = trim($_GET['q'] ?? '');
 $search_sql = db_articles_search_sql($search);
 $result = paginate($search_sql['sql'], $search_sql['params'], 25);
 $articles = $result['items'];
-
 $titre_page = 'Articles';
 include __DIR__ . '/includes/header.php';
 ?>
-
 <div class="d-flex flex-wrap justify-content-end align-items-center mb-3 gap-2">
     <a href="<?= h(page_url('articles', ['action' => 'nouveau'])) ?>" class="btn btn-primary">
         <i class="bi bi-plus-lg"></i> Nouvel article
     </a>
 </div>
-
 <div class="card shadow-sm">
     <div class="card-header bg-white">
         <form id="searchForm" class="d-flex gap-2" role="search">
@@ -285,7 +284,7 @@ include __DIR__ . '/includes/header.php';
     </div>
     <div class="card-body p-0">
         <div id="apiStatus" class="text-center text-muted py-1 d-none" style="font-size:.8rem">
-            <i class="bi bi-cloud-arrow-up"></i> Mode API — données chargées en temps réel
+            <i class="bi bi-cloud-arrow-up"></i> Mode API - données chargées en temps réel
         </div>
         <div class="table-responsive">
             <table class="table table-hover mb-0 align-middle">
@@ -305,11 +304,11 @@ include __DIR__ . '/includes/header.php';
                     <tr class="<?= $en_alerte ? 'alert-stock-low' : '' ?>">
                         <td class="fw-semibold"><?= h($a['nom']) ?></td>
                         <td><code><?= h($a['code_barre']) ?></code></td>
-                        <td><?= h($a['sku'] ?: '—') ?></td>
+                        <td><?= h($a['sku'] ?: ' ') ?></td>
                         <td class="text-end"><?= money($a['prix_vente']) ?></td>
                         <td class="text-center"><?= stock_badge((int)$a['quantite_stock'], (int)$a['seuil_alerte']) ?></td>
-                        <td><?= h($a['emplacement'] ?: '—') ?></td>
-                        <td><?= h($a['fournisseur_nom'] ?: '—') ?></td>
+                        <td><?= h($a['emplacement'] ?: ' ') ?></td>
+                        <td><?= h($a['fournisseur_nom'] ?: ' ') ?></td>
                         <td class="text-center text-nowrap">
                             <a href="<?= h(generate_signed_url('articles.php', (int)$a['id'], ['action' => 'editer'])) ?>"
                                class="btn btn-sm btn-outline-primary" title="Modifier">
@@ -331,12 +330,11 @@ include __DIR__ . '/includes/header.php';
         </div>
     </div>
 </div>
-
 <div id="paginationZone">
-<?php
+<?php 
 $pagination_params = $search !== '' ? ['q' => $search] : [];
 $base_url = page_url('articles', $pagination_params);
-pagination_links($result['page'], $result['total_pages'], $base_url);
+pagination_links($result['page'], $result['total_pages'], $base_url); 
 ?>
 </div>
 
@@ -350,11 +348,13 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
     const paginationEl = document.getElementById('paginationZone');
     const BASE         = window.BASE_URL || '/eSotck/';
 
-    searchForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const q = searchInput.value.trim();
-        loadArticles(q);
-    });
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const q = searchInput.value.trim();
+            loadArticles(q);
+        });
+    }
 
     if (resetBtn) {
         resetBtn.addEventListener('click', function(e) {
@@ -366,11 +366,10 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
 
     function loadArticles(q) {
         tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div> Chargement...</td></tr>';
-        paginationEl.innerHTML = '';
-        apiStatus.classList.remove('d-none');
-
+        if (paginationEl) paginationEl.innerHTML = '';
+        if (apiStatus) apiStatus.classList.remove('d-none');
+        
         const url = BASE + 'api/articles' + (q ? '?q=' + encodeURIComponent(q) : '');
-
         fetch(url)
             .then(function(r) {
                 if (r.status === 401) {
@@ -391,16 +390,16 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
                     var seuil = parseInt(a.seuil_alerte, 10) || 0;
                     var alerteClass = stock <= seuil ? ' alert-stock-low' : '';
                     var badgeClass = stock <= seuil ? 'danger' : 'secondary';
-                    // NOU-7 : Utiliser l'URL signée fournie par l'API
                     var editUrl = a.edit_url || (BASE + 'articles.php?action=editer&id=' + a.id);
+                    
                     return '<tr class="' + alerteClass + '">'
                         + '<td class="fw-semibold">' + esc(a.nom) + '</td>'
                         + '<td><code>' + esc(a.code_barre) + '</code></td>'
-                        + '<td>' + esc(a.sku || '—') + '</td>'
+                        + '<td>' + esc(a.sku || ' ') + '</td>'
                         + '<td class="text-end">' + esc(a.prix_vente) + '</td>'
                         + '<td class="text-center"><span class="badge text-bg-' + badgeClass + '">' + stock + '</span></td>'
-                        + '<td>' + esc(a.emplacement || '—') + '</td>'
-                        + '<td>' + esc(a.fournisseur_nom || '—') + '</td>'
+                        + '<td>' + esc(a.emplacement || ' ') + '</td>'
+                        + '<td>' + esc(a.fournisseur_nom || ' ') + '</td>'
                         + '<td class="text-center text-nowrap">'
                         + '<a href="' + editUrl + '" class="btn btn-sm btn-outline-primary" title="Modifier"><i class="bi bi-pencil"></i></a>'
                         + '</td></tr>';
@@ -418,5 +417,4 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
     }
 })();
 </script>
-
 <?php include __DIR__ . '/includes/footer.php'; ?>
