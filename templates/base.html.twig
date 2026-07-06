@@ -202,12 +202,15 @@
                     <span class="rl">{{ role }}</span>
                 </span>
             </a>
-            <a class="side-user" href="logout.php" title="Se deconnecter">
-                <span class="avatar avatar-logout"><i class="bi bi-box-arrow-right"></i></span>
-                <span class="meta">
-                    <span class="nm">Déconnexion</span>
-                </span>
-            </a>
+            <form method="POST" action="logout.php" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="side-user btn btn-link text-decoration-none" title="Se deconnecter" style="background:none;border:none;">
+                    <span class="avatar avatar-logout"><i class="bi bi-box-arrow-right"></i></span>
+                    <span class="meta">
+                        <span class="nm">Déconnexion</span>
+                    </span>
+                </button>
+            </form>
         </div>
     </aside>
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>

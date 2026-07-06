@@ -91,11 +91,14 @@ function extract_post_data(array $schema, string $global_redirect = ''): array {
 
     // Validation required : tous les champs requis doivent être non vides
     foreach ($schema as $cle => $def) {
-        if (!empty($def['required']) && ($data[$cle] === null || $data[$cle] === '' || $data[$cle] === 0)) {
-            $redirect = $def['redirect'] ?? $global_redirect;
-            if ($redirect) {
-                flash_error("Le champ « {$cle} » est obligatoire.");
-                redirect($redirect);
+        if (!empty($def['required'])) {
+            $val = $data[$cle] ?? null;
+            if ($val === null || $val === '') {
+                $redirect = $def['redirect'] ?? $global_redirect;
+                if ($redirect) {
+                    flash_error("Le champ « {$cle} » est obligatoire.");
+                    redirect($redirect);
+                }
             }
         }
     }
@@ -113,7 +116,7 @@ function extract_post_data(array $schema, string $global_redirect = ''): array {
 function validate_required_fields(array $data, array $fields, string $redirect_url): bool {
     foreach ($fields as $cle => $label) {
         $val = $data[$cle] ?? null;
-        if ($val === null || $val === '' || $val === 0) {
+        if ($val === null || $val === '') {
             flash_error("Le champ « {$label} » est obligatoire.");
             redirect($redirect_url);
         }

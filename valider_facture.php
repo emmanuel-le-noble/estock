@@ -169,7 +169,7 @@ try {
             // Si aucun lot n'existe (vieux stocks ou produit non périssable), on initialise un lot permanent
             if ($has_lot === 0) {
                 $stmt_create_lot = $pdo->prepare(
-                    "INSERT INTO article_lots (article_id, magasin_id, numero_lot, quantite, date_peremption) 
+                    "INSERT IGNORE INTO article_lots (article_id, magasin_id, numero_lot, quantite, date_peremption) 
                      VALUES (?, ?, 'LOT-GENERAL', ?, NULL)"
                 );
                 $stmt_create_lot->execute([$l['article_id'], $magasin_id, $l['stock_dispo']]);
@@ -207,7 +207,7 @@ try {
 } catch (Throwable $e) {
     $pdo->rollBack();
     error_log('Erreur validation facture: ' . $e->getMessage());
-    suivre_activite('ECHEC_VENTE', 'Erreur: ' . $e->getMessage());
+    suivre_activite('ECHEC_VENTE', 'Erreur lors de la validation de vente.');
     
     flash_error('Une erreur technique est survenue lors de la vente. Veuillez réessayer.');
     redirect('caisse.php');

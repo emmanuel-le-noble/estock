@@ -29,6 +29,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $erreur = 'Veuillez renseigner tous les champs.';
         } else {
             $u = db_user_get_by_login($pdo, $login);
+            // NOU-3 : Protection anti-timing (ajouter délai si user n'existe pas)
+            if (!$u) {
+                usleep(random_int(100000, 300000)); // 100-300ms de délai artificiel
+            }
             if ($u && password_verify($mdp, $u['mot_de_passe'])) {
                 db_login_attempt_clear($pdo, $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1', $login);
                 session_regenerate_id(true);

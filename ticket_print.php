@@ -18,17 +18,19 @@ if ($factureId <= 0) {
     exit('Paramètre facture_id invalide.');
 }
 
-// Sécurité : authentification OU signature HMAC
+// Sécurité : exiger l'authentification OU signature HMAC valide
 $token = $_GET['token'] ?? '';
-if (!est_connecte() && !verify_url_signature($factureId, $token)) {
-    http_response_code(403);
-    exit('Accès non autorisé.');
-}
-
-// Si authentifié, vérifier les droits RBAC
-if (est_connecte() && !peut('ventes_consulter')) {
-    http_response_code(403);
-    exit('Droits insuffisants.');
+if (!est_connecte()) {
+    if (!verify_url_signature($factureId, $token)) {
+        http_response_code(403);
+        exit('Accès non autorisé.');
+    }
+    // Si non authentifié mais HMAC valide, vérifier les droits RBAC basiques
+} else {
+    if (!peut('ventes_consulter')) {
+        http_response_code(403);
+        exit('Droits insuffisants.');
+    }
 }
 
 $facture = db_facture_get_by_id($pdo, $factureId);

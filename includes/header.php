@@ -174,12 +174,15 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
                     <span class="rl"><?= h($role) ?></span>
                 </span>
             </a>
-            <a class="side-user" href="logout.php" title="Se déconnecter">
-                <span class="avatar avatar-logout"><i class="bi bi-box-arrow-right"></i></span>
-                <span class="meta">
-                    <span class="nm">Déconnexion</span>
-                </span>
-            </a>
+            <form method="POST" action="logout.php" class="d-inline">
+                <?= csrf_field() ?>
+                <button type="submit" class="side-user btn btn-link text-decoration-none" title="Se déconnecter" style="background:none;border:none;">
+                    <span class="avatar avatar-logout"><i class="bi bi-box-arrow-right"></i></span>
+                    <span class="meta">
+                        <span class="nm">Déconnexion</span>
+                    </span>
+                </button>
+            </form>
         </div>
     </aside>
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
@@ -200,7 +203,6 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
                     <a href="<?= 'caisse.php' ?>" class="btn btn-success btn-sm"><i class="bi bi-cart-check"></i> Caisse</a>
                 <?php endif; ?>
                 <?php if (peut('stock_consulter')): ?>
-                    <?php $nb_alertes_topbar = db_articles_low_stock_count($pdo); ?>
                     <a href="suggestions_achat.php" class="btn btn-sm position-relative <?= $nb_alertes_topbar > 0 ? 'btn-outline-warning' : 'btn-outline-secondary' ?>" title="Alertes stock">
                         <i class="bi bi-bell"></i>
                         <?php if ($nb_alertes_topbar > 0): ?>
@@ -209,7 +211,6 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
                             </span>
                         <?php endif; ?>
                     </a>
-                    <?php $nb_alertes_peremption = db_peremption_alert_count($pdo, 30); ?>
                     <?php if ($nb_alertes_peremption > 0): ?>
                         <a href="peremptions.php" class="btn btn-sm btn-outline-danger position-relative" title="Alertes péremption">
                             <i class="bi bi-calendar-week"></i>

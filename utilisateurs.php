@@ -52,7 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         ROLE_ADMIN     => 3,
         ROLE_DIRECTEUR => 4,
     ];
-    $current_role_level = $role_hierarchy[$u['role']] ?? 0;
+    $current = user_courant();
+    $current_role_level = $role_hierarchy[$current['role']] ?? 0;
     $target_role_level = $role_hierarchy[$data['role']] ?? 0;
     if ($data['id'] === 0 && $target_role_level >= $current_role_level) {
         flash_error('Vous ne pouvez pas créer un utilisateur avec un rôle égal ou supérieur au vôtre.');

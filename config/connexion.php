@@ -10,6 +10,36 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 // ============================================================
+//  0bis. CHARGEUR .env (si vlucas/phpdotenv n'est pas installé)
+// ============================================================
+function _load_dotenv(string $path): void {
+    if (!file_exists($path)) return;
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#') continue;
+        $pos = strpos($line, '=');
+        if ($pos === false) continue;
+        $key = trim(substr($line, 0, $pos));
+        $value = trim(substr($line, $pos + 1));
+        // Retirer les guillemets
+        if (strlen($value) >= 2 && $value[0] === '"' && $value[strlen($value) - 1] === '"') {
+            $value = substr($value, 1, -1);
+        } elseif (strlen($value) >= 2 && $value[0] === "'" && $value[strlen($value) - 1] === "'") {
+            $value = substr($value, 1, -1);
+        }
+        if (getenv($key) === false) {
+            putenv("$key=$value");
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
+    }
+}
+
+// Charger le fichier .env s'il existe
+_load_dotenv(__DIR__ . '/../.env');
+
+// ============================================================
 //  1. PARAMÈTRES DE CONNEXION  (à adapter à votre WampServer)
 // ============================================================
 define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');
@@ -24,12 +54,9 @@ define('DB_USER', $dbUser);
 
 $dbPass = getenv('DB_PASS');
 if ($dbPass === false || $dbPass === '') {
-    error_log('[CRITIQUE] DB_PASS non défini dans l\'environnement. Connexion refusée en prod.');
-    if (getenv('APP_ENV') === 'production') {
-        http_response_code(500);
-        die('Configuration manquante.');
-    }
-    $dbPass = 'admin';
+    error_log('[CRITIQUE] DB_PASS non défini dans l\'environnement.');
+    http_response_code(500);
+    die('Variable DB_PASS non définie. Configurez votre fichier .env ou les variables d\'environnement.');
 }
 define('DB_PASS', $dbPass);
 
@@ -41,13 +68,10 @@ define('ROLE_MAGASINIER', 'Magasinier');
 define('ROLE_VENDEUR', 'Vendeur');
 
 $secretKey = getenv('SECRET_URL_KEY');
-if ($secretKey === false || $secretKey === '') {
-    error_log('[CRITIQUE] SECRET_URL_KEY non défini. Tokens HMAC non sécurisés.');
-    if (getenv('APP_ENV') === 'production') {
-        http_response_code(500);
-        die('Configuration manquante.');
-    }
-    $secretKey = 'estock_hmac_changez_moi_en_prod_2024';
+if ($secretKey === false || strlen($secretKey) < 32) {
+    error_log('[CRITIQUE] SECRET_URL_KEY non défini ou trop court (< 32 caractères).');
+    http_response_code(500);
+    die('SECRET_URL_KEY manquant ou trop court. Configurez votre fichier .env (minimum 32 caractères).');
 }
 define('SECRET_URL_KEY', $secretKey);
 
@@ -360,12 +384,22 @@ function clear_login_attempts(string $login): void {
 //  8. PAGINATION
 // ============================================================
 
-function paginate(string $sql, array $params = [], int $par_page = 25): array {
+function paginate(string $sql, array $params = [], int $par_page = 25, ?string $countSql = null): array {
     global $pdo;
 
-    $countSql = preg_replace('/SELECT\s+.+?\s+FROM/is', 'SELECT COUNT(*) FROM', $sql, 1);
-    $countSql = preg_replace('/GROUP BY\s+.+$/i', '', $countSql);
-    $countSql = preg_replace('/ORDER BY\s+.+$/i', '', $countSql);
+    // BUG-6 : Utiliser un COUNT SQL fourni si possible, sinon améliorer la regex
+    if ($countSql === null) {
+        // NOU-6 : Regex améliorée pour gérer les alias SQL (AS avant FROM)
+        // Ex: "SELECT a.*, b.nom AS alias FROM articles a..."
+        $countSql = preg_replace('/SELECT\s+(?!.*\bFROM\b)(?!.*\bAS\b).*?(?=\s+FROM\s)/is', 'SELECT COUNT(*) FROM ', $sql, 1);
+        if ($countSql === $sql) {
+            // Fallback : si la regex n'a pas fonctionné, utiliser une approche plus simple
+            $countSql = preg_replace('/SELECT\s+.+?\s+FROM/is', 'SELECT COUNT(*) FROM', $sql, 1);
+        }
+        // Supprimer les ORDER BY, LIMIT, OFFSET qui ne sont pas nécessaires pour COUNT
+        $countSql = preg_replace('/\bORDER\s+BY\s+.+$/i', '', $countSql);
+        $countSql = preg_replace('/\bLIMIT\s+.+$/i', '', $countSql);
+    }
     $stmt = $pdo->prepare($countSql);
     $stmt->execute($params);
     $total = (int)$stmt->fetchColumn();
@@ -432,6 +466,7 @@ $twig->addGlobal('can_bill', peut_facturer());
 $twig->addGlobal('can_admin', peut_administrer());
 $twig->addGlobal('csp_nonce_val', csp_nonce());
 $twig->addGlobal('flash_messages', $_SESSION['flash'] ?? []);
+$twig->addGlobal('csrf_token', csrf_token());
 $twig->addGlobal('page_courante', $_GET['_page'] ?? str_replace('.php', '', basename($_SERVER['PHP_SELF'])));
 
 $twig->addGlobal('nb_alertes_topbar', (est_connecte() && peut_gerer_stock()) ? db_articles_low_stock_count($pdo) : 0);

@@ -112,7 +112,7 @@ $pagination_params = build_filter_params([
     'debut'  => $debut,
     'fin'    => $fin,
 ]);
-$base_url = page_url('factures', $pagination_params) . '&';
+$base_url = page_url('factures', $pagination_params);
 pagination_links($result['page'], $result['total_pages'], $base_url);
 ?>
 

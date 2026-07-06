@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             db_magasin_toggle_active($pdo, $id);
             $mag = db_magasin_get_by_id($pdo, $id);
-            $statut = ($mag && $mag['actif'] ?? 0) ? 'désactivé' : 'activé';
+            $statut = (!empty($mag['actif'])) ? 'désactivé' : 'activé';
             suivre_activite('TOGGLE_MAGASIN', 'Magasin « ' . ($mag['nom'] ?? '#'.$id) . ' » ' . $statut);
             flash_success('Magasin mis à jour avec succès.');
         } catch (Throwable $e) {

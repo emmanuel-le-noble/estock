@@ -30,14 +30,20 @@ function _params_ensure_table(): bool {
             WHERE cle IN ('devise_position', 'paiement_rapide_1', 'ticket_format')
         ");
         if ((int)$stmt->fetchColumn() < 3 && file_exists($sql_file)) {
-            $pdo->exec(file_get_contents($sql_file));
+            $sql_content = file_get_contents($sql_file);
+            if ($sql_content !== false && strlen($sql_content) < 100000) {
+                $pdo->exec($sql_content);
+            }
         }
         return true;
     } catch (PDOException $e) {
         // Table n'existe pas — on tente l'installation automatique
         if (file_exists($sql_file)) {
             try {
-                $pdo->exec(file_get_contents($sql_file));
+                $sql_content = file_get_contents($sql_file);
+                if ($sql_content !== false && strlen($sql_content) < 100000) {
+                    $pdo->exec($sql_content);
+                }
                 return true;
             } catch (Throwable $ignore) {}
         }

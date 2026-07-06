@@ -122,6 +122,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function genererUUID() {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
             var r = Math.random() * 16 | 0;
             var v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -155,7 +158,10 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 var res = await fetch(BASE + 'api/caisse/sync', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
                     body: JSON.stringify(vente)
                 });
                 var data = await res.json();

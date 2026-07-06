@@ -34,7 +34,7 @@ match (true) {
     // --- Auth ---
     $resource === 'login' && $method === 'POST'
         => handle_login(),
-    $resource === 'logout' && $method === 'GET'
+    $resource === 'logout' && $method === 'POST'
         => handle_logout(),
     $resource === 'me' && $method === 'GET'
         => handle_me(),
@@ -77,6 +77,13 @@ match (true) {
 // ============================================================
 
 function handle_login(): void {
+    // SEC-11 : Vérifier que la requête vient d'une interface interne (pas cross-origin)
+    $isXHR = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest';
+    $isAPI = !empty($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json');
+    if (!$isXHR && !$isAPI) {
+        json_out(['error' => 'Requête non autorisée.'], 403);
+    }
+
     $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) $input = [];
 
@@ -114,6 +121,12 @@ function handle_login(): void {
 }
 
 function handle_logout(): void {
+    // SEC-12 : Vérifier le token CSRF pour le logout
+    $csrfToken = $_POST['_csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (empty($csrfToken) || !hash_equals(csrf_token(), $csrfToken)) {
+        json_out(['error' => 'Token CSRF invalide.'], 403);
+    }
+
     if (!est_connecte()) {
         json_out(['success' => false, 'message' => 'Déjà déconnecté.'], 401);
     }
@@ -150,6 +163,12 @@ function handle_articles_list(): void {
     $stmt = $pdo->prepare($search_sql['sql']);
     $stmt->execute($search_sql['params']);
     $articles = $stmt->fetchAll();
+
+    // NOU-7 : Ajouter l'URL signée pour chaque article
+    foreach ($articles as &$a) {
+        $a['edit_url'] = generate_signed_url('articles.php', (int)$a['id'], ['action' => 'editer']);
+    }
+    unset($a);
 
     json_out([
         'data'  => $articles,
@@ -432,8 +451,13 @@ function handle_caisse_sync(): void {
             if (!$art) {
                 throw new RuntimeException('Article #' . $articleId . ' introuvable.');
             }
-            if ((int)$art['quantite_stock'] < $quantite) {
-                throw new RuntimeException('Stock insuffisant pour ' . $art['nom']);
+
+            // SEC-13 : Vérifier que l'article a du stock dans CE magasin
+            $stmt_stock = $pdo->prepare("SELECT quantite FROM stock_magasins WHERE article_id = ? AND magasin_id = ?");
+            $stmt_stock->execute([$articleId, $magasinId]);
+            $stock_magasin = (int)($stmt_stock->fetchColumn() ?: 0);
+            if ($stock_magasin < $quantite) {
+                throw new RuntimeException('Stock insuffisant pour ' . $art['nom'] . ' dans ce magasin.');
             }
 
             $prixUnitaire = (float)$art['prix_vente'];
@@ -458,6 +482,11 @@ function handle_caisse_sync(): void {
         $tauxTva = param_tva_taux();
         $totalTtcCalc = round($totalHt * (1 + $tauxTva / 100), 2);
         $monnaieRendue = max(0.0, $montantPaye - $totalTtcCalc);
+
+        // NOU-5 : Vérifier que le total_ttc envoyé correspond au calculé (tolérance 0.02)
+        if (abs($totalTtc - $totalTtcCalc) > 0.02) {
+            throw new RuntimeException('Le total TTC ne correspond pas au calculé.');
+        }
 
         if ($montantPaye < round($totalTtcCalc, 2)) {
             throw new RuntimeException('Le montant payé est insuffisant.');

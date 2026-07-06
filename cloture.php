@@ -58,8 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$deja_ferme) {
 
         $pdo->commit();
 
-        // Audit : tracer l'écart si détecté
-        if ($ecart != 0) {
+        // Audit : tracer l'écart si détecté (seuil de tolérance pour erreurs float)
+        if (abs($ecart) > 0.001) {
             $signe = $ecart > 0 ? '+' : '';
             suivre_activite(
                 'ECART_CAISSE',

@@ -71,11 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
                 db_article_update($pdo, $id, $articleData);
             } else {
                 $id = db_article_insert($pdo, $articleData);
-                if ($quantite > 0) {
-                    $u = user_courant();
-                    $magasin_id = (int)($u['magasin_id'] ?? 0);
-                    db_mouvement_insert($pdo, $id, $u['id'] ?? null, 'Entree', $quantite, 'Stock initial à la création de l\'article', $magasin_id);
-                }
+                // NOTE: db_article_insert() initialise déjà le stock dans
+                // stock_magasins via db_stock_magasin_init_for_article().
+                // Aucun mouvement 'Entree' supplémentaire ne doit être créé ici
+                // pour éviter la double décrémentation du stock.
             }
         },
         'Article enregistré avec succès.',
@@ -104,8 +103,7 @@ if ($action === 'nouveau' || $action === 'editer') {
     ];
     if ($action === 'editer') {
         $get_id = (int)($_GET['id'] ?? 0);
-        // CORRECTION : Permettre l'accès au formulaire même si le jeton n'est pas fourni par la liste API dynamique
-        if (isset($_GET['token']) && !verify_url_signature($get_id, $_GET['token'], ['action' => 'editer'])) {
+        if (!isset($_GET['token']) || !verify_url_signature($get_id, $_GET['token'], ['action' => 'editer'])) {
             flash_error('Lien invalide ou expiré.');
             redirect('articles.php');
         }
@@ -393,6 +391,8 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
                     var seuil = parseInt(a.seuil_alerte, 10) || 0;
                     var alerteClass = stock <= seuil ? ' alert-stock-low' : '';
                     var badgeClass = stock <= seuil ? 'danger' : 'secondary';
+                    // NOU-7 : Utiliser l'URL signée fournie par l'API
+                    var editUrl = a.edit_url || (BASE + 'articles.php?action=editer&id=' + a.id);
                     return '<tr class="' + alerteClass + '">'
                         + '<td class="fw-semibold">' + esc(a.nom) + '</td>'
                         + '<td><code>' + esc(a.code_barre) + '</code></td>'
@@ -402,7 +402,7 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
                         + '<td>' + esc(a.emplacement || '—') + '</td>'
                         + '<td>' + esc(a.fournisseur_nom || '—') + '</td>'
                         + '<td class="text-center text-nowrap">'
-                        + '<a href="' + BASE + 'articles.php?action=editer&id=' + a.id + '" class="btn btn-sm btn-outline-primary" title="Modifier"><i class="bi bi-pencil"></i></a>'
+                        + '<a href="' + editUrl + '" class="btn btn-sm btn-outline-primary" title="Modifier"><i class="bi bi-pencil"></i></a>'
                         + '</td></tr>';
                 }).join('');
             })

@@ -35,7 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'trans
     }
 
     try {
-        $pdo->beginTransaction();
         db_transferer_stock(
             $pdo,
             $data['article_id'],
@@ -44,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'trans
             $data['quantite'],
             $data['motif'] !== '' ? $data['motif'] : null
         );
-        $pdo->commit();
 
         $art = db_article_get_by_id($pdo, $data['article_id']);
         suivre_activite('TRANSFERT_STOCK',
@@ -55,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'trans
     } catch (Throwable $e) {
         $pdo->rollBack();
         error_log('Erreur transfert: ' . $e->getMessage());
-        flash_error('Erreur lors du transfert : ' . h($e->getMessage()));
+        flash_error('Erreur lors du transfert. Veuillez réessayer.');
     }
     redirect('transferts.php');
 }
