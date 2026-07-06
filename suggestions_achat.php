@@ -21,8 +21,9 @@ $groupes  = generate_restock_list_by_supplier(is_array($articles) ? $articles : 
 $nb_total = is_array($articles) ? count($articles) : 0;
 
 echo $twig->render('suggestions_achat.html.twig', [
-    'titre_page' => "Alertes Stock — Suggestions d'achat",
-    'articles'   => $articles,
-    'groupes'    => $groupes,
-    'nb_total'   => $nb_total,
+    'titre_page'    => "Alertes Stock — Suggestions d'achat",
+    'articles'      => $articles,
+    'groupes'       => $groupes,
+    'nb_total'      => $nb_total,
+    'csp_nonce_val' => csp_nonce() // Assure la transmission correcte du nonce pour l'impression
 ]);

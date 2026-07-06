@@ -176,7 +176,6 @@ function db_transaction(callable $callback, string $success_msg, string $error_m
 
 /**
  * Processus de mouvement de stock AVEC support des lots.
- * [CORRECTION BUG 2] : Réparation de la syntaxe cassée et de la mise à jour synchrone du stock.
  */
 function process_stock_movement(PDO $pdo, int $article_id, string $type, int $quantite, 
                                  ?string $motif, int $user_id, int $magasin_id = 0,
@@ -184,6 +183,11 @@ function process_stock_movement(PDO $pdo, int $article_id, string $type, int $qu
     $art = db_article_get_for_mouvement($pdo, $article_id, $magasin_id);
     if (!$art) {
         throw new RuntimeException('Article introuvable.');
+    }
+    
+    // CORRECTION CRITIQUE : Vérification globale du stock pour les sorties AVANT traitement FEFO
+    if ($type !== 'Entree' && $quantite > (int)$art['quantite_stock']) {
+        throw new RuntimeException('Stock insuffisant pour cette sortie (' . (int)$art['quantite_stock'] . ' dispo).');
     }
     
     // Entrée de stock : créer/incrémenter le lot si fourni
@@ -197,7 +201,7 @@ function process_stock_movement(PDO $pdo, int $article_id, string $type, int $qu
         $lots_dispo = db_lots_by_article($pdo, $article_id, $magasin_id);
         $total_lots = array_sum(array_column($lots_dispo, 'quantite'));
         
-        // Si des lots existent, vérifier par les lots
+        // Si des lots existent, vérifier la cohérence par les lots
         if ($total_lots > 0 && $quantite > $total_lots) {
             throw new RuntimeException("Stock insuffisant par lots ($total_lots dispo en lots, $quantite demandé).");
         }
@@ -206,11 +210,6 @@ function process_stock_movement(PDO $pdo, int $article_id, string $type, int $qu
         if ($total_lots > 0) {
             db_lot_decrement_fefo($pdo, $article_id, $magasin_id, $quantite);
         }
-    }
-    
-    // Vérification du stock pour les sorties (fallback sans lots)
-    if ($type !== 'Entree' && $quantite > (int)$art['quantite_stock']) {
-        throw new RuntimeException('Stock insuffisant pour cette sortie (' . (int)$art['quantite_stock'] . ' dispo).');
     }
     
     // Mettre à jour le stock global et par magasin
@@ -277,7 +276,7 @@ function render_dropdown(string $name, array $items, $selected_id, string $defau
     echo '<option value="">' . h($default_label) . '</option>';
     foreach ($items as $item) {
         $id   = (int)$item['id'];
-        $sel  = ($selected_id != null && (int)$selected_id === $id) ? ' selected' : '';
+        $sel  = ($selected_id !== null && (int)$selected_id === $id) ? ' selected' : '';
         $label = h($item['nom']);
         if ($show_code && !empty($item['code_barre'])) {
             $label .= ' (' . h($item['code_barre']) . ')';
@@ -429,6 +428,9 @@ function generer_ean13(): string {
     return $corps . $check;
 }
 
+/**
+ * Calcule la clé de contrôle EAN-13
+ */
 function calculer_check_digit_ean13(string $douze_chiffres): int {
     $sum = 0;
     for ($i = 0; $i < 12; $i++) {

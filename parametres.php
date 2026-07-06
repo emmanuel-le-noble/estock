@@ -72,6 +72,9 @@ foreach ($sections as $section) {
     }
 }
 
+// ============================================================
+//  TRAITEMENT POST : CONFIGURATION GENERALE
+// ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
     if (!csrf_validate()) {
         flash_error('Token de sécurité invalide.');
@@ -108,7 +111,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
 
         param_save($cle, $valeur);
 
-        // [CORRECTION BUG 4 - Synchronisation immédiate de la langue en session]
         if ($cle === 'langue') {
             $_SESSION['langue'] = $valeur;
         }
@@ -179,7 +181,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
 // ============================================================
 //  TRAITEMENT POST : SUPPRESSION D'UNE RÈGLE DE PROMOTION
 // ============================================================
-// [CORRECTION BUG CRITIQUE 1 - Requête SQL ciblée et transaction isolée]
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_promotion') {
     if (!csrf_validate()) {
         flash_error('Token de sécurité invalide.');
@@ -190,7 +191,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     if ($promo_id > 0) {
         try {
             $pdo->beginTransaction();
-            // On cible explicitement la table regles_promotions pour éviter d'impacter la table parametres
             $stmt = $pdo->prepare("DELETE FROM regles_promotions WHERE id = ?");
             $stmt->execute([$promo_id]);
             $pdo->commit();
@@ -211,14 +211,38 @@ function valeur_param_champ(array $champ): string {
 
 $titre_page = 'Paramètres';
 $sous_titre = param_shop_name();
-
-// Charger les règles de promotion pour l'onglet dédié
 $promotions_all = db_promotions_get_all($pdo);
 
+// Inclusion globale du header pour TOUS les onglets afin de garder le menu de navigation cohérent
+include __DIR__ . '/includes/header.php';
+?>
+
+<!-- Onglets de Navigation Supérieurs -->
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link <?= $tab_courant === 'config' ? 'active' : '' ?>" href="?tab=config">
+            <i class="bi bi-gear"></i> Configuration
+        </a>
+    </li>
+    <?php if (peut('utilisateurs_gerer')): ?>
+    <li class="nav-item">
+        <a class="nav-link <?= $tab_courant === 'droits' ? 'active' : '' ?>" href="?tab=droits">
+            <i class="bi bi-shield-lock"></i> Gestion des Droits
+        </a>
+    </li>
+    <?php endif; ?>
+    <li class="nav-item">
+        <a class="nav-link <?= $tab_courant === 'promotions' ? 'active' : '' ?>" href="?tab=promotions">
+            <i class="bi bi-lightning"></i> Promotions
+        </a>
+    </li>
+</ul>
+
+<?php 
 // ============================================================
-//  ONGLET DROITS : rendu Twig (layout géré par base.html.twig)
+//  RENDU ONGLET DROITS (RBAC via Twig injecté dans le layout commun)
 // ============================================================
-if ($tab_courant === 'droits' && peut('utilisateurs_gerer')) {
+if ($tab_courant === 'droits' && peut('utilisateurs_gerer')): 
     $roles = db_permissions_get_roles($pdo);
     $all_perms = db_permissions_all($pdo);
     
@@ -244,42 +268,15 @@ if ($tab_courant === 'droits' && peut('utilisateurs_gerer')) {
         'total_permissions' => count($all_perms ?? []),
     ];
     
+    // On effectue le rendu de la matrice de droits directement à cet emplacement
     echo $twig->render('permissions.html.twig', [
         'permissions_data' => $permissions_data,
         'titre_page' => $titre_page,
         'sous_titre' => $sous_titre,
     ]);
-    exit;
-}
-
-// ============================================================
-//  ONGLET CONFIG : rendu legacy via header.php
-// ============================================================
-include __DIR__ . '/includes/header.php';
 ?>
 
-<!-- Onglets -->
-<ul class="nav nav-tabs mb-4">
-    <li class="nav-item">
-        <a class="nav-link <?= $tab_courant === 'config' ? 'active' : '' ?>" href="?tab=config">
-            <i class="bi bi-gear"></i> Configuration
-        </a>
-    </li>
-    <?php if (peut('utilisateurs_gerer')): ?>
-    <li class="nav-item">
-        <a class="nav-link <?= $tab_courant === 'droits' ? 'active' : '' ?>" href="?tab=droits">
-            <i class="bi bi-shield-lock"></i> Gestion des Droits
-        </a>
-    </li>
-    <?php endif; ?>
-    <li class="nav-item">
-        <a class="nav-link <?= $tab_courant === 'promotions' ? 'active' : '' ?>" href="?tab=promotions">
-            <i class="bi bi-lightning"></i> Promotions
-        </a>
-    </li>
-</ul>
-
-<?php if ($tab_courant === 'config'): ?>
+<?php elseif ($tab_courant === 'config'): ?>
     <!-- Configuration classique -->
     <div class="row g-3 mb-4">
         <div class="col-md-4">

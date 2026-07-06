@@ -149,7 +149,6 @@ function h($value): string {
 
 /**
  * Formater un montant avec la devise configurée dans les paramètres.
- * [CORRECTION FORMATAGE 3 - Séparateur obligatoire Espace]
  */
 function money($montant): string {
     $decimales = (int)param('devise_decimales', '0');
@@ -381,22 +380,17 @@ function clear_login_attempts(string $login): void {
 }
 
 // ============================================================
-//  8. PAGINATION
+//  8. PAGINATION (Version compatible avec paramètres ? et :)
 // ============================================================
 
 function paginate(string $sql, array $params = [], int $par_page = 25, ?string $countSql = null): array {
     global $pdo;
 
-    // BUG-6 : Utiliser un COUNT SQL fourni si possible, sinon améliorer la regex
     if ($countSql === null) {
-        // NOU-6 : Regex améliorée pour gérer les alias SQL (AS avant FROM)
-        // Ex: "SELECT a.*, b.nom AS alias FROM articles a..."
         $countSql = preg_replace('/SELECT\s+(?!.*\bFROM\b)(?!.*\bAS\b).*?(?=\s+FROM\s)/is', 'SELECT COUNT(*) FROM ', $sql, 1);
         if ($countSql === $sql) {
-            // Fallback : si la regex n'a pas fonctionné, utiliser une approche plus simple
             $countSql = preg_replace('/SELECT\s+.+?\s+FROM/is', 'SELECT COUNT(*) FROM', $sql, 1);
         }
-        // Supprimer les ORDER BY, LIMIT, OFFSET qui ne sont pas nécessaires pour COUNT
         $countSql = preg_replace('/\bORDER\s+BY\s+.+$/i', '', $countSql);
         $countSql = preg_replace('/\bLIMIT\s+.+$/i', '', $countSql);
     }
@@ -409,11 +403,35 @@ function paginate(string $sql, array $params = [], int $par_page = 25, ?string $
     $page = min($page, $total_pages);
     $offset = ($page - 1) * $par_page;
 
-    $sql .= " LIMIT ? OFFSET ?";
-    $params[] = $par_page;
-    $params[] = $offset;
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
+    // Détecter si la requête d'origine utilise des paramètres positionnels (?) ou nommés (:)
+    $conserve_positional = empty($params) || isset($params[0]) || array_key_exists(0, $params);
+
+    if ($conserve_positional) {
+        // Si la requête utilise des "?", on ajoute des "?" pour LIMIT et OFFSET
+        $sql .= " LIMIT ? OFFSET ?";
+        $stmt = $pdo->prepare($sql);
+        
+        // On lie les paramètres d'origine un par un
+        $idx = 1;
+        foreach ($params as $val) {
+            $stmt->bindValue($idx++, $val);
+        }
+        // On lie le LIMIT et l'OFFSET à la suite avec le bon type INTEGER
+        $stmt->bindValue($idx++, (int)$par_page, PDO::PARAM_INT);
+        $stmt->bindValue($idx++, (int)$offset, PDO::PARAM_INT);
+    } else {
+        // Si la requête d'origine utilise des paramètres nommés (:param)
+        $sql .= " LIMIT :limit_val OFFSET :offset_val";
+        $stmt = $pdo->prepare($sql);
+        
+        foreach ($params as $key => $val) {
+            $stmt->bindValue($key, $val);
+        }
+        $stmt->bindValue(':limit_val', (int)$par_page, PDO::PARAM_INT);
+        $stmt->bindValue(':offset_val', (int)$offset, PDO::PARAM_INT);
+    }
+
+    $stmt->execute();
     $items = $stmt->fetchAll();
 
     return compact('items', 'page', 'total_pages', 'total');

@@ -25,9 +25,7 @@
     {% endif %}
 </ul>
 
-{# ═══════════════════════════════════════════════════════
-   COMPTEURS — Stat Cards Liquid Glass (clone Statistiques)
-   ═══════════════════════════════════════════════════════ #}
+{# ── COMPTEURS ── #}
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
         <div class="stat-card is-danger">
@@ -75,9 +73,7 @@
     </div>
 </div>
 
-{# ═══════════════════════════════════════════════════════
-   FORMULAIRE — Carte Glass inline (remplace le modal)
-   ═══════════════════════════════════════════════════════ #}
+{# ── FORMULAIRE INLINE ── #}
 <div class="glass-card mb-4">
     <div class="glass-header">
         <i class="bi bi-box-seam"></i>
@@ -93,7 +89,7 @@
                     <option value="">— Sélectionner un article —</option>
                     {% for art in articles|default([]) %}
                         <option value="{{ art.id }}">
-                            {{ art.nom|e }} {% if art.code_barre %}({{ art.code_barre|e }}){% endif %}
+                            {{ h(art.nom|default('')) }} {% if art.code_barre %}({{ h(art.code_barre) }}){% endif %}
                         </option>
                     {% endfor %}
                 </select>
@@ -121,9 +117,7 @@
     </div>
 </div>
 
-{# ═══════════════════════════════════════════════════════
-   ZONE 1 : Lots périmés — Glass Card
-   ═══════════════════════════════════════════════════════ #}
+{# ── ZONE 1 : Lots périmés ── #}
 {% if nb_expired > 0 %}
 <div class="glass-card is-danger mb-4">
     <div class="glass-header">
@@ -174,9 +168,7 @@
 </div>
 {% endif %}
 
-{# ═══════════════════════════════════════════════════════
-   ZONE 2 : Lots expirant bientôt — Glass Card
-   ═══════════════════════════════════════════════════════ #}
+{# ── ZONE 2 : Lots expirant bientôt ── #}
 {% if nb_expiring > 0 %}
 <div class="glass-card is-warning mb-4">
     <div class="glass-header">

@@ -12,6 +12,22 @@ $user = user_courant();
 $role = user_role();
 $app_nom = param_app_name();
 
+// ----- Sécurité : Initialisation automatique des compteurs d'alertes topbar -----
+if (est_connecte() && (!isset($nb_alertes_topbar) || !isset($nb_alertes_peremption))) {
+    $magasin_id_topbar = $_SESSION['user']['magasin_id'] ?? 0;
+    
+    if (!isset($nb_alertes_topbar)) {
+        $nb_alertes_topbar = function_exists('db_articles_low_stock_count') ? db_articles_low_stock_count($pdo, $magasin_id_topbar) : 0;
+    }
+    
+    if (!isset($nb_alertes_peremption)) {
+        $nb_alertes_peremption = function_exists('db_peremption_alert_count') ? db_peremption_alert_count($pdo, 30, $magasin_id_topbar) : 0;
+    }
+} else {
+    $nb_alertes_topbar = $nb_alertes_topbar ?? 0;
+    $nb_alertes_peremption = $nb_alertes_peremption ?? 0;
+}
+
 // ----- Icône (initiale) pour l'avatar -----
 $initiale = mb_substr(trim($user['nom'] ?? 'U'), 0, 1, 'UTF-8');
 

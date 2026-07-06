@@ -8,7 +8,7 @@ require_once __DIR__ . '/includes/helpers.php';
 // SEC-12 : Exiger POST + CSRF pour éviter les attaques CSRF logout
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_validate()) {
     flash_error('Requête invalide.');
-    redirect('dashboard.php');
+    redirect('tableau_bord.php'); // <-- Corrigé (pointe vers votre vrai tableau de bord)
 }
 
 suivre_activite('DECONNEXION', 'Déconnexion');
@@ -27,5 +27,4 @@ if (ini_get('session.use_cookies')) {
     ]);
 }
 session_destroy();
-header('Location: login.php');
-exit;
+redirect('login.php'); // <-- Corrigé pour utiliser votre helper global qui contient déjà l'instruction exit

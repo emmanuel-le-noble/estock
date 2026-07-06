@@ -188,8 +188,9 @@ function db_article_decrement_stock(PDO $pdo, int $id, int $quantite, int $magas
  */
 function db_articles_list_active(PDO $pdo, int $limit = 500): array {
     $limit = max(1, min(1000, (int)$limit));
-    $stmt = $pdo->prepare("SELECT id, nom, code_barre FROM articles WHERE actif=1 ORDER BY nom LIMIT ?");
-    $stmt->execute([$limit]);
+    $stmt = $pdo->prepare("SELECT id, nom, code_barre FROM articles WHERE actif=1 ORDER BY nom LIMIT :limit");
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
     return $stmt->fetchAll();
 }
 
@@ -205,25 +206,25 @@ function db_articles_search_stock(PDO $pdo, string $search = '', int $limit = 20
                    COALESCE(sm.stock_alerte, a.seuil_alerte) AS seuil_alerte,
                    a.emplacement
             FROM articles a
-            LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = ?
+            LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = :mid
             WHERE a.actif = 1
         ";
-        $params = [$magasin_id];
+        $stmt = $pdo->prepare($sql . ($search !== '' ? " AND (a.nom LIKE :s1 OR a.code_barre LIKE :s2 OR a.sku LIKE :s3 OR a.emplacement LIKE :s4) " : "") . " ORDER BY a.nom LIMIT :limit");
+        $stmt->bindValue(':mid', $magasin_id, PDO::PARAM_INT);
     } else {
         $sql = "SELECT a.code_barre, a.nom, a.sku, a.prix_vente, a.quantite_stock, a.seuil_alerte, a.emplacement FROM articles a WHERE a.actif = 1";
-        $params = [];
+        $stmt = $pdo->prepare($sql . ($search !== '' ? " AND (a.nom LIKE :s1 OR a.code_barre LIKE :s2 OR a.sku LIKE :s3 OR a.emplacement LIKE :s4) " : "") . " ORDER BY a.nom LIMIT :limit");
     }
+
     if ($search !== '') {
-        $sql .= " AND (a.nom LIKE ? OR a.code_barre LIKE ? OR a.sku LIKE ? OR a.emplacement LIKE ?) ";
-        $params[] = "%$search%";
-        $params[] = "%$search%";
-        $params[] = "%$search%";
-        $params[] = "%$search%";
+        $searchParam = "%$search%";
+        $stmt->bindValue(':s1', $searchParam, PDO::PARAM_STR);
+        $stmt->bindValue(':s2', $searchParam, PDO::PARAM_STR);
+        $stmt->bindValue(':s3', $searchParam, PDO::PARAM_STR);
+        $stmt->bindValue(':s4', $searchParam, PDO::PARAM_STR);
     }
-    $sql .= " ORDER BY a.nom LIMIT ?";
-    $params[] = $limit;
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
     return $stmt->fetchAll();
 }
 
@@ -293,9 +294,11 @@ function db_articles_low_stock(PDO $pdo, int $limit = 50, int $magasin_id = 0): 
             LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = :mid
             WHERE a.actif = 1 AND COALESCE(sm.quantite, 0) <= COALESCE(sm.stock_alerte, a.seuil_alerte)
             ORDER BY (COALESCE(sm.quantite, 0) - COALESCE(sm.stock_alerte, a.seuil_alerte)) ASC, a.nom ASC
-            LIMIT ?
+            LIMIT :limit
         ");
-        $stmt->execute([$magasin_id, $limit]);
+        $stmt->bindValue(':mid', $magasin_id, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
         return $stmt->fetchAll();
     }
     $stmt = $pdo->prepare("
@@ -303,9 +306,10 @@ function db_articles_low_stock(PDO $pdo, int $limit = 50, int $magasin_id = 0): 
         FROM articles
         WHERE actif = 1 AND quantite_stock <= seuil_alerte
         ORDER BY (quantite_stock - seuil_alerte) ASC, nom ASC
-        LIMIT ?
+        LIMIT :limit
     ");
-    $stmt->execute([$limit]);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
     return $stmt->fetchAll();
 }
 
@@ -329,7 +333,9 @@ function db_articles_low_stock_with_supplier(PDO $pdo, int $limit = 100, int $ma
             ORDER BY (COALESCE(sm.quantite, 0) - COALESCE(sm.stock_alerte, a.seuil_alerte)) ASC, a.nom ASC
             LIMIT :limit
         ");
-        $stmt->execute([':mid' => $magasin_id, ':limit' => $limit]);
+        $stmt->bindValue(':mid', $magasin_id, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
         return $stmt->fetchAll();
     }
     $stmt = $pdo->prepare("
@@ -341,9 +347,10 @@ function db_articles_low_stock_with_supplier(PDO $pdo, int $limit = 100, int $ma
         LEFT JOIN fournisseurs f ON f.id = a.fournisseur_id
         WHERE a.actif = 1 AND a.quantite_stock <= a.seuil_alerte
         ORDER BY (a.quantite_stock - a.seuil_alerte) ASC, a.nom ASC
-        LIMIT ?
+        LIMIT :limit
     ");
-    $stmt->execute([$limit]);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
     return $stmt->fetchAll();
 }
 
@@ -415,9 +422,10 @@ function db_fournisseurs_list_with_count(PDO $pdo, int $limit = 500): array {
         LEFT JOIN articles a ON a.fournisseur_id = f.id
         GROUP BY f.id
         ORDER BY f.nom
-        LIMIT ?
+        LIMIT :limit
     ");
-    $stmt->execute([$limit]);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
     return $stmt->fetchAll();
 }
 
@@ -526,8 +534,9 @@ function db_user_get_by_login(PDO $pdo, string $login): ?array {
  */
 function db_users_list(PDO $pdo, int $limit = 200): array {
     $limit = max(1, min(1000, (int)$limit));
-    $stmt = $pdo->prepare("SELECT id, nom, login, role, actif, date_creation FROM utilisateurs ORDER BY nom LIMIT ?");
-    $stmt->execute([$limit]);
+    $stmt = $pdo->prepare("SELECT id, nom, login, role, actif, date_creation FROM utilisateurs ORDER BY nom LIMIT :limit");
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
     return $stmt->fetchAll();
 }
 
@@ -717,11 +726,14 @@ function db_stats_top_articles(PDO $pdo, string $debut, string $fin, int $limit 
         FROM lignes_facture lf
         JOIN articles a ON a.id = lf.article_id
         JOIN factures f ON f.id = lf.facture_id
-        WHERE DATE(f.date_facture) BETWEEN ? AND ? AND f.statut = 'Payee'
+        WHERE DATE(f.date_facture) BETWEEN :debut AND :fin AND f.statut = 'Payee'
         GROUP BY a.id, a.nom, a.code_barre
         ORDER BY total_qte DESC
-        LIMIT ?");
-    $stmt->execute([$debut, $fin, $limit]);
+        LIMIT :limit");
+    $stmt->bindValue(':debut', $debut, PDO::PARAM_STR);
+    $stmt->bindValue(':fin', $fin, PDO::PARAM_STR);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
     return $stmt->fetchAll();
 }
 
@@ -781,9 +793,10 @@ function db_mouvements_recent(PDO $pdo, int $limit = 8): array {
         JOIN articles a ON a.id = m.article_id
         LEFT JOIN utilisateurs u ON u.id = m.utilisateur_id
         ORDER BY m.date_mouvement DESC
-        LIMIT ?
+        LIMIT :limit
     ");
-    $stmt->execute([$limit]);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
     return $stmt->fetchAll();
 }
 
@@ -1151,16 +1164,19 @@ function db_transferts_list(PDO $pdo, int $magasin_id = 0, int $limit = 50): arr
             JOIN magasins ms ON ms.id = t.magasin_source_id
             JOIN magasins md ON md.id = t.magasin_destination_id
             LEFT JOIN utilisateurs u ON u.id = t.utilisateur_id";
-    $params = [];
+    
     if ($magasin_id > 0) {
         $sql .= " WHERE t.magasin_source_id = :mid OR t.magasin_destination_id = :mid2";
-        $params[':mid']  = $magasin_id;
-        $params[':mid2'] = $magasin_id;
     }
-    $sql .= " ORDER BY t.date_transfert DESC LIMIT ?";
-    $params[] = $limit;
+    $sql .= " ORDER BY t.date_transfert DESC LIMIT :limit";
+    
     $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
+    if ($magasin_id > 0) {
+        $stmt->bindValue(':mid', $magasin_id, PDO::PARAM_INT);
+        $stmt->bindValue(':mid2', $magasin_id, PDO::PARAM_INT);
+    }
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
     return $stmt->fetchAll();
 }
 

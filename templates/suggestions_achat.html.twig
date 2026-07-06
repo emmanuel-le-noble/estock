@@ -7,9 +7,9 @@
     </div>
     <div class="d-flex gap-2">
         {% if (nb_total|default(0)) > 0 %}
-            <button class="btn btn-outline-secondary" onclick="window.print()">
-                <i class="bi bi-printer"></i> Imprimer la liste
-            </button>
+            <a href="{{ base_url }}suggestions_impression.php" target="_blank" class="btn btn-outline-secondary">
+                <i class="bi bi-printer"></i> Imprimer la liste (A4)
+            </a>
         {% endif %}
         <a href="{{ base_url }}stock.php" class="btn btn-outline-primary">
             <i class="bi bi-boxes"></i> Consultation stock
@@ -31,7 +31,7 @@
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="bi bi-truck text-primary"></i>
-                    {{ g.fournisseur_nom|default('Sans fournisseur') }}
+                    {{ h(g.fournisseur_nom|default('Sans fournisseur')) }}
                 </h5>
                 {% set nb = g.articles|default([])|length %}
                 <span class="badge text-bg-secondary">{{ nb }} article{{ nb > 1 ? 's' : '' }}</span>
@@ -40,11 +40,11 @@
                 {% if g.contact|default('') or g.telephone|default('') %}
                     <div class="mb-3 text-muted small">
                         {% if g.contact|default('') %}
-                            <span><i class="bi bi-person"></i> {{ g.contact }}</span>
+                            <span><i class="bi bi-person"></i> {{ h(g.contact) }}</span>
                         {% endif %}
                         {% if g.contact|default('') and g.telephone|default('') %} · {% endif %}
                         {% if g.telephone|default('') %}
-                            <span><i class="bi bi-telephone"></i> {{ g.telephone }}</span>
+                            <span><i class="bi bi-telephone"></i> {{ h(g.telephone) }}</span>
                         {% endif %}
                     </div>
                 {% endif %}
@@ -55,7 +55,7 @@
                             <tr>
                                 <th>Article</th>
                                 <th>Code-barres</th>
-                                <th>Emplacement</th>
+                                <th class="text-center">Emplacement</th>
                                 <th class="text-center">Stock actuel</th>
                                 <th class="text-center">Seuil alerte</th>
                                 <th class="text-end">Prix vente</th>
@@ -65,8 +65,8 @@
                             {% for a in g.articles|default([]) %}
                                 <tr class="{{ a.quantite_stock|default(0) == 0 ? 'table-danger' : 'table-warning' }}">
                                     <td class="fw-semibold">{{ a.nom|default('') }}</td>
-                                    <td><code>{{ a.code_barre|default('') }}</code></td>
-                                    <td>{{ a.emplacement|default('') ?: '—' }}</td>
+                                    <td><code>{{ h(a.code_barre|default('')) }}</code></td>
+                                    <td class="text-center">{{ h(a.emplacement|default('')) ?: '—' }}</td>
                                     <td class="text-center">
                                         <span class="badge text-bg-{{ a.quantite_stock|default(0) == 0 ? 'danger' : 'warning' }}">
                                             {{ a.quantite_stock|default(0) }}
@@ -83,4 +83,15 @@
         </div>
     {% endfor %}
 {% endif %}
+
+<script nonce="{{ csp_nonce_val }}">
+document.addEventListener('DOMContentLoaded', function() {
+    const btnPrint = document.getElementById('btnPrint');
+    if (btnPrint) {
+        btnPrint.addEventListener('click', function() {
+            window.print();
+        });
+    }
+});
+</script>
 {% endblock %}

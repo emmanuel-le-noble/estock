@@ -6,6 +6,7 @@
 if (!function_exists('est_connecte')) { require_once __DIR__ . '/config/connexion.php'; }
 if (!function_exists('db_article_insert')) { require_once __DIR__ . '/includes/db_functions.php'; }
 if (!function_exists('csrf_guard')) { require_once __DIR__ . '/includes/helpers.php'; }
+require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/config/connexion.php';
 require_once __DIR__ . '/includes/db_functions.php';
 
@@ -29,9 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $erreur = 'Veuillez renseigner tous les champs.';
         } else {
             $u = db_user_get_by_login($pdo, $login);
-            // NOU-3 : Protection anti-timing (ajouter délai si user n'existe pas)
             if (!$u) {
-                usleep(random_int(100000, 300000)); // 100-300ms de délai artificiel
+                usleep(random_int(100000, 300000)); // Protection anti-timing
             }
             if ($u && password_verify($mdp, $u['mot_de_passe'])) {
                 db_login_attempt_clear($pdo, $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1', $login);
@@ -62,7 +62,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .login-split { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
         @media (max-width: 991.98px) { .login-split { grid-template-columns: 1fr; } .login-aside { display: none; } }
 
-        /* Panneau gauche : vitrine dégradé sombre + orbes */
         .login-aside {
             position: relative; overflow: hidden; color: #fff;
             background: radial-gradient(120% 120% at 0% 0%, #312e81 0%, #1e1b4b 45%, #0b1020 100%);
@@ -88,7 +87,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .login-aside .feat i { color: #a5b4fc; }
         .login-aside .footnote { position: relative; z-index: 1; color: #94a3b8; font-size: .82rem; }
 
-        /* Panneau droit : formulaire centré */
         .login-form-side { display: flex; align-items: center; justify-content: center; padding: 40px 28px; background: var(--bg); }
         .login-card { width: 100%; max-width: 400px; }
         .login-title { font-size: 1.7rem; font-weight: 800; color: var(--ink); letter-spacing: -.02em; }
@@ -140,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-lock"></i></span>
                         <input type="password" name="mot_de_passe" id="mdp" class="form-control" required placeholder="••••••••">
-                        <button class="btn btn-outline-secondary" type="button" onclick="toggleMdp()" style="border-radius:0 var(--radius-sm) var(--radius-sm) 0;">
+                        <button class="btn btn-outline-secondary" type="button" id="btnToggleMdp" style="border-radius:0 var(--radius-sm) var(--radius-sm) 0;">
                             <i class="bi bi-eye" id="eyeIcon"></i>
                         </button>
                     </div>
@@ -154,12 +152,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <script nonce="<?= h(csp_nonce()) ?>">
-function toggleMdp() {
+document.addEventListener('DOMContentLoaded', function() {
+    const btnToggle = document.getElementById('btnToggleMdp');
     const mdp = document.getElementById('mdp');
     const icn = document.getElementById('eyeIcon');
-    if (mdp.type === 'password') { mdp.type = 'text';  icn.classList.replace('bi-eye','bi-eye-slash'); }
-    else                         { mdp.type = 'password'; icn.classList.replace('bi-eye-slash','bi-eye'); }
-}
+
+    if (btnToggle && mdp && icn) {
+        btnToggle.addEventListener('click', function() {
+            if (mdp.type === 'password') {
+                mdp.type = 'text';
+                icn.className = 'bi bi-eye-slash';
+            } else {
+                mdp.type = 'password';
+                icn.className = 'bi bi-eye';
+            }
+        });
+    }
+});
 </script>
 </body>
 </html>

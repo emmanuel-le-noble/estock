@@ -1,9 +1,4 @@
-# ============================================================
-# eStock - Assets statiques uniquement
-# Les pages PHP sont accessibles directement (pas de front controller)
-# ============================================================
-
-# Forcer leUTF-8
+# Forcer le UTF-8
 AddDefaultCharset utf-8
 
 # Compresser les réponses
@@ -11,17 +6,13 @@ AddDefaultCharset utf-8
     AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
 </IfModule>
 
-# Protéger les dossiers sensibles
-<FilesMatch "\.(php|sql|log|ini|env)$">
-    <If "%{REQUEST_URI} =~ m#/(config|includes|database|vendor|templates)/#">
-        Require all denied
-    </If>
-</FilesMatch>
+# Activer le moteur de réécriture (Indispensable pour vos règles)
+RewriteEngine On
 
-# Blocage complémentaire via RewriteRule pour les sous-dossiers
+# Blocage des dossiers sensibles
 RewriteRule ^(config|includes|database|vendor|templates)/ - [F,L]
 
-# Autoriser l'accès public uniquement
-<DirectoryMatch "^(assets|api|uploads|img)">
-    Require all granted
-</DirectoryMatch>
+# Note : On ne peut pas utiliser <DirectoryMatch> ici.
+# Si vous voulez restreindre l'accès à certains dossiers, 
+# il faut utiliser des fichiers .htaccess dans ces dossiers spécifiques 
+# ou laisser Apache gérer cela via la configuration principale.
