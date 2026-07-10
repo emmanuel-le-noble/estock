@@ -8,6 +8,6 @@ require_once __DIR__ . '/config/connexion.php';
 if (est_connecte()) {
     header('Location: tableau_bord.php');
 } else {
-    header('Location: login.php');
+    header('Location: auth/login.php');
 }
 exit;

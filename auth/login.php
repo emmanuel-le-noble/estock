@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Connexion · <?= h($app_nom) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="<?= BASE_URL ?>assets/css/style.css" rel="stylesheet">
+    <link href="../assets/css/style.css" rel="stylesheet">
     <style>
         .login-split { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
         @media (max-width: 991.98px) { .login-split { grid-template-columns: 1fr; } .login-aside { display: none; } }
@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .login-aside .footnote { position: relative; z-index: 1; color: #94a3b8; font-size: .82rem; }
 
         .login-form-side { display: flex; align-items: center; justify-content: center; padding: 40px 28px; background: var(--bg); }
-        .login-card { width: 100%; max-width: 400px; }
+        .login-card { width: 100%; max-width: 500px; padding: 50px 38px;}
         .login-title { font-size: 1.7rem; font-weight: 800; color: var(--ink); letter-spacing: -.02em; }
         .login-sub { color: var(--ink-3); margin-top: 4px; margin-bottom: 28px; }
     </style>
@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- Panneau droit formulaire -->
     <div class="login-form-side">
-        <div class="login-card">
+        <div class="card login-card">
             <h1 class="login-title">Bon retour 👋</h1>
             <p class="login-sub">Connectez-vous pour accéder à votre espace.</p>
 
