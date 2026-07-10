@@ -776,10 +776,7 @@ function db_ligne_facture_insert(PDO $pdo, int $facture_id, int $article_id, int
  * Insérer un mouvement de stock.
  */
 function db_mouvement_insert(PDO $pdo, int $article_id, ?int $user_id, string $type, int $quantite, ?string $motif = null, int $magasin_id = 0): void {
-    $pdo->prepare("
-        INSERT INTO mouvements_stock (article_id, utilisateur_id, type, quantite, motif, magasin_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ")->execute([$article_id, $user_id, $type, $quantite, $motif, $magasin_id > 0 ? $magasin_id : null]);
+    $pdo->prepare("INSERT INTO mouvements_stock (article_id, utilisateur_id, type, quantite, motif, magasin_id) VALUES (?, ?, ?, ?, ?, ?)")->execute([$article_id, $user_id, $type, $quantite, $motif, $magasin_id > 0 ? $magasin_id : null]);
 }
 
 /**

@@ -2,13 +2,13 @@
 /**
  * logout.php - Déconnexion (POST uniquement + CSRF).
  */
-require_once __DIR__ . '/config/connexion.php';
-require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/../config/connexion.php';
+require_once __DIR__ . '/../includes/helpers.php';
 
 // SEC-12 : Exiger POST + CSRF pour éviter les attaques CSRF logout
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_validate()) {
     flash_error('Requête invalide.');
-    redirect('tableau_bord.php'); // <-- Corrigé (pointe vers votre vrai tableau de bord)
+    redirect('../tableau_bord.php'); // <-- Corrigé (pointe vers votre vrai tableau de bord)
 }
 
 suivre_activite('DECONNEXION', 'Déconnexion');

@@ -190,7 +190,7 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
                     <span class="rl"><?= h($role) ?></span>
                 </span>
             </a>
-            <form method="POST" action="logout.php" class="d-inline">
+            <form method="POST" action="auth/logout.php" class="d-inline">
                 <?= csrf_field() ?>
                 <button type="submit" class="side-user btn btn-link text-decoration-none" title="Se déconnecter" style="background:none;border:none;">
                     <span class="avatar avatar-logout"><i class="bi bi-box-arrow-right"></i></span>

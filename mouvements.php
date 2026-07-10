@@ -1,7 +1,7 @@
 <?php
 /**
  * mouvements.php - Historique global et filtrable des mouvements de stock.
- *                  + saisie d'une entrée / sortie manuelle (Magasinier+).
+ * + saisie d'une entrée / sortie manuelle (Magasinier+).
  *
  * Magasinier : peut saisir des Entrée/Sortie et consulter l'historique.
  */
@@ -39,7 +39,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
             $numero_lot = mb_substr($numero_lot, 0, 100);
         }
         $date_peremption = !empty($_POST['date_peremption']) ? $_POST['date_peremption'] : null;
+        
+        // 1. Enregistrement de l'historique du mouvement (et stock par magasin)
         $art = process_stock_movement($pdo, $data['article_id'], $data['type'], $data['quantite'], $data['motif'], $u['id'] ?? 0, $magasin_id, $numero_lot, $date_peremption);
+        
+        // 2. CORRECTION CENTRALISÉE : Appel de la fonction de mise à jour du stock global
+        db_article_update_stock_global($pdo, $data['article_id'], $data['type'], $data['quantite']);
+
         $pdo->commit();
         suivre_activite('MOUVEMENT_STOCK', $data['type'] . ' de ' . $data['quantite'] . ' unité(s) — ' . $art['nom']);
         flash_success(sprintf('%s de %d unité(s) enregistrée pour « %s ».',
@@ -83,7 +89,6 @@ include __DIR__ . '/includes/header.php';
     </button>
 </div>
 
-<!-- Formulaire de filtres -->
 <div class="card shadow-sm mb-3">
     <div class="card-body">
         <form method="get" class="row g-2 align-items-end">
@@ -116,7 +121,6 @@ include __DIR__ . '/includes/header.php';
     </div>
 </div>
 
-<!-- Tableau historique -->
 <div class="card shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -168,7 +172,6 @@ $base_url = page_url('mouvements', $filter_params);
 pagination_links($result['page'], $result['total_pages'], $base_url);
 ?>
 
-<!-- Modal nouveau mouvement -->
 <div class="modal fade" id="modalMouvement" tabindex="-1">
     <div class="modal-dialog">
         <form method="post" class="modal-content">
@@ -200,7 +203,6 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
                     <label class="form-label">Motif</label>
                     <input type="text" name="motif" class="form-control" placeholder="ex : Réappro, casse, inventaire...">
                 </div>
-                <!-- Numéro de lot (Entrée seulement) -->
                 <div class="row g-3 mt-2" id="lotFields" style="display: none;">
                     <div class="col-md-6">
                         <label class="form-label" for="numero_lot">Numéro de lot</label>

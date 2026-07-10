@@ -178,46 +178,74 @@ function db_transaction(callable $callback, string $success_msg, string $error_m
  * Processus de mouvement de stock AVEC support des lots.
  */
 function process_stock_movement(PDO $pdo, int $article_id, string $type, int $quantite, 
-                                 ?string $motif, int $user_id, int $magasin_id = 0,
+                                 ?string $motif, int $user_id, int $magasin_id,
                                  ?string $numero_lot = null, ?string $date_peremption = null): array {
+    // 1. Récupération de l'article avant mouvement
     $art = db_article_get_for_mouvement($pdo, $article_id, $magasin_id);
     if (!$art) {
         throw new RuntimeException('Article introuvable.');
     }
     
-    // CORRECTION CRITIQUE : Vérification globale du stock pour les sorties AVANT traitement FEFO
+    // 2. Vérification du stock (Déjà géré et validé en amont)
     if ($type !== 'Entree' && $quantite > (int)$art['quantite_stock']) {
         throw new RuntimeException('Stock insuffisant pour cette sortie (' . (int)$art['quantite_stock'] . ' dispo).');
     }
     
-    // Entrée de stock : créer/incrémenter le lot si fourni
+    // 3. ENTRÉE : On crée un lot UNIQUEMENT si l'utilisateur a fourni un numéro de lot (article périssable)
     if ($type === 'Entree' && !empty($numero_lot) && $magasin_id > 0) {
         db_lot_upsert($pdo, $article_id, $magasin_id, $numero_lot, $quantite, $date_peremption);
     }
     
-    // Sortie ou Vente avec FEFO (si multi-magasin actif)
+    // 4. SORTIE ou VENTE : Gestion hybride (Périssable VS Non Périssable)
     if (($type === 'Sortie' || $type === 'Vente') && $magasin_id > 0) {
-        // Vérifier qu'il y a assez de stock via les lots
+        // On récupère les lots existants pour cet article
         $lots_dispo = db_lots_by_article($pdo, $article_id, $magasin_id);
-        $total_lots = array_sum(array_column($lots_dispo, 'quantite'));
+        $total_lots = !empty($lots_dispo) ? array_sum(array_column($lots_dispo, 'quantite')) : 0;
         
-        // Si des lots existent, vérifier la cohérence par les lots
-        if ($total_lots > 0 && $quantite > $total_lots) {
-            throw new RuntimeException("Stock insuffisant par lots ($total_lots dispo en lots, $quantite demandé).");
-        }
-        
-        // Déduire par FEFO si des lots avec DLC existent
+        // SI l'article possède des lots en base (Article Périssable) : on applique le FEFO
         if ($total_lots > 0) {
+            if ($quantite > $total_lots) {
+                throw new RuntimeException("Stock insuffisant par lots ($total_lots dispo en lots, $quantite demandé).");
+            }
             db_lot_decrement_fefo($pdo, $article_id, $magasin_id, $quantite);
         }
+        // SI l'article n'a aucun lot (Article NON Périssable) : on ne fait rien ici,
+        // le système passera directement à l'étape 5 pour déduire le stock classique.
     }
     
-    // Mettre à jour le stock global et par magasin
+    // 5. Mise à jour du stock par magasin (liaison classique du projet)
     $delta = ($type === 'Entree') ? $quantite : -$quantite;
     db_article_update_stock($pdo, $article_id, $delta, $magasin_id);
 
+    // 6. Enregistrement systématique dans l'historique des mouvements
+    db_mouvement_insert($pdo, $article_id, $user_id, $type, $quantite, $motif, $magasin_id);
+
     // Retourner l'état mis à jour
     return db_article_get_for_mouvement($pdo, $article_id, $magasin_id);
+}
+
+/**
+ * Ajuste la quantité globale en stock d'un article spécifique.
+ * Evite que le stock devienne négatif en cas de sortie supérieure au stock disponible.
+ *
+ * @param PDO $pdo Instance de connexion
+ * @param int $articleId ID de l'article
+ * @param string $type 'Entree' ou 'Sortie'
+ * @param int $quantite Quantité à ajouter ou soustraire
+ * @return bool
+ */
+function db_article_update_stock_global(PDO $pdo, int $articleId, string $type, int $quantite): bool 
+{
+    if ($type === 'Entree') {
+        $sql = "UPDATE articles SET quantite_stock = quantite_stock + ? WHERE id = ?";
+    } elseif ($type === 'Sortie') {
+        $sql = "UPDATE articles SET quantite_stock = GREATEST(0, quantite_stock - ?) WHERE id = ?";
+    } else {
+        return false;
+    }
+    
+    $stmt = $pdo->prepare($sql);
+    return $stmt->execute([$quantite, $articleId]);
 }
 
 /**

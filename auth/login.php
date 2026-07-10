@@ -3,18 +3,18 @@
  * login.php - Authentification (design split-screen moderne).
  */
 // Guard: compatible avec le routeur front controller (index.php)
-if (!function_exists('est_connecte')) { require_once __DIR__ . '/config/connexion.php'; }
-if (!function_exists('db_article_insert')) { require_once __DIR__ . '/includes/db_functions.php'; }
-if (!function_exists('csrf_guard')) { require_once __DIR__ . '/includes/helpers.php'; }
-require_once __DIR__ . '/includes/helpers.php';
-require_once __DIR__ . '/config/connexion.php';
-require_once __DIR__ . '/includes/db_functions.php';
+if (!function_exists('est_connecte')) { require_once __DIR__ . '/../config/connexion.php'; }
+if (!function_exists('db_article_insert')) { require_once __DIR__ . '/../includes/db_functions.php'; }
+if (!function_exists('csrf_guard')) { require_once __DIR__ . '/../includes/helpers.php'; }
+require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../config/connexion.php';
+require_once __DIR__ . '/../includes/db_functions.php';
 
 $app_nom = param_app_name();
 $nom_boutique = param_shop_name();
 $slogan_boutique = param('slogan_boutique', 'Gérez votre stock et votre caisse. Simplement.');
 
-if (est_connecte()) redirect('tableau_bord.php');
+if (est_connecte()) redirect('../tableau_bord.php');
 
 $erreur = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 unset($u['mot_de_passe']);
                 $_SESSION['user'] = $u;
                 suivre_activite('CONNEXION', 'Connexion réussie: ' . $login);
-                redirect('tableau_bord.php');
+                redirect('../tableau_bord.php');
             } else {
                 db_login_attempt_insert($pdo, $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1', $login);
                 suivre_activite('ECHEC_CONNEXION', 'Tentative échouée: ' . $login);
