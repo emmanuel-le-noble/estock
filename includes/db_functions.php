@@ -25,8 +25,8 @@ function db_article_code_barre_exists(PDO $pdo, string $code_barre, int $exclude
  */
 function db_article_insert(PDO $pdo, array $data): int {
     $stmt = $pdo->prepare("
-        INSERT INTO articles (code_barre, nom, sku, prix_achat, prix_vente, quantite_stock, seuil_alerte, emplacement, fournisseur_id)
-        VALUES (:code, :nom, :sku, :pa, :pv, :qte, :seuil, :emp, :four)
+        INSERT INTO articles (code_barre, nom, sku, prix_achat, prix_vente, quantite_stock, seuil_alerte, emplacement, fournisseur_id, categorie_id, taux_tva)
+        VALUES (:code, :nom, :sku, :pa, :pv, :qte, :seuil, :emp, :four, :cat, :tva)
     ");
     $stmt->execute([
         ':code' => $data['code_barre'],
@@ -38,6 +38,8 @@ function db_article_insert(PDO $pdo, array $data): int {
         ':seuil'=> $data['seuil_alerte'],
         ':emp'  => $data['emplacement'],
         ':four' => $data['fournisseur_id'],
+        ':cat'  => !empty($data['categorie_id']) ? (int)$data['categorie_id'] : null,
+        ':tva'  => isset($data['taux_tva']) && $data['taux_tva'] !== null ? (float)$data['taux_tva'] : null,
     ]);
     $new_id = (int)$pdo->lastInsertId();
 
@@ -56,7 +58,8 @@ function db_article_update(PDO $pdo, int $id, array $data): void {
             code_barre=:code, nom=:nom, sku=:sku,
             prix_achat=:pa, prix_vente=:pv,
             quantite_stock=:qte, seuil_alerte=:seuil,
-            emplacement=:emp, fournisseur_id=:four
+            emplacement=:emp, fournisseur_id=:four,
+            categorie_id=:cat, taux_tva=:tva
         WHERE id=:id
     ");
     $stmt->execute([
@@ -69,6 +72,8 @@ function db_article_update(PDO $pdo, int $id, array $data): void {
         ':seuil'=> $data['seuil_alerte'],
         ':emp'  => $data['emplacement'],
         ':four' => $data['fournisseur_id'],
+        ':cat'  => !empty($data['categorie_id']) ? (int)$data['categorie_id'] : null,
+        ':tva'  => isset($data['taux_tva']) && $data['taux_tva'] !== null ? (float)$data['taux_tva'] : null,
         ':id'   => $id,
     ]);
 }
@@ -84,7 +89,13 @@ function db_article_deactivate(PDO $pdo, int $id): void {
  * Récupérer un article par son ID.
  */
 function db_article_get_by_id(PDO $pdo, int $id): ?array {
-    $stmt = $pdo->prepare("SELECT * FROM articles WHERE id = ?");
+    $stmt = $pdo->prepare("
+        SELECT a.*, c.nom AS categorie_nom, f.nom AS fournisseur_nom
+        FROM articles a
+        LEFT JOIN categories c ON c.id = a.categorie_id
+        LEFT JOIN fournisseurs f ON f.id = a.fournisseur_id
+        WHERE a.id = ?
+    ");
     $stmt->execute([$id]);
     return $stmt->fetch() ?: null;
 }
@@ -96,7 +107,7 @@ function db_article_get_by_id(PDO $pdo, int $id): ?array {
 function db_article_get_by_barcode(PDO $pdo, string $code, int $magasin_id = 0): ?array {
     if ($magasin_id > 0) {
         $stmt = $pdo->prepare("
-            SELECT a.id, a.code_barre, a.nom, a.sku, a.prix_vente,
+            SELECT a.id, a.code_barre, a.nom, a.sku, a.prix_vente, a.taux_tva,
                    COALESCE(sm.quantite, 0) AS quantite_stock,
                    COALESCE(sm.stock_alerte, a.seuil_alerte) AS seuil_alerte
             FROM articles a
@@ -107,7 +118,7 @@ function db_article_get_by_barcode(PDO $pdo, string $code, int $magasin_id = 0):
         $stmt->execute([$magasin_id, $code]);
     } else {
         $stmt = $pdo->prepare("
-            SELECT id, code_barre, nom, sku, prix_vente, quantite_stock, seuil_alerte
+            SELECT id, code_barre, nom, sku, prix_vente, taux_tva, quantite_stock, seuil_alerte
             FROM articles WHERE code_barre = ? AND actif = 1 LIMIT 1
         ");
         $stmt->execute([$code]);
@@ -121,7 +132,7 @@ function db_article_get_by_barcode(PDO $pdo, string $code, int $magasin_id = 0):
  */
 function db_article_get_for_update(PDO $pdo, int $id, int $magasin_id = 0): ?array {
     // Verrouiller la ligne articles
-    $stmt = $pdo->prepare("SELECT id, nom, quantite_stock, prix_vente FROM articles WHERE id = ? FOR UPDATE");
+    $stmt = $pdo->prepare("SELECT id, nom, quantite_stock, prix_vente, taux_tva FROM articles WHERE id = ? FOR UPDATE");
     $stmt->execute([$id]);
     $article = $stmt->fetch();
     if (!$article) return null;
@@ -197,51 +208,92 @@ function db_articles_list_active(PDO $pdo, int $limit = 500): array {
 /**
  * Rechercher des articles avec filtres dynamiques (stock consultation).
  */
-function db_articles_search_stock(PDO $pdo, string $search = '', int $limit = 200, int $magasin_id = 0): array {
+function db_articles_search_stock(PDO $pdo, string $search = '', int $limit = 200, int $magasin_id = 0, int $categorie_id = 0): array {
     $limit = max(1, min(1000, (int)$limit));
+    $where = ["a.actif = 1"];
+    $params = [];
+
     if ($magasin_id > 0) {
         $sql = "
-            SELECT a.code_barre, a.nom, a.sku, a.prix_vente,
+            SELECT a.id, a.code_barre, a.nom, a.sku, a.prix_vente,
                    COALESCE(sm.quantite, 0) AS quantite_stock,
                    COALESCE(sm.stock_alerte, a.seuil_alerte) AS seuil_alerte,
-                   a.emplacement
+                   a.emplacement, c.nom AS categorie_nom
             FROM articles a
             LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = :mid
-            WHERE a.actif = 1
+            LEFT JOIN categories c ON c.id = a.categorie_id
         ";
-        $stmt = $pdo->prepare($sql . ($search !== '' ? " AND (a.nom LIKE :s1 OR a.code_barre LIKE :s2 OR a.sku LIKE :s3 OR a.emplacement LIKE :s4) " : "") . " ORDER BY a.nom LIMIT :limit");
-        $stmt->bindValue(':mid', $magasin_id, PDO::PARAM_INT);
+        $params[':mid'] = $magasin_id;
     } else {
-        $sql = "SELECT a.code_barre, a.nom, a.sku, a.prix_vente, a.quantite_stock, a.seuil_alerte, a.emplacement FROM articles a WHERE a.actif = 1";
-        $stmt = $pdo->prepare($sql . ($search !== '' ? " AND (a.nom LIKE :s1 OR a.code_barre LIKE :s2 OR a.sku LIKE :s3 OR a.emplacement LIKE :s4) " : "") . " ORDER BY a.nom LIMIT :limit");
+        $sql = "
+            SELECT a.id, a.code_barre, a.nom, a.sku, a.prix_vente, a.quantite_stock, a.seuil_alerte,
+                   a.emplacement, c.nom AS categorie_nom
+            FROM articles a
+            LEFT JOIN categories c ON c.id = a.categorie_id
+        ";
     }
 
     if ($search !== '') {
-        $searchParam = "%$search%";
-        $stmt->bindValue(':s1', $searchParam, PDO::PARAM_STR);
-        $stmt->bindValue(':s2', $searchParam, PDO::PARAM_STR);
-        $stmt->bindValue(':s3', $searchParam, PDO::PARAM_STR);
-        $stmt->bindValue(':s4', $searchParam, PDO::PARAM_STR);
+        $where[] = "(a.nom LIKE :s1 OR a.code_barre LIKE :s2 OR a.sku LIKE :s3 OR a.emplacement LIKE :s4)";
+        $params[':s1'] = "%$search%";
+        $params[':s2'] = "%$search%";
+        $params[':s3'] = "%$search%";
+        $params[':s4'] = "%$search%";
     }
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    $stmt->execute();
+
+    if ($categorie_id > 0) {
+        $where[] = "a.categorie_id = :cid";
+        $params[':cid'] = $categorie_id;
+    }
+
+    $sql .= " WHERE " . implode(" AND ", $where) . " ORDER BY a.nom LIMIT " . (int)$limit;
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     return $stmt->fetchAll();
 }
 
 /**
  * Construit SQL + params pour la recherche d'articles (compatible paginate()).
+ * Accepte une chaîne $search ou un tableau de filtres ['search' => ..., 'categorie_id' => ..., 'fournisseur_id' => ...].
  */
-function db_articles_search_sql(string $search = ''): array {
-    $sql = "SELECT a.*, f.nom AS fournisseur_nom
+function db_articles_search_sql($search_or_filters = ''): array {
+    $search = '';
+    $cat_id = 0;
+    $four_id = 0;
+
+    if (is_array($search_or_filters)) {
+        $search  = trim($search_or_filters['search'] ?? '');
+        $cat_id  = (int)($search_or_filters['categorie_id'] ?? 0);
+        $four_id = (int)($search_or_filters['fournisseur_id'] ?? 0);
+    } else {
+        $search = trim((string)$search_or_filters);
+    }
+
+    $sql = "SELECT a.*, f.nom AS fournisseur_nom, c.nom AS categorie_nom
         FROM articles a
         LEFT JOIN fournisseurs f ON f.id = a.fournisseur_id
+        LEFT JOIN categories c ON c.id = a.categorie_id
         WHERE a.actif = 1
     ";
     $params = [];
+
     if ($search !== '') {
         $sql .= " AND (a.nom LIKE ? OR a.code_barre LIKE ? OR a.sku LIKE ?) ";
-        $params = ["%$search%", "%$search%", "%$search%"];
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
     }
+
+    if ($cat_id > 0) {
+        $sql .= " AND a.categorie_id = ? ";
+        $params[] = $cat_id;
+    }
+
+    if ($four_id > 0) {
+        $sql .= " AND a.fournisseur_id = ? ";
+        $params[] = $four_id;
+    }
+
     $sql .= " ORDER BY a.nom ASC";
     return ['sql' => $sql, 'params' => $params];
 }
@@ -760,12 +812,12 @@ function db_stats_daily_sales(PDO $pdo, string $debut, string $fin): array {
  * @param float|null $prix_original Prix unitaire avant remise (null si pas de remise)
  * @param float|null $remise_pct    Pourcentage de remise appliqué (null si pas de remise)
  */
-function db_ligne_facture_insert(PDO $pdo, int $facture_id, int $article_id, int $quantite, float $prix_unitaire, ?float $prix_original = null, ?float $remise_pct = null): void {
+function db_ligne_facture_insert(PDO $pdo, int $facture_id, int $article_id, int $quantite, float $prix_unitaire, ?float $prix_original = null, ?float $remise_pct = null, ?float $taux_tva = null): void {
     $stmt = $pdo->prepare("
-        INSERT INTO lignes_facture (facture_id, article_id, quantite, prix_unitaire, prix_original, remise_pct)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO lignes_facture (facture_id, article_id, quantite, prix_unitaire, prix_original, remise_pct, taux_tva)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     ");
-    $stmt->execute([$facture_id, $article_id, $quantite, $prix_unitaire, $prix_original, $remise_pct]);
+    $stmt->execute([$facture_id, $article_id, $quantite, $prix_unitaire, $prix_original, $remise_pct, $taux_tva]);
 }
 
 // ============================================================
@@ -2132,3 +2184,666 @@ function db_paiements_total_by_mode(PDO $pdo, int $facture_id): array {
     }
     return $result;
 }
+
+// ============================================================
+//  COMMANDES FOURNISSEURS (Module 1)
+// ============================================================
+
+/**
+ * Construit SQL + params pour la recherche de commandes fournisseurs (compatible avec paginate()).
+ */
+function db_commandes_fournisseur_search_sql(array $filters = []): array {
+    $where = ["1=1"];
+    $params = [];
+
+    if (!empty($filters['statut'])) {
+        $where[] = "cf.statut = ?";
+        $params[] = $filters['statut'];
+    }
+
+    if (!empty($filters['fournisseur_id'])) {
+        $where[] = "cf.fournisseur_id = ?";
+        $params[] = (int)$filters['fournisseur_id'];
+    }
+
+    if (!empty($filters['magasin_id'])) {
+        $where[] = "cf.magasin_id = ?";
+        $params[] = (int)$filters['magasin_id'];
+    }
+
+    if (!empty($filters['date_debut'])) {
+        $where[] = "DATE(cf.date_commande) >= ?";
+        $params[] = $filters['date_debut'];
+    }
+
+    if (!empty($filters['date_fin'])) {
+        $where[] = "DATE(cf.date_commande) <= ?";
+        $params[] = $filters['date_fin'];
+    }
+
+    $where_sql = implode(' AND ', $where);
+
+    $sql = "
+        SELECT cf.*, f.nom AS fournisseur_nom, m.nom AS magasin_nom, u.nom AS utilisateur_nom,
+               COUNT(lcf.id) AS nb_lignes,
+               COALESCE(SUM(lcf.quantite_commandee * lcf.prix_achat_unitaire), 0) AS total_ht
+        FROM commandes_fournisseur cf
+        LEFT JOIN fournisseurs f ON f.id = cf.fournisseur_id
+        LEFT JOIN magasins m ON m.id = cf.magasin_id
+        LEFT JOIN utilisateurs u ON u.id = cf.utilisateur_id
+        LEFT JOIN lignes_commande_fournisseur lcf ON lcf.commande_id = cf.id
+        WHERE {$where_sql}
+        GROUP BY cf.id
+        ORDER BY cf.date_commande DESC, cf.id DESC
+    ";
+
+    return ['sql' => $sql, 'params' => $params];
+}
+
+/**
+ * Récupérer une commande fournisseur par son ID avec infos fournisseur, magasin, utilisateur.
+ */
+function db_commande_fournisseur_get_by_id(PDO $pdo, int $id): ?array {
+    $stmt = $pdo->prepare("
+        SELECT cf.*, f.nom AS fournisseur_nom, f.telephone AS fournisseur_telephone, f.email AS fournisseur_email,
+               m.nom AS magasin_nom, u.nom AS utilisateur_nom
+        FROM commandes_fournisseur cf
+        LEFT JOIN fournisseurs f ON f.id = cf.fournisseur_id
+        LEFT JOIN magasins m ON m.id = cf.magasin_id
+        LEFT JOIN utilisateurs u ON u.id = cf.utilisateur_id
+        WHERE cf.id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$id]);
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * Insérer une nouvelle commande fournisseur.
+ */
+function db_commande_fournisseur_insert(PDO $pdo, array $data): int {
+    $stmt = $pdo->prepare("
+        INSERT INTO commandes_fournisseur (fournisseur_id, magasin_id, utilisateur_id, statut, date_commande, date_reception_prevue, notes)
+        VALUES (:four, :mag, :user, :statut, :date_cmd, :date_rec, :notes)
+    ");
+    $stmt->execute([
+        ':four'     => $data['fournisseur_id'],
+        ':mag'      => $data['magasin_id'],
+        ':user'     => $data['utilisateur_id'],
+        ':statut'   => $data['statut'] ?? 'Brouillon',
+        ':date_cmd' => $data['date_commande'] ?? date('Y-m-d H:i:s'),
+        ':date_rec' => !empty($data['date_reception_prevue']) ? $data['date_reception_prevue'] : null,
+        ':notes'    => $data['notes'] ?? null,
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+/**
+ * Mettre à jour les informations d'une commande fournisseur (si statut Brouillon).
+ */
+function db_commande_fournisseur_update(PDO $pdo, int $id, array $data): void {
+    $stmt = $pdo->prepare("
+        UPDATE commandes_fournisseur SET
+            fournisseur_id = :four,
+            magasin_id = :mag,
+            date_reception_prevue = :date_rec,
+            notes = :notes
+        WHERE id = :id AND statut = 'Brouillon'
+    ");
+    $stmt->execute([
+        ':four'     => $data['fournisseur_id'],
+        ':mag'      => $data['magasin_id'],
+        ':date_rec' => !empty($data['date_reception_prevue']) ? $data['date_reception_prevue'] : null,
+        ':notes'    => $data['notes'] ?? null,
+        ':id'       => $id,
+    ]);
+}
+
+/**
+ * Changer le statut d'une commande fournisseur.
+ */
+function db_commande_fournisseur_update_statut(PDO $pdo, int $id, string $statut): void {
+    $stmt = $pdo->prepare("UPDATE commandes_fournisseur SET statut = ? WHERE id = ?");
+    $stmt->execute([$statut, $id]);
+}
+
+/**
+ * Récupérer les lignes d'une commande fournisseur.
+ */
+function db_commande_fournisseur_lignes_get(PDO $pdo, int $commande_id): array {
+    $stmt = $pdo->prepare("
+        SELECT lcf.*, a.nom AS article_nom, a.code_barre, a.sku
+        FROM lignes_commande_fournisseur lcf
+        JOIN articles a ON a.id = lcf.article_id
+        WHERE lcf.commande_id = ?
+        ORDER BY lcf.id ASC
+    ");
+    $stmt->execute([$commande_id]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * Enregistrer (remplacer) les lignes d'une commande fournisseur.
+ * $lignes = [['article_id' => ..., 'quantite_commandee' => ..., 'prix_achat_unitaire' => ...], ...]
+ */
+function db_commande_fournisseur_lignes_save(PDO $pdo, int $commande_id, array $lignes): void {
+    $pdo->prepare("DELETE FROM lignes_commande_fournisseur WHERE commande_id = ?")->execute([$commande_id]);
+
+    if (empty($lignes)) return;
+
+    $stmt = $pdo->prepare("
+        INSERT INTO lignes_commande_fournisseur (commande_id, article_id, quantite_commandee, quantite_recue, prix_achat_unitaire)
+        VALUES (?, ?, ?, ?, ?)
+    ");
+    foreach ($lignes as $l) {
+        $article_id = (int)($l['article_id'] ?? 0);
+        $qte_cmd    = (int)($l['quantite_commandee'] ?? 0);
+        $qte_rec    = (int)($l['quantite_recue'] ?? 0);
+        $pa         = (float)($l['prix_achat_unitaire'] ?? 0);
+        if ($article_id > 0 && $qte_cmd > 0) {
+            $stmt->execute([$commande_id, $article_id, $qte_cmd, $qte_rec, $pa]);
+        }
+    }
+}
+
+/**
+ * Mettre à jour la quantité reçue pour une ligne spécifique de commande.
+ */
+function db_commande_fournisseur_lignes_update_reception(PDO $pdo, int $ligne_id, int $qte_recue_ajout): void {
+    $stmt = $pdo->prepare("
+        UPDATE lignes_commande_fournisseur 
+        SET quantite_recue = quantite_recue + ? 
+        WHERE id = ?
+    ");
+    $stmt->execute([$qte_recue_ajout, $ligne_id]);
+}
+
+// ============================================================
+//  CATÉGORIES D'ARTICLES (Module 2)
+// ============================================================
+
+/**
+ * Récupérer toutes les catégories d'articles actives.
+ */
+function db_categories_all(PDO $pdo, bool $only_active = true): array {
+    $sql = "SELECT c.*, COUNT(a.id) AS nb_articles
+            FROM categories c
+            LEFT JOIN articles a ON a.categorie_id = c.id AND a.actif = 1";
+    if ($only_active) {
+        $sql .= " WHERE c.actif = 1";
+    }
+    $sql .= " GROUP BY c.id ORDER BY c.nom ASC";
+    return $pdo->query($sql)->fetchAll();
+}
+
+/**
+ * Récupérer une catégorie par son ID.
+ */
+function db_categorie_get_by_id(PDO $pdo, int $id): ?array {
+    $stmt = $pdo->prepare("SELECT * FROM categories WHERE id = ?");
+    $stmt->execute([$id]);
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * Insérer une nouvelle catégorie d'articles.
+ */
+function db_categorie_insert(PDO $pdo, array $data): int {
+    $stmt = $pdo->prepare("INSERT INTO categories (nom, description, actif) VALUES (:nom, :desc, :actif)");
+    $stmt->execute([
+        ':nom'   => $data['nom'],
+        ':desc'  => $data['description'] ?? null,
+        ':actif' => isset($data['actif']) ? (int)$data['actif'] : 1,
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+/**
+ * Mettre à jour une catégorie d'articles.
+ */
+function db_categorie_update(PDO $pdo, int $id, array $data): void {
+    $stmt = $pdo->prepare("UPDATE categories SET nom = :nom, description = :desc, actif = :actif WHERE id = :id");
+    $stmt->execute([
+        ':nom'   => $data['nom'],
+        ':desc'  => $data['description'] ?? null,
+        ':actif' => isset($data['actif']) ? (int)$data['actif'] : 1,
+        ':id'    => $id,
+    ]);
+}
+
+/**
+ * Désactiver une catégorie d'articles (soft delete).
+ */
+function db_categorie_deactivate(PDO $pdo, int $id): void {
+    $pdo->prepare("UPDATE categories SET actif = 0 WHERE id = ?")->execute([$id]);
+}
+
+// ============================================================
+//  MODULE 4 — INVENTAIRE PHYSIQUE (COMPTAGE CYCLIQUE)
+// ============================================================
+
+/**
+ * Créer une session d'inventaire et retourner son ID.
+ */
+function db_inventaire_insert(PDO $pdo, array $data): int {
+    $stmt = $pdo->prepare("
+        INSERT INTO inventaires (reference, magasin_id, utilisateur_id, notes)
+        VALUES (:ref, :mag, :uid, :notes)
+    ");
+    $stmt->execute([
+        ':ref'   => $data['reference'],
+        ':mag'   => (int)($data['magasin_id'] ?? 1),
+        ':uid'   => $data['utilisateur_id'] ?? null,
+        ':notes' => $data['notes'] ?? null,
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+/**
+ * Récupérer une session d'inventaire par son ID.
+ */
+function db_inventaire_get_by_id(PDO $pdo, int $id): ?array {
+    $stmt = $pdo->prepare("
+        SELECT i.*, u.nom AS createur_nom, m.nom_magasin
+        FROM inventaires i
+        LEFT JOIN utilisateurs u ON u.id = i.utilisateur_id
+        LEFT JOIN magasins m ON m.id = i.magasin_id
+        WHERE i.id = ?
+    ");
+    $stmt->execute([$id]);
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * Construire SQL + params pour la liste paginée des inventaires.
+ */
+function db_inventaires_search_sql(array $filters = []): array {
+    $where  = [];
+    $params = [];
+    $statut = $filters['statut'] ?? '';
+    $magasin_id = (int)($filters['magasin_id'] ?? 0);
+    $search = $filters['search'] ?? '';
+
+    if ($statut !== '') {
+        $where[] = 'i.statut = ?';
+        $params[] = $statut;
+    }
+    if ($magasin_id > 0) {
+        $where[] = 'i.magasin_id = ?';
+        $params[] = $magasin_id;
+    }
+    if ($search !== '') {
+        $where[] = '(i.reference LIKE ? OR u.nom LIKE ?)';
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
+
+    $sql = "SELECT i.*, u.nom AS createur_nom, m.nom_magasin,
+                   COUNT(il.id) AS nb_lignes
+            FROM inventaires i
+            LEFT JOIN utilisateurs u  ON u.id  = i.utilisateur_id
+            LEFT JOIN magasins m      ON m.id  = i.magasin_id
+            LEFT JOIN inventaire_lignes il ON il.inventaire_id = i.id";
+    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+    $sql .= " GROUP BY i.id ORDER BY i.created_at DESC";
+    return ['sql' => $sql, 'params' => $params];
+}
+
+/**
+ * Mettre à jour le statut d'une session d'inventaire.
+ */
+function db_inventaire_update_statut(PDO $pdo, int $id, string $statut): void {
+    $allowed = ['En cours', 'Validé', 'Annulé'];
+    if (!in_array($statut, $allowed, true)) return;
+    $date_fin = in_array($statut, ['Validé', 'Annulé'], true) ? date('Y-m-d H:i:s') : null;
+    $stmt = $pdo->prepare("UPDATE inventaires SET statut = ?, date_fin = ? WHERE id = ?");
+    $stmt->execute([$statut, $date_fin, $id]);
+}
+
+/**
+ * Récupérer toutes les lignes d'une session d'inventaire.
+ */
+function db_inventaire_lignes_get(PDO $pdo, int $inventaire_id): array {
+    $stmt = $pdo->prepare("
+        SELECT il.*, a.nom AS article_nom, a.code_barre, a.sku
+        FROM inventaire_lignes il
+        JOIN articles a ON a.id = il.article_id
+        WHERE il.inventaire_id = ?
+        ORDER BY a.nom
+    ");
+    $stmt->execute([$inventaire_id]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * Ajouter ou mettre à jour la ligne de comptage pour un article dans une session.
+ * Utilise INSERT … ON DUPLICATE KEY UPDATE pour l'idempotence.
+ */
+function db_inventaire_ligne_upsert(PDO $pdo, int $inventaire_id, int $article_id, int $qte_comptee, int $qte_theorique, ?string $notes = null): void {
+    $stmt = $pdo->prepare("
+        INSERT INTO inventaire_lignes (inventaire_id, article_id, quantite_theorique, quantite_comptee, notes)
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            quantite_theorique = VALUES(quantite_theorique),
+            quantite_comptee   = VALUES(quantite_comptee),
+            notes              = VALUES(notes)
+    ");
+    $stmt->execute([$inventaire_id, $article_id, $qte_theorique, $qte_comptee, $notes]);
+}
+
+/**
+ * Appliquer les écarts d'inventaire : met à jour le stock système selon
+ * la quantité physiquement comptée, et enregistre un mouvement de type Ajustement.
+ * Doit être appelé dans une transaction.
+ */
+function db_inventaire_appliquer_ecarts(PDO $pdo, int $inventaire_id, int $user_id): void {
+    $lignes = db_inventaire_lignes_get($pdo, $inventaire_id);
+    foreach ($lignes as $l) {
+        $ecart = (int)$l['ecart'];
+        if ($ecart === 0) continue;
+
+        // Obtenir le magasin_id de l'inventaire
+        $inv = db_inventaire_get_by_id($pdo, $inventaire_id);
+        $magasin_id = (int)($inv['magasin_id'] ?? 0);
+
+        // Correction directe : SET quantite_comptee dans stock_magasins
+        if ($magasin_id > 0) {
+            $pdo->prepare("
+                UPDATE stock_magasins SET quantite = :qte WHERE article_id = :aid AND magasin_id = :mid
+            ")->execute([
+                ':qte' => (int)$l['quantite_comptee'],
+                ':aid' => (int)$l['article_id'],
+                ':mid' => $magasin_id,
+            ]);
+        }
+
+        // Mise à jour du stock global articles
+        $pdo->prepare("UPDATE articles SET quantite_stock = :qte WHERE id = :id")
+            ->execute([':qte' => (int)$l['quantite_comptee'], ':id' => (int)$l['article_id']]);
+
+        // Mouvement de stock
+        $type   = $ecart > 0 ? 'Entree' : 'Sortie';
+        $motif  = 'Ajustement inventaire #' . $inventaire_id;
+        if (function_exists('process_stock_movement')) {
+            process_stock_movement($pdo, (int)$l['article_id'], $type, abs($ecart), $motif, $user_id, $magasin_id);
+        }
+    }
+}
+
+// ============================================================
+//  MODULE 5 — RETOURS & AVOIRS (SAV)
+// ============================================================
+
+/**
+ * Insérer un retour de vente.
+ */
+function db_retour_insert(PDO $pdo, array $data): int {
+    $stmt = $pdo->prepare("
+        INSERT INTO retours_factures (numero_retour, facture_id, magasin_id, utilisateur_id, montant_total, motif)
+        VALUES (:num, :fid, :mag, :uid, :montant, :motif)
+    ");
+    $stmt->execute([
+        ':num'     => $data['numero_retour'],
+        ':fid'     => (int)$data['facture_id'],
+        ':mag'     => (int)($data['magasin_id'] ?? 1),
+        ':uid'     => $data['utilisateur_id'] ?? null,
+        ':montant' => (float)($data['montant_total'] ?? 0),
+        ':motif'   => $data['motif'] ?? null,
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+/**
+ * Récupérer un retour par son ID.
+ */
+function db_retour_get_by_id(PDO $pdo, int $id): ?array {
+    $stmt = $pdo->prepare("
+        SELECT r.*, f.numero_facture, u.nom AS agent_nom, m.nom_magasin
+        FROM retours_factures r
+        JOIN factures f ON f.id = r.facture_id
+        LEFT JOIN utilisateurs u ON u.id = r.utilisateur_id
+        LEFT JOIN magasins m ON m.id = r.magasin_id
+        WHERE r.id = ?
+    ");
+    $stmt->execute([$id]);
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * Récupérer les lignes d'un retour.
+ */
+function db_retour_lignes_get(PDO $pdo, int $retour_id): array {
+    $stmt = $pdo->prepare("
+        SELECT lr.*, a.nom AS article_nom, a.code_barre
+        FROM lignes_retour lr
+        JOIN articles a ON a.id = lr.article_id
+        WHERE lr.retour_id = ?
+        ORDER BY lr.id
+    ");
+    $stmt->execute([$retour_id]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * Recherche paginée des retours.
+ */
+function db_retours_search_sql(array $filters = []): array {
+    $where  = [];
+    $params = [];
+    $magasin_id = (int)($filters['magasin_id'] ?? 0);
+    $search     = $filters['search'] ?? '';
+
+    if ($magasin_id > 0) {
+        $where[] = 'r.magasin_id = ?';
+        $params[] = $magasin_id;
+    }
+    if ($search !== '') {
+        $where[] = '(r.numero_retour LIKE ? OR f.numero_facture LIKE ? OR u.nom LIKE ?)';
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
+
+    $sql = "SELECT r.*, f.numero_facture, u.nom AS agent_nom, m.nom_magasin,
+                   COUNT(lr.id) AS nb_articles
+            FROM retours_factures r
+            JOIN factures f ON f.id = r.facture_id
+            LEFT JOIN utilisateurs u ON u.id = r.utilisateur_id
+            LEFT JOIN magasins m ON m.id = r.magasin_id
+            LEFT JOIN lignes_retour lr ON lr.retour_id = r.id";
+    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+    $sql .= " GROUP BY r.id ORDER BY r.created_at DESC";
+    return ['sql' => $sql, 'params' => $params];
+}
+
+/**
+ * Créer un retour complet avec ré-incrémentation du stock.
+ * Doit être exécuté dans une transaction.
+ */
+function db_retour_creer(PDO $pdo, int $facture_id, array $lignes_retour, string $motif, int $user_id, int $magasin_id): int {
+    $year  = date('Y');
+    $count = (int)$pdo->query("SELECT COUNT(*)+1 FROM retours_factures WHERE YEAR(created_at) = $year")->fetchColumn();
+    $num   = 'RET-' . $year . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+
+    // Calculer le montant total du retour
+    $montantTotal = 0.0;
+    foreach ($lignes_retour as $l) {
+        $montantTotal += (float)$l['prix_unitaire'] * (int)$l['quantite'];
+    }
+
+    $retourId = db_retour_insert($pdo, [
+        'numero_retour'  => $num,
+        'facture_id'     => $facture_id,
+        'magasin_id'     => $magasin_id,
+        'utilisateur_id' => $user_id,
+        'montant_total'  => $montantTotal,
+        'motif'          => $motif,
+    ]);
+
+    $stmtLigne = $pdo->prepare("
+        INSERT INTO lignes_retour (retour_id, ligne_facture_id, article_id, quantite, prix_unitaire)
+        VALUES (?, ?, ?, ?, ?)
+    ");
+
+    foreach ($lignes_retour as $l) {
+        $stmtLigne->execute([
+            $retourId,
+            (int)$l['ligne_facture_id'],
+            (int)$l['article_id'],
+            (int)$l['quantite'],
+            (float)$l['prix_unitaire'],
+        ]);
+
+        // Remettre en stock via process_stock_movement (Entrée / Retour SAV)
+        if (function_exists('process_stock_movement')) {
+            process_stock_movement(
+                $pdo,
+                (int)$l['article_id'],
+                'Entree',
+                (int)$l['quantite'],
+                'Retour SAV #' . $num . ' (Facture #' . $facture_id . ')',
+                $user_id,
+                $magasin_id
+            );
+        }
+    }
+
+    return $retourId;
+}
+
+// ============================================================
+//  MODULE 6 — REMISES ET PROMOTIONS (CODES PROMO & PROMOTIONS)
+// ============================================================
+
+/**
+ * Insérer une promotion.
+ */
+function db_promotion_insert(PDO $pdo, array $data): int {
+    $stmt = $pdo->prepare("
+        INSERT INTO promotions (nom, code_promo, type_reduction, valeur, article_id, categorie_id, montant_min_achat, date_debut, date_fin, limite_utilisations, actif)
+        VALUES (:nom, :code, :type, :valeur, :art_id, :cat_id, :min_achat, :debut, :fin, :limite, :actif)
+    ");
+    $stmt->execute([
+        ':nom'       => $data['nom'],
+        ':code'      => !empty($data['code_promo']) ? strtoupper(trim($data['code_promo'])) : null,
+        ':type'      => in_array($data['type_reduction'] ?? '', ['pourcentage', 'montant_fixe'], true) ? $data['type_reduction'] : 'pourcentage',
+        ':valeur'    => (float)($data['valeur'] ?? 0),
+        ':art_id'    => !empty($data['article_id']) ? (int)$data['article_id'] : null,
+        ':cat_id'    => !empty($data['categorie_id']) ? (int)$data['categorie_id'] : null,
+        ':min_achat' => (float)($data['montant_min_achat'] ?? 0),
+        ':debut'     => !empty($data['date_debut']) ? $data['date_debut'] : null,
+        ':fin'       => !empty($data['date_fin']) ? $data['date_fin'] : null,
+        ':limite'    => !empty($data['limite_utilisations']) ? (int)$data['limite_utilisations'] : null,
+        ':actif'     => isset($data['actif']) ? (int)$data['actif'] : 1,
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+/**
+ * Mettre à jour une promotion.
+ */
+function db_promotion_update(PDO $pdo, int $id, array $data): void {
+    $stmt = $pdo->prepare("
+        UPDATE promotions SET
+            nom = :nom, code_promo = :code, type_reduction = :type, valeur = :valeur,
+            article_id = :art_id, categorie_id = :cat_id, montant_min_achat = :min_achat,
+            date_debut = :debut, date_fin = :fin, limite_utilisations = :limite, actif = :actif
+        WHERE id = :id
+    ");
+    $stmt->execute([
+        ':nom'       => $data['nom'],
+        ':code'      => !empty($data['code_promo']) ? strtoupper(trim($data['code_promo'])) : null,
+        ':type'      => in_array($data['type_reduction'] ?? '', ['pourcentage', 'montant_fixe'], true) ? $data['type_reduction'] : 'pourcentage',
+        ':valeur'    => (float)($data['valeur'] ?? 0),
+        ':art_id'    => !empty($data['article_id']) ? (int)$data['article_id'] : null,
+        ':cat_id'    => !empty($data['categorie_id']) ? (int)$data['categorie_id'] : null,
+        ':min_achat' => (float)($data['montant_min_achat'] ?? 0),
+        ':debut'     => !empty($data['date_debut']) ? $data['date_debut'] : null,
+        ':fin'       => !empty($data['date_fin']) ? $data['date_fin'] : null,
+        ':limite'    => !empty($data['limite_utilisations']) ? (int)$data['limite_utilisations'] : null,
+        ':actif'     => isset($data['actif']) ? (int)$data['actif'] : 1,
+        ':id'        => $id,
+    ]);
+}
+
+/**
+ * Récupérer une promotion par ID.
+ */
+function db_promotion_get_by_id(PDO $pdo, int $id): ?array {
+    $stmt = $pdo->prepare("
+        SELECT p.*, a.nom AS article_nom, c.nom AS categorie_nom
+        FROM promotions p
+        LEFT JOIN articles a ON a.id = p.article_id
+        LEFT JOIN categories c ON c.id = p.categorie_id
+        WHERE p.id = ?
+    ");
+    $stmt->execute([$id]);
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * Récupérer et valider un code promo actif.
+ */
+function db_promotion_get_by_code(PDO $pdo, string $code, float $total_achat = 0.0): ?array {
+    $code = strtoupper(trim($code));
+    if ($code === '') return null;
+
+    $stmt = $pdo->prepare("
+        SELECT p.*, a.nom AS article_nom
+        FROM promotions p
+        LEFT JOIN articles a ON a.id = p.article_id
+        WHERE p.code_promo = :code
+          AND p.actif = 1
+          AND (p.date_debut IS NULL OR p.date_debut <= NOW())
+          AND (p.date_fin IS NULL OR p.date_fin >= NOW())
+          AND (p.limite_utilisations IS NULL OR p.nb_utilisations < p.limite_utilisations)
+          AND (p.montant_min_achat <= :total)
+    ");
+    $stmt->execute([':code' => $code, ':total' => $total_achat]);
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * Incrémenter l'utilisation d'un code promo.
+ */
+function db_promotion_increment_usage(PDO $pdo, int $promo_id): void {
+    $pdo->prepare("UPDATE promotions SET nb_utilisations = nb_utilisations + 1 WHERE id = ?")->execute([$promo_id]);
+}
+
+/**
+ * Désactiver une promotion.
+ */
+function db_promotion_deactivate(PDO $pdo, int $id): void {
+    $pdo->prepare("UPDATE promotions SET actif = 0 WHERE id = ?")->execute([$id]);
+}
+
+/**
+ * Recherche paginée des promotions.
+ */
+function db_promotions_search_sql(array $filters = []): array {
+    $where  = [];
+    $params = [];
+    $search = $filters['search'] ?? '';
+    $actif  = $filters['actif'] ?? '';
+
+    if ($search !== '') {
+        $where[] = '(p.nom LIKE ? OR p.code_promo LIKE ?)';
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
+    if ($actif !== '') {
+        $where[] = 'p.actif = ?';
+        $params[] = (int)$actif;
+    }
+
+    $sql = "SELECT p.*, a.nom AS article_nom, c.nom AS categorie_nom
+            FROM promotions p
+            LEFT JOIN articles a ON a.id = p.article_id
+            LEFT JOIN categories c ON c.id = p.categorie_id";
+    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+    $sql .= " ORDER BY p.created_at DESC";
+    return ['sql' => $sql, 'params' => $params];
+}
+
+
+

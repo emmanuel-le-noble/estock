@@ -49,8 +49,20 @@
                     <i class="bi bi-truck text-primary"></i>
                     {{ h(g.fournisseur_nom|default('Sans fournisseur')) }}
                 </h5>
-                {% set nb = g.articles|default([])|length %}
-                <span class="badge text-bg-secondary">{{ nb }} article{{ nb > 1 ? 's' : '' }}</span>
+                <div class="d-flex align-items-center gap-2">
+                    {% set nb = g.articles|default([])|length %}
+                    <span class="badge text-bg-secondary">{{ nb }} article{{ nb > 1 ? 's' : '' }}</span>
+                    {% if peut('achats_gerer') and g.fournisseur_id|default(0) > 0 %}
+                        <form method="POST" action="commandes_fournisseur.php" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="action" value="preremplir">
+                            <input type="hidden" name="fournisseur_id" value="{{ g.fournisseur_id }}">
+                            <button type="submit" class="btn btn-sm btn-primary">
+                                <i class="bi bi-cart-plus me-1"></i> Créer bon de commande
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
             </div>
             <div class="card-body">
                 <?php if ($g['contact'] || $g['telephone']): ?>

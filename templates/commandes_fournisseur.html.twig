@@ -1,0 +1,475 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h2 class="h4 mb-0 fw-bold">
+            <i class="bi bi-truck text-primary me-2"></i>
+            {% if vue == 'detail' %}
+                Commande Fournisseur #{{ commande.id|default('') }}
+            {% elseif vue == 'formulaire' %}
+                {{ commande ? 'Édition de la Commande #' ~ commande.id : 'Nouvelle Commande Fournisseur' }}
+            {% else %}
+                Commandes Fournisseurs
+            {% endif %}
+        </h2>
+        <p class="text-muted small mb-0">Gestion du cycle d'approvisionnement et réceptions de stock</p>
+    </div>
+    <div class="d-flex gap-2">
+        {% if vue != 'liste' %}
+            <a href="commandes_fournisseur.php" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Retour à la liste
+            </a>
+        {% endif %}
+        {% if vue == 'liste' and can_manage %}
+            <a href="commandes_fournisseur.php?action=nouveau" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i> Nouvelle Commande
+            </a>
+        {% endif %}
+    </div>
+</div>
+
+{# ==================== VUE LISTE ==================== #}
+{% if vue == 'liste' %}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="GET" action="commandes_fournisseur.php" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Statut</label>
+                <select name="statut" class="form-select form-select-sm">
+                    <option value="">Tous les statuts</option>
+                    <option value="Brouillon" {{ filters.statut|default('') == 'Brouillon' ? 'selected' : '' }}>Brouillon</option>
+                    <option value="Envoyee" {{ filters.statut|default('') == 'Envoyee' ? 'selected' : '' }}>Envoyée</option>
+                    <option value="Recue_Partielle" {{ filters.statut|default('') == 'Recue_Partielle' ? 'selected' : '' }}>Reçue (Partielle)</option>
+                    <option value="Recue" {{ filters.statut|default('') == 'Recue' ? 'selected' : '' }}>Reçue (Totale)</option>
+                    <option value="Annulee" {{ filters.statut|default('') == 'Annulee' ? 'selected' : '' }}>Annulée</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Fournisseur</label>
+                <select name="fournisseur_id" class="form-select form-select-sm">
+                    <option value="">Tous les fournisseurs</option>
+                    {% for f in fournisseurs|default([]) %}
+                        <option value="{{ f.id }}" {{ filters.fournisseur_id|default('') == f.id ? 'selected' : '' }}>
+                            {{ h(f.nom) }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold">Date début</label>
+                <input type="date" name="date_debut" class="form-select form-select-sm" value="{{ filters.date_debut|default('') }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold">Date fin</label>
+                <input type="date" name="date_fin" class="form-select form-select-sm" value="{{ filters.date_fin|default('') }}">
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                    <i class="bi bi-search"></i> Filtrer
+                </button>
+                <a href="commandes_fournisseur.php" class="btn btn-outline-secondary btn-sm" title="Réinitialiser">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>N° Commande</th>
+                    <th>Fournisseur</th>
+                    <th>Magasin</th>
+                    <th>Statut</th>
+                    <th>Articles</th>
+                    <th class="text-end">Total HT</th>
+                    <th>Date commande</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in commandes|default([]) %}
+                    {% set badge_class = {
+                        'Brouillon': 'secondary',
+                        'Envoyee': 'info',
+                        'Recue_Partielle': 'warning',
+                        'Recue': 'success',
+                        'Annulee': 'danger'
+                    }[c.statut|default('Brouillon')]|default('secondary') %}
+                    <tr>
+                        <td class="fw-bold">#{{ c.id }}</td>
+                        <td>{{ h(c.fournisseur_nom|default('—')) }}</td>
+                        <td>{{ h(c.magasin_nom|default('—')) }}</td>
+                        <td>
+                            <span class="badge bg-{{ badge_class }}">
+                                {{ c.statut|replace({'_': ' '}) }}
+                            </span>
+                        </td>
+                        <td><span class="badge bg-light text-dark">{{ c.nb_lignes|default(0) }} ligne(s)</span></td>
+                        <td class="text-end fw-semibold">{{ money(c.total_ht|default(0)) }}</td>
+                        <td class="small">{{ date_fr(c.date_commande|default('')) }}</td>
+                        <td class="text-end">
+                            <a href="{{ generate_signed_url('commandes_fournisseur.php', c.id, {'action': 'voir'}) }}" class="btn btn-sm btn-outline-primary" title="Voir détail">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                            Aucune commande fournisseur trouvée.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ==================== VUE DÉTAIL ==================== #}
+{% elseif vue == 'detail' %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h5 class="fw-bold mb-1">Commande Fournisseur #{{ commande.id }}</h5>
+                        <p class="text-muted small mb-0">Créée par {{ h(commande.utilisateur_nom|default('Utilisateur')) }} le {{ date_fr(commande.date_creation) }}</p>
+                    </div>
+                    {% set badge_class = {
+                        'Brouillon': 'secondary',
+                        'Envoyee': 'info',
+                        'Recue_Partielle': 'warning',
+                        'Recue': 'success',
+                        'Annulee': 'danger'
+                    }[commande.statut]|default('secondary') %}
+                    <span class="badge bg-{{ badge_class }} fs-6">
+                        {{ commande.statut|replace({'_': ' '}) }}
+                    </span>
+                </div>
+
+                <div class="row g-3 mt-2 border-top pt-3">
+                    <div class="col-sm-6">
+                        <span class="text-muted small d-block">Fournisseur :</span>
+                        <strong>{{ h(commande.fournisseur_nom|default('—')) }}</strong>
+                        {% if commande.fournisseur_telephone|default('') %}
+                            <div class="small text-muted"><i class="bi bi-telephone"></i> {{ h(commande.fournisseur_telephone) }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-sm-6">
+                        <span class="text-muted small d-block">Magasin de destination :</span>
+                        <strong>{{ h(commande.magasin_nom|default('—')) }}</strong>
+                    </div>
+                    {% if commande.date_reception_prevue|default('') %}
+                    <div class="col-sm-6">
+                        <span class="text-muted small d-block">Réception prévue le :</span>
+                        <span>{{ date_fr(commande.date_reception_prevue) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if commande.notes|default('') %}
+                    <div class="col-12">
+                        <span class="text-muted small d-block">Notes / Instructions :</span>
+                        <div class="p-2 bg-light rounded small">{{ h(commande.notes) }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body d-flex flex-column justify-content-between">
+                <div>
+                    <h6 class="fw-bold mb-3">Actions sur la commande</h6>
+
+                    {% if commande.statut == 'Brouillon' and can_manage %}
+                        <form method="POST" action="commandes_fournisseur.php" class="mb-2">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="action" value="envoyer">
+                            <input type="hidden" name="id" value="{{ commande.id }}">
+                            <button type="submit" class="btn btn-info text-white w-100 mb-2">
+                                <i class="bi bi-send"></i> Marquer comme Envoyée
+                            </button>
+                        </form>
+
+                        <a href="{{ generate_signed_url('commandes_fournisseur.php', commande.id, {'action': 'editer_form'}) }}" class="btn btn-outline-primary w-100 mb-2">
+                            <i class="bi bi-pencil"></i> Modifier le brouillon
+                        </a>
+                    {% endif %}
+
+                    {% if commande.statut in ['Brouillon', 'Envoyee'] and can_manage %}
+                        <form method="POST" action="commandes_fournisseur.php" onsubmit="return confirm('Êtes-vous sûr de vouloir annuler cette commande ?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="action" value="annuler">
+                            <input type="hidden" name="id" value="{{ commande.id }}">
+                            <button type="submit" class="btn btn-outline-danger w-100">
+                                <i class="bi bi-x-circle"></i> Annuler la commande
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+
+                <div class="mt-4 pt-3 border-top text-center">
+                    <span class="text-muted small">Total Estimé HT</span>
+                    {% set total_ht = 0 %}
+                    {% for l in lignes|default([]) %}
+                        {% set total_ht = total_ht + (l.quantite_commandee * l.prix_achat_unitaire) %}
+                    {% endfor %}
+                    <div class="fs-3 fw-bold text-primary">{{ money(total_ht) }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Table des articles & Formulaire de Réception #}
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i>Articles commandés & état de réception</h6>
+    </div>
+
+    {% if commande.statut in ['Envoyee', 'Recue_Partielle'] and can_manage %}
+    <form method="POST" action="commandes_fournisseur.php">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="action" value="receptionner">
+        <input type="hidden" name="id" value="{{ commande.id }}">
+    {% endif %}
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Article</th>
+                    <th>Code-barres</th>
+                    <th class="text-end">Prix achat unitaire</th>
+                    <th class="text-center">Qté commandée</th>
+                    <th class="text-center">Qté reçue</th>
+                    <th class="text-center">Reste à recevoir</th>
+                    {% if commande.statut in ['Envoyee', 'Recue_Partielle'] and can_manage %}
+                        <th class="text-center bg-warning-subtle" style="width: 160px;">Saisir réception</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in lignes|default([]) %}
+                    {% set reste = l.quantite_commandee - l.quantite_recue %}
+                    <tr>
+                        <td class="fw-semibold">{{ h(l.article_nom) }}</td>
+                        <td><code>{{ h(l.code_barre) }}</code></td>
+                        <td class="text-end">{{ money(l.prix_achat_unitaire) }}</td>
+                        <td class="text-center fw-bold">{{ l.quantite_commandee }}</td>
+                        <td class="text-center text-success fw-bold">{{ l.quantite_recue }}</td>
+                        <td class="text-center">
+                            {% if reste > 0 %}
+                                <span class="badge bg-warning text-dark">{{ reste }}</span>
+                            {% else %}
+                                <span class="badge bg-success"><i class="bi bi-check"></i> Complet</span>
+                            {% endif %}
+                        </td>
+                        {% if commande.statut in ['Envoyee', 'Recue_Partielle'] and can_manage %}
+                            <td class="bg-warning-subtle text-center">
+                                {% if reste > 0 %}
+                                    <input type="number" name="reception[{{ l.id }}]" class="form-control form-control-sm text-center mx-auto" style="max-width: 100px;" min="0" max="{{ reste }}" value="0">
+                                {% else %}
+                                    <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if commande.statut in ['Envoyee', 'Recue_Partielle'] and can_manage %}
+        <div class="card-footer bg-white text-end py-3">
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-box-seam me-1"></i> Valider l'entrée en stock des quantités reçues
+            </button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+
+{# ==================== VUE FORMULAIRE ==================== #}
+{% elseif vue == 'formulaire' %}
+
+<form method="POST" action="commandes_fournisseur.php" id="formCommande">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="{{ commande ? 'editer' : 'creer' }}">
+    {% if commande %}
+        <input type="hidden" name="id" value="{{ commande.id }}">
+    {% endif %}
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Fournisseur <span class="text-danger">*</span></label>
+                    <select name="fournisseur_id" class="form-select" required>
+                        <option value="">-- Choisir un fournisseur --</option>
+                        {% for f in fournisseurs|default([]) %}
+                            <option value="{{ f.id }}" {{ (commande.fournisseur_id|default('') == f.id) ? 'selected' : '' }}>
+                                {{ h(f.nom) }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Magasin de réception <span class="text-danger">*</span></label>
+                    <select name="magasin_id" class="form-select" required>
+                        {% for m in magasins|default([]) %}
+                            <option value="{{ m.id }}" {{ (commande.magasin_id|default('') == m.id or current_user.magasin_id|default(0) == m.id) ? 'selected' : '' }}>
+                                {{ h(m.nom) }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Date de réception prévue</label>
+                    <input type="date" name="date_reception_prevue" class="form-control" value="{{ commande.date_reception_prevue|default('') }}">
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Notes / Informations</label>
+                    <textarea name="notes" class="form-control" rows="2" placeholder="Notes optionnelles pour le fournisseur ou la réception...">{{ commande.notes|default('') }}</textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+            <h6 class="mb-0 fw-bold"><i class="bi bi-box-seam me-2"></i>Articles à commander</h6>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnAddLine">
+                <i class="bi bi-plus-lg"></i> Ajouter un article
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="tableLignes">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 45%;">Article</th>
+                        <th style="width: 20%;" class="text-end">Prix Achat Unitaire (HT)</th>
+                        <th style="width: 20%;" class="text-center">Quantité commandée</th>
+                        <th style="width: 15%;" class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set initial_lignes = lignes|default([]) %}
+                    {% if initial_lignes|length == 0 %}
+                        {% set initial_lignes = [{}] %}
+                    {% endif %}
+                    {% for idx, l in initial_lignes %}
+                        <tr class="ligne-row">
+                            <td>
+                                <select name="lignes[{{ idx }}][article_id]" class="form-select form-select-sm select-article" required>
+                                    <option value="">-- Sélectionner l'article --</option>
+                                    {% for a in articles|default([]) %}
+                                        <option value="{{ a.id }}" data-pa="{{ a.prix_achat }}" {{ (l.article_id|default('') == a.id) ? 'selected' : '' }}>
+                                            {{ h(a.nom) }} ({{ h(a.code_barre) }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" step="0.01" min="0" name="lignes[{{ idx }}][prix_achat_unitaire]" class="form-control form-control-sm text-end input-pa" value="{{ l.prix_achat_unitaire|default(0) }}" required>
+                            </td>
+                            <td>
+                                <input type="number" min="1" name="lignes[{{ idx }}][quantite_commandee]" class="form-control form-control-sm text-center input-qte" value="{{ l.quantite_commandee|default(1) }}" required>
+                            </td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-line"><i class="bi bi-trash"></i></button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="text-end">
+        <button type="submit" class="btn btn-primary btn-lg">
+            <i class="bi bi-check-lg"></i> Enregistrer le Brouillon
+        </button>
+    </div>
+</form>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts_extra %}
+<script nonce="{{ csp_nonce_val }}">
+document.addEventListener('DOMContentLoaded', function() {
+    const tableBody = document.querySelector('#tableLignes tbody');
+    const btnAddLine = document.getElementById('btnAddLine');
+
+    if (!tableBody || !btnAddLine) return;
+
+    let lineIndex = tableBody.querySelectorAll('.ligne-row').length;
+
+    // Mise à jour automatique du prix d'achat à la sélection d'un article
+    tableBody.addEventListener('change', function(e) {
+        if (e.target.classList.contains('select-article')) {
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            const pa = selectedOption.getAttribute('data-pa') || 0;
+            const row = e.target.closest('tr');
+            const paInput = row.querySelector('.input-pa');
+            if (paInput && (!paInput.value || paInput.value == 0)) {
+                paInput.value = parseFloat(pa).toFixed(2);
+            }
+        }
+    });
+
+    // Suppression de ligne
+    tableBody.addEventListener('click', function(e) {
+        const btnRemove = e.target.closest('.btn-remove-line');
+        if (btnRemove) {
+            const row = btnRemove.closest('tr');
+            if (tableBody.querySelectorAll('.ligne-row').length > 1) {
+                row.remove();
+            } else {
+                alert('La commande doit comporter au moins une ligne.');
+            }
+        }
+    });
+
+    // Ajout de ligne
+    btnAddLine.addEventListener('click', function() {
+        const firstRow = tableBody.querySelector('.ligne-row');
+        if (!firstRow) return;
+
+        const newRow = firstRow.cloneNode(true);
+        lineIndex++;
+
+        // Réinitialiser les champs et mettre à jour les attributs name
+        newRow.querySelectorAll('select, input').forEach(input => {
+            const nameAttr = input.getAttribute('name');
+            if (nameAttr) {
+                input.setAttribute('name', nameAttr.replace(/\[\d+\]/, '[' + lineIndex + ']'));
+            }
+            if (input.tagName === 'SELECT') {
+                input.selectedIndex = 0;
+            } else if (input.classList.contains('input-qte')) {
+                input.value = 1;
+            } else {
+                input.value = '';
+            }
+        });
+
+        tableBody.appendChild(newRow);
+    });
+});
+</script>
+{% endblock %}

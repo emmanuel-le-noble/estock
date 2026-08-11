@@ -115,10 +115,20 @@
             <td>Total HT</td>
             <td class="text-right">{{ facture.total_ht|number_format(decimals, '.', ' ') }} {{ devise }}</td>
         </tr>
+        {# --- TVA : ventilation multi-taux ou taux unique --- #}
+        {% if tva_resume is defined and tva_resume|length > 1 %}
+            {% for tv in tva_resume %}
+            <tr>
+                <td>TVA {{ tv.taux|number_format(2, ',', ' ') }}%</td>
+                <td class="text-right">{{ tv.montant_tva|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+            </tr>
+            {% endfor %}
+        {% elseif tva_taux > 0 %}
         <tr>
             <td>TVA ({{ tva_taux }}%)</td>
             <td class="text-right">{{ (facture.total_ttc - facture.total_ht)|number_format(decimals, '.', ' ') }} {{ devise }}</td>
         </tr>
+        {% endif %}
         <tr>
             <td class="fw-bold fs-lg">TOTAL TTC</td>
             <td class="text-right fw-bold fs-lg">{{ facture.total_ttc|number_format(decimals, '.', ' ') }} {{ devise }}</td>

@@ -67,6 +67,10 @@ match (true) {
     $resource === 'generer_code_barre' && $method === 'GET'
         => handle_generer_code_barre(),
 
+    // --- Code promo ---
+    $resource === 'promo' && $method === 'GET'
+        => handle_promo_check(),
+
     // --- 404 ---
     default
         => json_out(['error' => 'Route introuvable.'], 404),
@@ -588,4 +592,35 @@ function handle_generer_code_barre(): void {
     } catch (\Throwable $e) {
         json_out(['error' => 'Erreur lors de la génération.'], 500);
     }
+}
+
+// ============================================================
+//  CODE PROMO (VERIFICATION CAISSE)
+// ============================================================
+
+function handle_promo_check(): void {
+    global $pdo;
+    if (!est_connecte()) {
+        json_out(['error' => 'Non autorisé.'], 401);
+    }
+    $code  = trim($_GET['code'] ?? '');
+    $total = (float)($_GET['total'] ?? 0);
+
+    if ($code === '') {
+        json_out(['valide' => false, 'message' => 'Code promo requis.'], 400);
+    }
+
+    $promo = db_promotion_get_by_code($pdo, $code, $total);
+    if (!$promo) {
+        json_out(['valide' => false, 'message' => 'Code promo invalide, expiré ou montant minimum non atteint.']);
+    }
+
+    json_out([
+        'valide'         => true,
+        'promo_id'       => (int)$promo['id'],
+        'nom'            => $promo['nom'],
+        'type_reduction' => $promo['type_reduction'],
+        'valeur'         => (float)$promo['valeur'],
+        'article_id'     => $promo['article_id'] ? (int)$promo['article_id'] : null,
+    ]);
 }

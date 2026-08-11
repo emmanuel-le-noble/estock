@@ -1,0 +1,154 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h2 class="h4 mb-0 fw-bold">
+            <i class="bi bi-tags text-primary me-2"></i>Catégories d'articles
+        </h2>
+        <p class="text-muted small mb-0">Organisation et classification des produits en rayon et en stock</p>
+    </div>
+    <div>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCategorie">
+            <i class="bi bi-plus-lg"></i> Nouvelle Catégorie
+        </button>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Nom de la catégorie</th>
+                    <th>Description</th>
+                    <th class="text-center">Articles associés</th>
+                    <th class="text-center">Statut</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in categories|default([]) %}
+                    <tr>
+                        <td class="text-muted">#{{ c.id }}</td>
+                        <td class="fw-bold">{{ h(c.nom) }}</td>
+                        <td class="text-muted small">{{ h(c.description|default('—')) }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-light text-dark border">{{ c.nb_articles|default(0) }} article(s)</span>
+                        </td>
+                        <td class="text-center">
+                            {% if c.actif %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-outline-primary me-1 btn-edit-cat"
+                                    data-id="{{ c.id }}"
+                                    data-nom="{{ h(c.nom) }}"
+                                    data-description="{{ h(c.description|default('')) }}"
+                                    data-actif="{{ c.actif }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            {% if c.actif %}
+                                <form method="POST" action="categories.php" class="d-inline" onsubmit="return confirm('Désactiver cette catégorie ?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <input type="hidden" name="action" value="desactiver">
+                                    <input type="hidden" name="id" value="{{ c.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Désactiver">
+                                        <i class="bi bi-slash-circle"></i>
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            <i class="bi bi-tags fs-2 d-block mb-2"></i>
+                            Aucune catégorie créée pour le moment.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# Modal Ajouter / Éditer Catégorie #}
+<div class="modal fade" id="modalCategorie" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="categories.php" id="formCat">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="action" value="ajouter" id="catAction">
+                <input type="hidden" name="id" value="" id="catId">
+
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="catModalTitle">Nouvelle Catégorie</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Nom <span class="text-danger">*</span></label>
+                        <input type="text" name="nom" id="catNom" class="form-control" placeholder="ex: Boissons, Épicerie..." required max="100">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea name="description" id="catDesc" class="form-control" rows="3" placeholder="Description optionnelle..."></textarea>
+                    </div>
+                    <div class="form-check form-switch mb-3" id="catActifGroup" style="display:none;">
+                        <input class="form-check-input" type="checkbox" name="actif" id="catActif" value="1" checked>
+                        <label class="form-check-label fw-semibold" for="catActif">Catégorie active</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script nonce="{{ csp_nonce_val }}">
+document.addEventListener('DOMContentLoaded', function() {
+    const modalCat = document.getElementById('modalCategorie');
+    const formCat = document.getElementById('formCat');
+    const catAction = document.getElementById('catAction');
+    const catId = document.getElementById('catId');
+    const catNom = document.getElementById('catNom');
+    const catDesc = document.getElementById('catDesc');
+    const catActifGroup = document.getElementById('catActifGroup');
+    const catActif = document.getElementById('catActif');
+    const catModalTitle = document.getElementById('catModalTitle');
+
+    document.querySelectorAll('.btn-edit-cat').forEach(btn => {
+        btn.addEventListener('click', function() {
+            catAction.value = 'editer';
+            catId.value = this.dataset.id;
+            catNom.value = this.dataset.nom;
+            catDesc.value = this.dataset.description;
+            catActif.checked = this.dataset.actif == '1';
+            catActifGroup.style.display = 'block';
+            catModalTitle.textContent = 'Éditer la Catégorie #' + this.dataset.id;
+
+            const modal = new bootstrap.Modal(modalCat);
+            modal.show();
+        });
+    });
+
+    modalCat.addEventListener('hidden.bs.modal', function() {
+        catAction.value = 'ajouter';
+        catId.value = '';
+        formCat.reset();
+        catActifGroup.style.display = 'none';
+        catModalTitle.textContent = 'Nouvelle Catégorie';
+    });
+});
+</script>
+{% endblock %}

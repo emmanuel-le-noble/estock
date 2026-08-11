@@ -489,3 +489,161 @@ function api_generer_code_barre(PDO $pdo): string {
     }
     throw new \RuntimeException('Impossible de générer un code-barre unique après ' . $max . ' tentatives.');
 }
+
+// ============================================================
+//  MODULE 9 — NOTIFICATIONS (EMAIL BASIQUE)
+// ============================================================
+
+/**
+ * Envoyer un email de notification HTML avec fallback journal d'erreurs.
+ */
+function envoyer_email_notification(string $to, string $sujet, string $message_html): bool {
+    $from = param('smtp_from', 'noreply@estock.local');
+    $shop = param_shop_name();
+
+    $headers  = "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $headers .= "From: $shop <$from>\r\n";
+    $headers .= "Reply-To: $from\r\n";
+    $headers .= "X-Mailer: eStock POS Mailer\r\n";
+
+    $corps = "<!DOCTYPE html><html><body style='font-family:Arial,sans-serif;line-height:1.5;color:#333;'>";
+    $corps .= "<h2 style='color:#0d6efd;'>" . h($shop) . "</h2>";
+    $corps .= $message_html;
+    $corps .= "<hr style='border:none;border-top:1px solid #eee;margin-top:20px;'>";
+    $corps .= "<small style='color:#777;'>Ceci est une notification automatique générée par eStock.</small>";
+    $corps .= "</body></html>";
+
+    $envoye = false;
+    try {
+        // Envoi via fonction mail() native de PHP
+        $envoye = @mail($to, "[$shop] " . $sujet, $corps, $headers);
+    } catch (\Throwable $e) {
+        error_log("Erreur envoi email: " . $e->getMessage());
+    }
+
+    if (!$envoye) {
+        // Fallback journal en cas d'environnement local (WAMP sans serveur SMTP actif)
+        error_log("[eStock Email Simulated] Pour: $to | Sujet: $sujet | Message: " . strip_tags($message_html));
+    }
+    return $envoye;
+}
+
+/**
+ * Notifier par email les alertes de stock faible.
+ */
+function notifier_stock_faible_email(PDO $pdo): bool {
+    $actif = (int)param('email_notifications_actif', 0);
+    $dest  = trim(param('email_notifications_destinataire', ''));
+    if (!$actif || $dest === '') return false;
+
+    if (!function_exists('db_articles_low_stock')) return false;
+    $articles = db_articles_low_stock($pdo, 50);
+    if (empty($articles)) return false;
+
+    $html = "<h3>Alertes de stock faible (" . count($articles) . " article(s))</h3>";
+    $html .= "<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;width:100%;'>";
+    $html .= "<tr style='background:#f2f2f2;'><th>Article</th><th>Code-barres</th><th>Stock Actuel</th><th>Seuil Alerte</th></tr>";
+    foreach ($articles as $a) {
+        $html .= "<tr><td>" . h($a['nom']) . "</td><td><code>" . h($a['code_barre']) . "</code></td>";
+        $html .= "<td style='color:red;font-weight:bold;'>" . (int)$a['quantite_stock'] . "</td>";
+        $html .= "<td>" . (int)$a['seuil_alerte'] . "</td></tr>";
+    }
+    $html .= "</table>";
+
+    return envoyer_email_notification($dest, "Alerte Stock Faible (" . count($articles) . " articles)", $html);
+}
+
+// ============================================================
+//  MODULE 10 — SÉCURITÉ COMPLÉMENTAIRE (IP PROXY & 2FA TOTP)
+// ============================================================
+
+/**
+ * Récupérer l'adresse IP réelle du client avec gestion des reverse-proxies / CDN.
+ */
+function obtenir_adresse_ip_client(): string {
+    $ipKeys = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_CLIENT_IP', 'REMOTE_ADDR'];
+    foreach ($ipKeys as $key) {
+        if (!empty($_SERVER[$key])) {
+            foreach (explode(',', $_SERVER[$key]) as $ip) {
+                $ip = trim($ip);
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false) {
+                    return $ip;
+                }
+            }
+        }
+    }
+    return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+}
+
+/**
+ * Décodage Base32 (RFC 4648) pour TOTP.
+ */
+function base32_decode_custom(string $secret): string {
+    $base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $base32charsFlipped = array_flip(str_split($base32chars));
+    $secret = strtoupper($secret);
+    $buffer = 0;
+    $bitsLeft = 0;
+    $binary = '';
+
+    for ($i = 0; $i < strlen($secret); $i++) {
+        $ch = $secret[$i];
+        if (!isset($base32charsFlipped[$ch])) continue;
+        $buffer = ($buffer << 5) | $base32charsFlipped[$ch];
+        $bitsLeft += 5;
+        if ($bitsLeft >= 8) {
+            $bitsLeft -= 8;
+            $binary .= chr(($buffer >> $bitsLeft) & 0xFF);
+        }
+    }
+    return $binary;
+}
+
+/**
+ * Générer une clé secrète TOTP Base32 (16 caractères = 80 bits).
+ */
+function totp_generer_secret(int $length = 16): string {
+    $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $secret = '';
+    for ($i = 0; $i < $length; $i++) {
+        $secret .= $chars[random_int(0, strlen($chars) - 1)];
+    }
+    return $secret;
+}
+
+/**
+ * Calculer le code HMAC-SHA1 TOTP (RFC 6238) pour un pas de temps donné.
+ */
+function totp_calculer_code(string $secret, ?int $timestamp = null, int $timeStep = 30): string {
+    $timestamp = $timestamp ?? time();
+    $timeSlice = (int)floor($timestamp / $timeStep);
+    $packTime  = pack('N*', 0) . pack('N*', $timeSlice);
+
+    $binarySecret = base32_decode_custom($secret);
+    $hash         = hash_hmac('sha1', $packTime, $binarySecret, true);
+    $offset       = ord(substr($hash, -1)) & 0x0F;
+
+    $part = unpack('Nlog', substr($hash, $offset, 4));
+    $val  = $part['log'] & 0x7FFFFFFF;
+    $code = $val % 1000000;
+
+    return str_pad((string)$code, 6, '0', STR_PAD_LEFT);
+}
+
+/**
+ * Vérifier la validité d'un code TOTP à 6 chiffres avec une fenêtre de tolérance de ±1 pas (30s).
+ */
+function totp_verifier_code(string $secret, string $code, int $discrepancy = 1): bool {
+    $code = trim($code);
+    if (strlen($code) !== 6 || !ctype_digit($code)) return false;
+
+    $now = time();
+    for ($i = -$discrepancy; $i <= $discrepancy; $i++) {
+        $calc = totp_calculer_code($secret, $now + ($i * 30));
+        if (hash_equals($calc, $code)) {
+            return true;
+        }
+    }
+    return false;
+}

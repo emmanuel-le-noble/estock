@@ -86,16 +86,32 @@ $tauxTva = param_tva_taux();
 $decimals = max(0, min(4, (int)param('devise_decimales', 2)));
 $devise = param('devise_symbole', 'FCFA');
 
+// Calcul TVA multi-taux à partir des lignes
+$tvaResume = [];
+foreach ($lignes as $l) {
+    $htLigne   = (float)$l['prix_unitaire'] * (int)$l['quantite'];
+    $tauxLigne = ($l['taux_tva'] !== null && $l['taux_tva'] !== '') ? (float)$l['taux_tva'] : $tauxTva;
+    $tvaLigne  = $htLigne * ($tauxLigne / 100);
+    $tauxKey   = number_format($tauxLigne, 2);
+    if (!isset($tvaResume[$tauxKey])) {
+        $tvaResume[$tauxKey] = ['taux' => $tauxLigne, 'base_ht' => 0.0, 'montant_tva' => 0.0];
+    }
+    $tvaResume[$tauxKey]['base_ht']     += $htLigne;
+    $tvaResume[$tauxKey]['montant_tva'] += $tvaLigne;
+}
+$tvaResume = array_values($tvaResume);
+
 // Rendu Twig
 $loader = new \Twig\Loader\FilesystemLoader(__DIR__ . '/templates');
 $twig = new \Twig\Environment($loader, ['autoescape' => 'html']);
 
 echo $twig->render('ticket_print.html.twig', [
-    'facture'   => $facture,
-    'lignes'    => $lignes,
-    'paiements' => $paiements,
-    'magasin'   => $magasin,
-    'tva_taux'  => $tauxTva,
-    'devise'    => $devise,
-    'decimals'  => $decimals,
+    'facture'    => $facture,
+    'lignes'     => $lignes,
+    'paiements'  => $paiements,
+    'magasin'    => $magasin,
+    'tva_taux'   => $tauxTva,
+    'tva_resume' => $tvaResume,
+    'devise'     => $devise,
+    'decimals'   => $decimals,
 ]);

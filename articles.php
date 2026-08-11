@@ -37,6 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'seuil_alerte'  => ['type' => 'int', 'min' => 0, 'default' => 5],
         'emplacement'   => ['type' => 'string', 'trim' => true, 'nullable' => true, 'max' => 100, 'redirect' => ''],
         'fournisseur_id'=> ['type' => 'int', 'default' => 0],
+        'categorie_id'  => ['type' => 'int', 'default' => 0],
+        'taux_tva'      => ['type' => 'float', 'min' => 0, 'default' => 0],
     ], 'articles.php');
     
     $redirect_form = fn() => ($data['id'] ?? 0) ? generate_signed_url('articles.php', $data['id'], ['action' => 'editer']) : page_url('articles', ['action' => 'nouveau']);
@@ -67,6 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'seuil_alerte'   => $data['seuil_alerte'],
         'emplacement'    => $data['emplacement'],
         'fournisseur_id' => $data['fournisseur_id'] ?: null,
+        'categorie_id'   => $data['categorie_id'] ?: null,
+        'taux_tva'       => ($data['taux_tva'] > 0) ? round($data['taux_tva'], 4) : null,
     ];
     
     db_transaction(
@@ -102,7 +106,8 @@ if ($action === 'nouveau' || $action === 'editer') {
     $article = [
         'id'=>'','code_barre'=>'','nom'=>'','sku'=>'',
         'prix_achat'=>'','prix_vente'=>'','quantite_stock'=>'',
-        'seuil_alerte'=>5,'emplacement'=>'','fournisseur_id'=>''
+        'seuil_alerte'=>5,'emplacement'=>'','fournisseur_id'=>'',
+        'categorie_id'=>'', 'taux_tva'=>''
     ];
     if ($action === 'editer') {
         $get_id = (int)($_GET['id'] ?? 0);
@@ -113,6 +118,8 @@ if ($action === 'nouveau' || $action === 'editer') {
         $article = db_article_get_by_id($pdo, $get_id) ?: $article;
     }
     $fournisseurs = db_fournisseurs_list($pdo);
+    $categories   = function_exists('db_categories_all') ? db_categories_all($pdo) : [];
+    $taux_tva_global = param_tva_taux();
     $devise_symbole = param('devise_symbole', 'FCFA');
     $titre_page = ($action === 'nouveau' ? 'Nouvel article' : 'Modifier l\'article');
     include __DIR__ . '/includes/header.php';
@@ -180,6 +187,27 @@ if ($action === 'nouveau' || $action === 'editer') {
                             <div class="col-md-4">
                                 <label class="form-label">Fournisseur</label>
                                 <?= render_dropdown('fournisseur_id', $fournisseurs, $article['fournisseur_id'] ?? '', ' ') ?>
+                            </div>
+                            <?php if (!empty($categories)): ?>
+                            <div class="col-md-4">
+                                <label class="form-label">Catégorie</label>
+                                <select name="categorie_id" class="form-select">
+                                    <option value="">— Aucune —</option>
+                                    <?php foreach ($categories as $cat): ?>
+                                    <option value="<?= (int)$cat['id'] ?>" <?= (int)($article['categorie_id'] ?? 0) === (int)$cat['id'] ? 'selected' : '' ?>>
+                                        <?= h($cat['nom']) ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <?php endif; ?>
+                            <div class="col-md-4">
+                                <label class="form-label">Taux TVA spécifique (%)
+                                    <small class="text-muted">(laisser vide = taux global <?= h(number_format($taux_tva_global,1)) ?>%)</small>
+                                </label>
+                                <input type="number" step="0.01" min="0" max="100" name="taux_tva" class="form-control"
+                                       value="<?= ($article['taux_tva'] !== '' && $article['taux_tva'] !== null) ? h(number_format((float)$article['taux_tva'], 2, '.', '')) : '' ?>"
+                                       placeholder="ex : 18">
                             </div>
                         </div>
                         <div class="mt-4 d-flex gap-2">

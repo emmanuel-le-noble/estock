@@ -121,6 +121,11 @@ try {
             $prixOriginal = $promo['prix_original'];
             $remisePct = $promo['remise_pct'];
         }
+        // Taux TVA effectif : spécifique à l'article si défini, sinon taux global
+        $tauxTvaLigne = ($art['taux_tva'] !== null && $art['taux_tva'] !== '')
+            ? (float)$art['taux_tva']
+            : $taux_tva;
+
         $sousTotal = calc_line_subtotal($prixUnitaire, $quantite);
         $totalHt += $sousTotal;
 
@@ -130,6 +135,7 @@ try {
             'prix_unitaire' => $prixUnitaire,
             'prix_original' => $prixOriginal,
             'remise_pct'    => $remisePct,
+            'taux_tva'      => $tauxTvaLigne,
             'stock_dispo'   => $stock_dispo
         ];
     }
@@ -138,7 +144,26 @@ try {
         throw new RuntimeException('Aucune ligne valide.');
     }
 
-    $totalTtcCalc = $totalHt * (1 + $taux_tva / 100);
+    // Calcul TTC avec TVA multi-taux : somme des TTC par ligne
+    $totalTtcCalc = 0.0;
+    $tauxTvaResume = []; // ['taux' => ..., 'base_ht' => ..., 'montant_tva' => ...]
+    foreach ($lignesAFacturer as $lf) {
+        $htLigne = calc_line_subtotal($lf['prix_unitaire'], $lf['quantite']);
+        $tvaLigne = $htLigne * ($lf['taux_tva'] / 100);
+        $totalTtcCalc += $htLigne + $tvaLigne;
+        $tauxKey = number_format((float)$lf['taux_tva'], 2);
+        if (!isset($tauxTvaResume[$tauxKey])) {
+            $tauxTvaResume[$tauxKey] = ['taux' => $lf['taux_tva'], 'base_ht' => 0.0, 'montant_tva' => 0.0];
+        }
+        $tauxTvaResume[$tauxKey]['base_ht'] += $htLigne;
+        $tauxTvaResume[$tauxKey]['montant_tva'] += $tvaLigne;
+    }
+    // Taux TVA dominant pour la colonne factures.tva_taux (rétro-compat)
+    $tauxTvaDominant = $taux_tva;
+    if (count($lignesAFacturer) === 1) {
+        $tauxTvaDominant = $lignesAFacturer[0]['taux_tva'];
+    }
+
     if ($montantPaye < round($totalTtcCalc, 2)) {
         throw new RuntimeException('Le montant payé est insuffisant.');
     }
@@ -149,7 +174,7 @@ try {
         'numero_facture' => $numero,
         'utilisateur_id' => user_courant()['id'] ?? null,
         'total_ht'       => round($totalHt, 2),
-        'tva_taux'       => round($taux_tva, 2),
+        'tva_taux'       => round($tauxTvaDominant, 2),
         'total_ttc'      => round($totalTtcCalc, 2),
         'montant_paye'   => round($montantPaye, 2),
         'monnaie_rendue' => round($monnaieRendue, 2),
@@ -158,7 +183,7 @@ try {
 
     // ---- 4 & 5) Lignes + déduction atomique stock lot + mouvements ----
     foreach ($lignesAFacturer as $l) {
-        db_ligne_facture_insert($pdo, $factureId, $l['article_id'], $l['quantite'], $l['prix_unitaire'], $l['prix_original'], $l['remise_pct']);
+        db_ligne_facture_insert($pdo, $factureId, $l['article_id'], $l['quantite'], $l['prix_unitaire'], $l['prix_original'], $l['remise_pct'], $l['taux_tva'] ?? null);
 
         // ---- SÉCURITÉ DOUBLE TYPE : PÉRISSABLE & NON PÉRISSABLE ----
         if ($magasin_id > 0) {

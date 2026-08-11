@@ -1,0 +1,200 @@
+{% extends "base.html.twig" %}
+{% block title %}Retours & Avoirs (SAV){% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h1 class="h4 mb-0"><i class="bi bi-arrow-counterclockwise"></i> Retours & Avoirs (SAV)</h1>
+    {% if view == 'liste' and peut_gerer %}
+    <a href="{{ base_url }}retours.php?action=nouveau" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Nouveau retour
+    </a>
+    {% else %}
+    <a href="{{ base_url }}retours.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Retour à la liste</a>
+    {% endif %}
+</div>
+
+{% for msg in app.flashes('success') %}<div class="alert alert-success">{{ msg }}</div>{% endfor %}
+{% for msg in app.flashes('error') %}<div class="alert alert-danger">{{ msg }}</div>{% endfor %}
+
+{# ======================== LISTE ======================== #}
+{% if view == 'liste' %}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" action="{{ base_url }}retours.php" class="row g-2">
+            <div class="col-md-5">
+                <input type="text" name="search" class="form-control" placeholder="N° retour, N° facture ou agent…" value="{{ filters.search }}">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-outline-primary"><i class="bi bi-search"></i> Filtrer</button>
+                <a href="{{ base_url }}retours.php" class="btn btn-outline-secondary">Réinitialiser</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>N° Retour</th>
+                    <th>Facture d'origine</th>
+                    <th>Magasin</th>
+                    <th>Agent</th>
+                    <th class="text-end">Montant Total</th>
+                    <th>Motif</th>
+                    <th>Date</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in rows %}
+            <tr>
+                <td><strong>{{ row.numero_retour }}</strong></td>
+                <td><code>{{ row.numero_facture }}</code></td>
+                <td>{{ row.nom_magasin|default('—') }}</td>
+                <td>{{ row.agent_nom|default('—') }}</td>
+                <td class="text-end fw-bold text-danger">-{{ row.montant_total|number_format(0, ',', ' ') }} {{ devise }}</td>
+                <td>{{ row.motif|default('—') }}</td>
+                <td>{{ row.created_at|date('d/m/Y H:i') }}</td>
+                <td>
+                    <a href="{{ url_sign('retours.php', row.id, {'action':'detail'}) }}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i> Détail
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-center text-muted py-4">Aucun retour enregistré.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if pagination.total_pages > 1 %}
+    <div class="card-footer">{{ pagination_links(pagination, 'retours.php', filters) }}</div>
+    {% endif %}
+</div>
+
+{# ======================== NOUVEAU ======================== #}
+{% elseif view == 'nouveau' %}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white">
+        <h5 class="mb-0"><i class="bi bi-search"></i> Étape 1 : Rechercher la facture d'origine</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{{ base_url }}retours.php" class="row g-2 align-items-center">
+            <input type="hidden" name="action" value="nouveau">
+            <div class="col-md-5">
+                <input type="text" name="num" class="form-control form-control-lg" placeholder="ex : FAC-2025-0001" value="{{ num_search }}" required>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-lg"><i class="bi bi-search"></i> Rechercher</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if facture %}
+<form method="post" action="{{ base_url }}retours.php?action=enregistrer">
+    {{ csrf_field()|raw }}
+    <input type="hidden" name="facture_id" value="{{ facture.id }}">
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Facture <strong>{{ facture.numero_facture }}</strong> (du {{ facture.date_facture|date('d/m/Y H:i') }})</h5>
+            <span class="badge bg-success">Payée</span>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Motif du retour *</label>
+                <input type="text" name="motif" class="form-control" required placeholder="ex : Produit défectueux, erreur de taille, etc.">
+            </div>
+
+            <h6>Sélectionnez les articles à retourner :</h6>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Article</th>
+                            <th class="text-center">Qté vendue</th>
+                            <th class="text-end">Prix unitaire</th>
+                            <th class="text-center" style="width: 150px;">Qté à retourner</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for l in lignes %}
+                    <tr>
+                        <td>{{ l.article_nom }} <code>{{ l.code_barre }}</code></td>
+                        <td class="text-center"><span class="badge bg-secondary">{{ l.quantite }}</span></td>
+                        <td class="text-end">{{ l.prix_unitaire|number_format(0, ',', ' ') }} {{ devise }}</td>
+                        <td>
+                            <input type="hidden" name="lignes[{{ l.id }}][article_id]" value="{{ l.article_id }}">
+                            <input type="hidden" name="lignes[{{ l.id }}][prix_unitaire]" value="{{ l.prix_unitaire }}">
+                            <input type="number" name="lignes[{{ l.id }}][quantite]" class="form-control text-center" min="0" max="{{ l.quantite }}" value="0">
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer d-flex gap-2 justify-content-end">
+            <a href="{{ base_url }}retours.php" class="btn btn-secondary">Annuler</a>
+            <button class="btn btn-danger"><i class="bi bi-check-lg"></i> Valider le retour & réintégrer le stock</button>
+        </div>
+    </div>
+</form>
+{% endif %}
+
+{# ======================== DETAIL ======================== #}
+{% elseif view == 'detail' %}
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Retour <strong>{{ retour.numero_retour }}</strong></h5>
+        <span class="badge bg-danger">Avoir de {{ retour.montant_total|number_format(0, ',', ' ') }} {{ devise }}</span>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div>Facture d'origine : <strong>{{ retour.numero_facture }}</strong></div>
+                <div>Magasin : {{ retour.nom_magasin|default('—') }}</div>
+                <div>Traité par : {{ retour.agent_nom|default('—') }}</div>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <div>Date : {{ retour.date_retour|date('d/m/Y H:i') }}</div>
+                {% if retour.motif %}<div>Motif : <em>{{ retour.motif }}</em></div>{% endif %}
+            </div>
+        </div>
+
+        <h6 class="mb-3">Articles retournés :</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Article</th>
+                        <th>Code-barres</th>
+                        <th class="text-center">Qté retournée</th>
+                        <th class="text-end">Prix unitaire</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for l in lignes %}
+                <tr>
+                    <td>{{ l.article_nom }}</td>
+                    <td><code>{{ l.code_barre }}</code></td>
+                    <td class="text-center"><span class="badge bg-danger">{{ l.quantite }}</span></td>
+                    <td class="text-end">{{ l.prix_unitaire|number_format(0, ',', ' ') }} {{ devise }}</td>
+                    <td class="text-end fw-bold">{{ (l.prix_unitaire * l.quantite)|number_format(0, ',', ' ') }} {{ devise }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}

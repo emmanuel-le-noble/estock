@@ -14,6 +14,17 @@ require_once __DIR__ . '/includes/db_functions.php';
 require_once __DIR__ . '/includes/helpers.php';
 exiger_role(ROLE_DIRECTEUR, ROLE_MAGASINIER);
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoyer_alerte_email') {
+    csrf_guard('suggestions_achat.php');
+    $ok = notifier_stock_faible_email($pdo);
+    if ($ok) {
+        flash_success('Alerte de stock envoyé par email.');
+    } else {
+        flash_info('Email de notification simulé / enregistré dans les logs de l\'application.');
+    }
+    redirect('suggestions_achat.php');
+}
+
 $u = user_courant();
 $magasin_id = (int)($u['magasin_id'] ?? 0);
 $articles = db_articles_low_stock_with_supplier($pdo, 100, $magasin_id);

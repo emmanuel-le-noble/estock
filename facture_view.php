@@ -50,6 +50,21 @@ foreach ($lignes as $l) {
 }
 $totalRemises = round($totalRemises, 2);
 
+// Calcul TVA multi-taux à partir des lignes
+$tauxTvaResume = [];
+foreach ($lignes as $l) {
+    $htLigne = calc_line_subtotal((float)$l['prix_unitaire'], (int)$l['quantite']);
+    $tauxLigne = ($l['taux_tva'] !== null && $l['taux_tva'] !== '') ? (float)$l['taux_tva'] : (float)$f['tva_taux'];
+    $tvaLigne  = $htLigne * ($tauxLigne / 100);
+    $tauxKey   = number_format($tauxLigne, 2);
+    if (!isset($tauxTvaResume[$tauxKey])) {
+        $tauxTvaResume[$tauxKey] = ['taux' => $tauxLigne, 'base_ht' => 0.0, 'montant_tva' => 0.0];
+    }
+    $tauxTvaResume[$tauxKey]['base_ht']      += $htLigne;
+    $tauxTvaResume[$tauxKey]['montant_tva']  += $tvaLigne;
+}
+$multiTaux = count($tauxTvaResume) > 1;
+
 $impression = isset($_GET['print']);
 
 $nom_boutique = param_shop_name();
@@ -149,7 +164,15 @@ include __DIR__ . '/includes/header.php';
             <td>Total HT</td>
             <td align="right"><?= h(money((float)$f['total_ht'])) ?></td>
         </tr>
-        <?php if ((float)$f['tva_taux'] > 0): ?>
+        <?php if ($multiTaux): ?>
+        <!-- Ventilation TVA multi-taux -->
+        <?php foreach ($tauxTvaResume as $tv): ?>
+        <tr>
+            <td>TVA <?= h(number_format($tv['taux'], 2, ',', '')) ?>% (base <?= h(money($tv['base_ht'])) ?>)</td>
+            <td align="right"><?= h(money($tv['montant_tva'])) ?></td>
+        </tr>
+        <?php endforeach; ?>
+        <?php elseif ((float)$f['tva_taux'] > 0 && !empty($tauxTvaResume)): ?>
         <tr>
             <td>TVA (<?= h(number_format((float)$f['tva_taux'], 2, ',', ' ')) ?>%)</td>
             <td align="right"><?= h(money((float)$f['total_ttc'] - (float)$f['total_ht'])) ?></td>

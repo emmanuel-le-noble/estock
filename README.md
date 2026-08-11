@@ -1611,3 +1611,268 @@ Les `require_once` (lignes 9-11) étaient corrects. L'erreur venait uniquement d
 |------|-------|----------|
 | Validation 1 | QA #1 | ✅ **VALIDE** — zéro résidu `{# #}`, HTML intact |
 | Contre-validation 2 | QA #2 | ✅ **CONTRE-VALIDÉ** — aucun `{#}` dans les fichiers `.php`, rien d'altéré |
+
+---
+
+## 26. Module 1 — Commandes fournisseurs (Cycle d'achat complet)
+
+### 26.1 Objectif
+Implémentation complète du cycle d'achat et d'approvisionnement fournisseur. Permet la création de commandes d'achat manuelles ou pré-remplies depuis les alertes de stock (`suggestions_achat.php`), la gestion des statuts (`Brouillon`, `Envoyee`, `Recue_Partielle`, `Recue`, `Annulee`) et la réception partielle ou totale réintégrant le stock via `process_stock_movement()` (type `Entree`).
+
+### 26.2 Tables SQL
+- `commandes_fournisseur` (`id`, `fournisseur_id`, `magasin_id`, `utilisateur_id`, `statut`, `date_commande`, `date_reception_prevue`, `notes`, `date_creation`)
+- `lignes_commande_fournisseur` (`id`, `commande_id`, `article_id`, `quantite_commandee`, `quantite_recue`, `prix_achat_unitaire`)
+- Script de migration : `database/commandes_fournisseur.sql`
+
+### 26.3 Fonctions ajoutées (`includes/db_functions.php`)
+- `db_commandes_fournisseur_search_sql()`
+- `db_commande_fournisseur_get_by_id()`
+- `db_commande_fournisseur_insert()`
+- `db_commande_fournisseur_update()`
+- `db_commande_fournisseur_update_statut()`
+- `db_commande_fournisseur_lignes_get()`
+- `db_commande_fournisseur_lignes_save()`
+- `db_commande_fournisseur_lignes_update_reception()`
+
+### 26.4 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `database/commandes_fournisseur.sql` | **Créé** | Migration SQL (tables + permissions `achats_gerer` / `achats_consulter`) |
+| `commandes_fournisseur.php` | **Créé** | Contrôleur PHP du cycle d'achat (liste, création, édition, réception, annulation) |
+| `templates/commandes_fournisseur.html.twig` | **Créé** | Template Twig avec vues liste, détail et formulaire dynamique d'achat |
+| `includes/db_functions.php` | **Modifié** | Ajout des requêtes SQL préparées `db_commande_fournisseur_*` |
+| `suggestions_achat.php` | **Modifié** | Intégration de l'action POST pour pré-remplir un bon de commande |
+| `templates/suggestions_achat.html.twig` | **Modifié** | Ajout du bouton « Créer bon de commande » par fournisseur |
+| `templates/base.html.twig` | **Modifié** | Ajout du lien « Commandes d'achat » dans le menu sidebar Logistique |
+
+---
+
+## 27. Module 2 — Catégories d'articles
+
+### 27.1 Objectif
+Implémentation de la gestion des catégories d'articles pour classer les produits et faciliter le filtrage multi-critères dans les modules de consultation du stock, de la caisse et d'approvisionnement.
+
+### 27.2 Tables SQL
+- Table `categories` (`id`, `nom`, `description`, `actif`)
+- Colonne ajoutée sur `articles` : `categorie_id` (INT, nullable, clé étrangère `categories(id)`)
+- Script de migration : `database/categories.sql`
+
+### 27.3 Fonctions ajoutées (`includes/db_functions.php`)
+- `db_categories_all()`
+- `db_categorie_get_by_id()`
+- `db_categorie_insert()`
+- `db_categorie_update()`
+- `db_categorie_deactivate()`
+- Extension de `db_articles_search_sql()` et `db_articles_search_stock()` pour le filtrage par `categorie_id` et la jointure de la colonne `categorie_nom`
+
+### 27.4 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `database/categories.sql` | **Créé** | Migration SQL (table `categories` + colonne `categorie_id` sur `articles`) |
+| `categories.php` | **Créé** | Contrôleur PHP de gestion des catégories (liste, création, édition, désactivation) |
+| `templates/categories.html.twig` | **Créé** | Template Twig de gestion des catégories avec modal dynamique |
+| `includes/db_functions.php` | **Modifié** | Ajout des fonctions `db_categories_*` et mise à jour de la recherche d'articles |
+| `articles.php` | **Modifié** | Prise en compte du champ `categorie_id` à la création/édition des articles |
+| `stock.php` | **Modifié** | Ajout du filtre par catégorie et affichage de la colonne Catégorie |
+| `templates/base.html.twig` | **Modifié** | Ajout du lien « Catégories » dans la section Logistique de la sidebar |
+
+---
+
+## 28. Module 3 — TVA Multiple
+
+### 28.1 Objectif
+Surcharge du taux de TVA par article (pour gérer les articles exonérés, à taux réduit, etc.) à la place du taux global unique. Les factures enregistrent le taux effectif par ligne et calculent la ventilation multi-taux sur les tickets et consultations.
+
+### 28.2 Tables SQL
+- Migration : `database/tva_multiple.sql`
+- `articles.taux_tva` (DECIMAL(5,2) NULL)
+- `lignes_facture.taux_tva` (DECIMAL(5,2) NULL)
+
+### 28.3 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `database/tva_multiple.sql` | **Créé** | Script d'ajout de la colonne `taux_tva` dans `articles` et `lignes_facture` |
+| `includes/db_functions.php` | **Modifié** | Prise en compte de `taux_tva` dans `db_article_get_by_barcode`, `db_article_insert`, `db_article_update`, `db_ligne_facture_insert` |
+| `valider_facture.php` | **Modifié** | Calcul du Total TTC ligne par ligne selon le taux spécifique et enregistrement en BDD |
+| `articles.php` | **Modifié** | Ajout de la saisie du taux de TVA spécifique par article dans le formulaire |
+| `facture_view.php` | **Modifié** | Ventilation de la TVA multi-taux sur la vue détaillée du ticket de caisse |
+| `ticket_print.php` | **Modifié** | Transmission du résumé de ventilation TVA au moteur Twig |
+| `templates/ticket_print.html.twig` | **Modifié** | Affichage de la ventilation par taux sur le ticket thermique 80mm |
+
+---
+
+## 29. Module 4 — Inventaire physique (Comptage cyclique)
+
+### 29.1 Objectif
+Mise en place d'un module complet d'inventaire physique par session avec comptage cyclique, gestion du stock théorique vs réel, calcul automatique des écarts (manquants/excédents) et ajustement automatique du stock via `process_stock_movement()`.
+
+### 29.2 Tables SQL
+- `inventaires` (`id`, `reference`, `magasin_id`, `statut`, `date_debut`, `date_fin`, `utilisateur_id`, `notes`)
+- `inventaire_lignes` (`id`, `inventaire_id`, `article_id`, `quantite_theorique`, `quantite_comptee`, `ecart`, `notes`)
+- Script de migration : `database/inventaire.sql`
+- Permissions RBAC : `inventaire_gerer`, `inventaire_consulter`
+
+### 29.3 Fonctions ajoutées (`includes/db_functions.php`)
+- `db_inventaire_insert()`
+- `db_inventaire_get_by_id()`
+- `db_inventaire_search_sql()`
+- `db_inventaire_update_statut()`
+- `db_inventaire_lignes_get()`
+- `db_inventaire_ligne_upsert()`
+- `db_inventaire_appliquer_ecarts()`
+
+### 29.4 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `database/inventaire.sql` | **Créé** | Script SQL des tables d'inventaire et des permissions RBAC associées |
+| `inventaire.php` | **Créé** | Contrôleur PHP (liste, création de session, saisie AJAX, validation des écarts, annulation) |
+| `templates/inventaire.html.twig` | **Créé** | Template Twig avec vue liste, synthèse d'écart et saisie interactive par code-barres / recherche |
+| `includes/db_functions.php` | **Modifié** | Ajout des fonctions BDD préparées pour la gestion d'inventaire |
+| `templates/base.html.twig` | **Modifié** | Ajout du lien « Inventaire » dans la section Logistique de la sidebar |
+
+---
+
+## 30. Module 5 — Retours & avoirs (SAV)
+
+### 30.1 Objectif
+Gestion intégrée des retours d'articles après vente et émission d'avoirs SAV. Permet la sélection partielle des lignes d'une facture payée, le renseignement du motif et la réintégration automatique en stock via `process_stock_movement()` (type `Entree`).
+
+### 30.2 Tables SQL
+- `retours_factures` (`id`, `numero_retour`, `facture_id`, `magasin_id`, `utilisateur_id`, `montant_total`, `motif`, `date_retour`, `statut`)
+- `lignes_retour` (`id`, `retour_id`, `ligne_facture_id`, `article_id`, `quantite`, `prix_unitaire`)
+- Script de migration : `database/retours.sql`
+- Permissions RBAC : `retours_gerer`, `retours_consulter`
+
+### 30.3 Fonctions ajoutées (`includes/db_functions.php`)
+- `db_retour_insert()`
+- `db_retour_get_by_id()`
+- `db_retour_lignes_get()`
+- `db_retours_search_sql()`
+- `db_retour_creer()`
+
+### 30.4 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `database/retours.sql` | **Créé** | Migration SQL des tables `retours_factures` et `lignes_retour` + permissions |
+| `retours.php` | **Créé** | Contrôleur PHP de gestion des retours (recherche facture, création retour, consultation) |
+| `templates/retours.html.twig` | **Créé** | Template Twig avec recherche de facture, sélection dynamique d'articles et fiche avoir |
+| `includes/db_functions.php` | **Modifié** | Fonctions SQL préparées pour les retours SAV et la réintégration en stock |
+| `templates/base.html.twig` | **Modifié** | Ajout du lien « Retours / SAV » dans le menu Ventes de la sidebar |
+
+---
+
+## 31. Module 6 — Remises et promotions (Codes promo & Remises ciblées)
+
+### 31.1 Objectif
+Gestion avancée des règles de promotions, remises ciblées (par article, par catégorie ou sur tout le panier) et des codes promo (coupons) réutilisables ou à limite d'utilisation avec vérification via API REST (`/api/promo`).
+
+### 31.2 Tables SQL
+- `promotions` (`id`, `nom`, `code_promo`, `type_reduction`, `valeur`, `article_id`, `categorie_id`, `montant_min_achat`, `date_debut`, `date_fin`, `limite_utilisations`, `nb_utilisations`, `actif`)
+- Script de migration : `database/promotions.sql`
+- Permissions RBAC : `promotions_gerer`, `promotions_consulter`
+
+### 31.3 Fonctions ajoutées (`includes/db_functions.php`)
+- `db_promotion_insert()`
+- `db_promotion_update()`
+- `db_promotion_get_by_id()`
+- `db_promotion_get_by_code()`
+- `db_promotion_increment_usage()`
+- `db_promotion_deactivate()`
+- `db_promotions_search_sql()`
+
+### 31.4 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `database/promotions.sql` | **Créé** | Migration SQL de la table `promotions` + permissions RBAC |
+| `promotions.php` | **Créé** | Contrôleur PHP de gestion des règles de promotion et codes promo |
+| `templates/promotions.html.twig` | **Créé** | Template Twig avec modal d'édition/création dynamique de promotion |
+| `includes/db_functions.php` | **Modifié** | Ajout des fonctions SQL préparées pour les promotions et codes promo |
+| `api/index.php` | **Modifié** | Ajout du point d'accès API `GET /api/promo?code=XXX&total=YYY` pour vérification caisse |
+| `templates/base.html.twig` | **Modifié** | Ajout du lien « Promotions & Remises » dans la section Ventes de la sidebar |
+
+---
+
+## 32. Module 7 — Étiquetage rayon (Générateur EAN-13 & Impression A4)
+
+### 32.1 Objectif
+Outil complet de génération et d'impression d'étiquettes de rayon sur planches A4 (grilles 3x8 - 24 étiquettes/page ou 4x10 - 40 étiquettes/page). Intègre le rendu dynamique des codes-barres EAN-13 via JsBarcode, le prix TTC, le nom de la boutique et la quantité paramétrable par article.
+
+### 32.2 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `etiquettes.php` | **Créé** | Contrôleur PHP de sélection des articles et génération du flux d'impression |
+| `templates/etiquettes.html.twig` | **Créé** | Template Twig avec interface de sélection et feuille de style d'impression A4 (`@media print`) |
+| `templates/base.html.twig` | **Modifié** | Ajout du lien « Étiquettes rayon » dans le menu Logistique de la sidebar |
+
+---
+
+## 33. Module 8 — Exports CSV / Excel UTF-8
+
+### 33.1 Objectif
+Contrôleur d'export universel au format CSV / Excel avec encodage UTF-8 (BOM `\xEF\xBB\xBF` inclus pour compatibilité native Excel). Permet l'export filtré des stocks, factures, mouvements de stock et comptes-rendus d'inventaire.
+
+### 33.2 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `exports.php` | **Créé** | Contrôleur d'export CSV / Excel multi-entités (`type=articles`, `factures`, `mouvements`, `inventaire`) |
+| `stock.php` | **Modifié** | Ajout du bouton « Export Excel / CSV » dans la barre d'outils de consultation des stocks |
+
+---
+
+## 34. Module 9 — Notifications Email Basiques
+
+### 34.1 Objectif
+Moteur léger de notifications par courriel HTML pour la diffusion automatique et sur demande des alertes de stock faible et de commandes d'achat. Intègre un système de secours (fallback) journalisant les emails simulés dans les logs d'erreurs en environnement de développement local (WampServer).
+
+### 34.2 Fonctions ajoutées (`includes/helpers.php`)
+- `envoyer_email_notification()`
+- `notifier_stock_faible_email()`
+
+### 34.3 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `includes/helpers.php` | **Modifié** | Ajout des helpers d'envoi d'emails HTML et de déclenchement des alertes |
+| `suggestions_achat.php` | **Modifié** | Ajout du déclencheur d'envoi d'alertes email sur la liste des réapprovisionnements |
+
+---
+
+## 35. Module 10 — Sécurité complémentaire (2FA TOTP, Backup CLI & Proxy IP)
+
+### 35.1 Objectif
+Renforcement de la sécurité de l'application par l'implémentation de la double authentification 2FA TOTP (compatible Google Authenticator / Authy selon la norme RFC 6238 en PHP procédural pur), la résolution sécurisée des adresses IP derrière un reverse proxy / CDN et la création d'un outil CLI d'archivage automatique BDD avec rotation sur 30 jours.
+
+### 35.2 Tables SQL
+- Alter `utilisateurs` : ajout des colonnes `totp_secret` (VARCHAR(32)) et `totp_actif` (TINYINT(1))
+- Migration : `database/securite_comp.sql`
+
+### 35.3 Fonctions ajoutées (`includes/helpers.php`)
+- `obtenir_adresse_ip_client()`
+- `totp_generer_secret()`
+- `totp_calculer_code()`
+- `totp_verifier_code()`
+
+### 35.4 Fichiers modifiés / créés
+
+| Fichier | Statut | Description |
+|---|---|---|
+| `database/securite_comp.sql` | **Créé** | Migration SQL d'ajout des colonnes 2FA TOTP sur `utilisateurs` |
+| `bin/backup_db.php` | **Créé** | Script CLI autonome de sauvegarde BDD, compression ZIP et rotation sur 30 jours |
+| `includes/helpers.php` | **Modifié** | Ajout du décodage Base32 RFC 4648, de la génération/validation TOTP RFC 6238 et de la résolution IP proxy |
+
+
+
+
+
+
+
+
+

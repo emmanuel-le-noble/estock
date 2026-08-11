@@ -1,0 +1,197 @@
+{% if view == 'print' %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Impression d'étiquettes rayon</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #fff; color: #000; }
+
+        @page { size: A4 portrait; margin: 10mm; }
+
+        /* Grille 3x8 (24 étiquettes par page A4) */
+        .grid-3x8 {
+            display: grid;
+            grid-template-columns: repeat(3, 63mm);
+            grid-auto-rows: 33mm;
+            gap: 2mm 3mm;
+            justify-content: center;
+        }
+        /* Grille 4x10 (40 étiquettes par page A4) */
+        .grid-4x10 {
+            display: grid;
+            grid-template-columns: repeat(4, 46mm);
+            grid-auto-rows: 25mm;
+            gap: 1.5mm 2mm;
+            justify-content: center;
+        }
+
+        .label-card {
+            border: 1px dashed #ccc;
+            padding: 2mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            text-align: center;
+            overflow: hidden;
+            background: #fff;
+            page-break-inside: avoid;
+        }
+
+        .label-shop { font-size: 8px; font-weight: bold; text-transform: uppercase; color: #555; }
+        .label-title { font-size: 11px; font-weight: bold; line-height: 1.1; margin: 1mm 0; max-height: 22px; overflow: hidden; }
+        .label-price { font-size: 14px; font-weight: 900; color: #000; }
+        .label-barcode { margin-top: auto; }
+        .label-barcode svg { max-width: 100%; height: auto; }
+
+        @media print {
+            .no-print { display: none !important; }
+            .label-card { border: 1px solid #ddd; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print" style="padding: 10px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+    <button onclick="window.print()" style="padding: 8px 16px; background: #0d6efd; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+        🖨️ Imprimer les étiquettes ({{ articles|length }})
+    </button>
+    <button onclick="window.close()" style="padding: 8px 16px; background: #6c757d; color: #fff; border: none; border-radius: 4px; cursor: cursor;">
+        Fermer
+    </button>
+</div>
+
+<div class="{{ format == 'grid_4x10' ? 'grid-4x10' : 'grid-3x8' }}">
+    {% for art in articles %}
+    <div class="label-card">
+        {% if afficher_shop %}<div class="label-shop">{{ nom_boutique }}</div>{% endif %}
+        <div class="label-title">{{ art.nom }}</div>
+        {% if afficher_prix %}
+        <div class="label-price">{{ art.prix_vente|number_format(0, ',', ' ') }} {{ devise }}</div>
+        {% endif %}
+        <div class="label-barcode">
+            <svg class="barcode-svg" data-code="{{ art.code_barre }}"></svg>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+    document.querySelectorAll('.barcode-svg').forEach(function(svg) {
+        var code = svg.getAttribute('data-code');
+        if (code && code.length >= 8) {
+            try {
+                JsBarcode(svg, code, {
+                    format: code.length === 13 ? 'EAN13' : 'CODE128',
+                    width: 1.2,
+                    height: 25,
+                    displayValue: true,
+                    fontSize: 9,
+                    margin: 1
+                });
+            } catch(e) {}
+        }
+    });
+</script>
+</body>
+</html>
+
+{% else %}
+{% extends "base.html.twig" %}
+{% block title %}Étiquettes de rayon{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h1 class="h4 mb-0"><i class="bi bi-tag"></i> Générateur d'étiquettes de rayon</h1>
+</div>
+
+<form method="post" action="{{ base_url }}etiquettes.php?action=imprimer" target="_blank">
+    {{ csrf_field()|raw }}
+    <div class="row g-4">
+        {# Colonne gauche : Options de mise en page #}
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white"><h6 class="mb-0"><i class="bi bi-sliders"></i> Configuration de la planche</h6></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Format de la planche A4</label>
+                        <select name="format" class="form-select">
+                            <option value="grid_3x8">24 étiquettes / page A4 (3 x 8 - Standard 63x33mm)</option>
+                            <option value="grid_4x10">40 étiquettes / page A4 (4 x 10 - Compact 46x25mm)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="afficher_prix" id="affPrix" checked>
+                        <label class="form-check-label" for="affPrix">Afficher le prix TTC</label>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" name="afficher_shop" id="affShop" checked>
+                        <label class="form-check-label" for="affShop">Afficher l'en-tête de la boutique</label>
+                    </div>
+
+                    <button class="btn btn-primary w-100 btn-lg"><i class="bi bi-printer"></i> Générer la planche d'étiquettes</button>
+                </div>
+            </div>
+        </div>
+
+        {# Colonne droite : Sélection des articles #}
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-box-seam"></i> Sélectionner les articles</h6>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleSelectAll(this)">Tout sélectionner</button>
+                </div>
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" id="checkAll" onclick="toggleAllCheckboxes(this)"></th>
+                                <th>Article</th>
+                                <th>Code-barres</th>
+                                <th class="text-end">Prix TTC</th>
+                                <th style="width: 110px;" class="text-center">Nb d'étiquettes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for art in articles %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" name="articles[]" value="{{ art.id }}" class="art-check">
+                            </td>
+                            <td><strong>{{ art.nom }}</strong></td>
+                            <td><code>{{ art.code_barre }}</code></td>
+                            <td class="text-end">{{ art.prix_vente|number_format(0, ',', ' ') }} {{ devise }}</td>
+                            <td>
+                                <input type="number" name="quantites[{{ art.id }}]" class="form-control form-control-sm text-center" min="1" value="1">
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center text-muted py-4">Aucun article disponible.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce_val }}">
+function toggleAllCheckboxes(master) {
+    document.querySelectorAll('.art-check').forEach(cb => cb.checked = master.checked);
+}
+function toggleSelectAll(btn) {
+    const master = document.getElementById('checkAll');
+    master.checked = !master.checked;
+    toggleAllCheckboxes(master);
+}
+</script>
+{% endblock %}
+{% endif %}
