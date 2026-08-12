@@ -207,7 +207,7 @@
                     {% endif %}
 
                     {% if commande.statut in ['Brouillon', 'Envoyee'] and can_manage %}
-                        <form method="POST" action="commandes_fournisseur.php" onsubmit="return confirm('Êtes-vous sûr de vouloir annuler cette commande ?');">
+                        <form method="POST" action="commandes_fournisseur.php" data-confirm="Êtes-vous sûr de vouloir annuler cette commande ?">
                             <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                             <input type="hidden" name="action" value="annuler">
                             <input type="hidden" name="id" value="{{ commande.id }}">

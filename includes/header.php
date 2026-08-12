@@ -31,59 +31,60 @@ if (est_connecte() && (!isset($nb_alertes_topbar) || !isset($nb_alertes_perempti
 // ----- Icône (initiale) pour l'avatar -----
 $initiale = mb_substr(trim($user['nom'] ?? 'U'), 0, 1, 'UTF-8');
 
-// ----- Construction du menu selon les droits -----
-$groupes = [];
+// ----- Construction du menu (liste plate, sans sous-menus) selon les droits -----
+$menu = [];
+$can_manage_stock = peut_gerer_stock();
+$can_bill = peut_facturer();
+$can_admin = peut_administrer();
 
 if (est_connecte()) {
-    $principal = [];
-    $principal[] = ['slug' => 'tableau_bord', 'label' => 'Tableau de bord', 'icon' => 'bi-speedometer2'];
-
-    if (peut('stock_consulter')) {
-        $logistique = [];
-        $logistique[] = ['slug' => 'stock',        'label' => 'Stock',        'icon' => 'bi-boxes'];
-        if (peut('articles_consulter')) {
-            $logistique[] = ['slug' => 'articles',     'label' => 'Articles',     'icon' => 'bi-box-seam'];
-        }
-        if (peut('fournisseurs_consulter')) {
-            $logistique[] = ['slug' => 'fournisseurs', 'label' => 'Fournisseurs', 'icon' => 'bi-truck'];
-        }
-        if (peut('stock_gerer')) {
-            $logistique[] = ['slug' => 'mouvements',   'label' => 'Mouvements',   'icon' => 'bi-arrow-left-right'];
-        }
-        if (peut('stock_transfert')) {
-            $logistique[] = ['slug' => 'transferts', 'label' => 'Transferts', 'icon' => 'bi-arrow-left-right'];
-        }
-        $logistique[] = ['slug' => 'peremptions', 'label' => 'Péremptions', 'icon' => 'bi-calendar-week'];
-        $principal[] = ['type' => 'group', 'label' => 'Logistique', 'icon' => 'bi-boxes', 'items' => $logistique];
+    $menu[] = ['slug' => 'tableau_bord', 'label' => 'Accueil', 'icon' => 'bi-speedometer2', 'color' => 'clr-indigo'];
+    if ($can_admin) {
+        $menu[] = ['slug' => 'statistiques', 'label' => 'Statistiques', 'icon' => 'bi-graph-up', 'color' => 'clr-indigo'];
     }
 
-    $groupes[] = ['label' => 'Navigation', 'items' => $principal];
-
-    if (peut('caisse_gerer')) {
-        $ventes = [];
-        $ventes[] = ['slug' => 'caisse',   'label' => 'Caisse',   'icon' => 'bi-cart-check'];
-        if (peut('facturation_consulter')) {
-            $ventes[] = ['slug' => 'factures', 'label' => 'Factures', 'icon' => 'bi-receipt'];
+    if ($can_manage_stock) {
+        $menu[] = ['slug' => 'stock', 'label' => 'Stock', 'icon' => 'bi-boxes', 'color' => 'clr-emerald'];
+        $menu[] = ['slug' => 'articles', 'label' => 'Articles', 'icon' => 'bi-box-seam', 'color' => 'clr-emerald'];
+        if (peut('articles_gerer')) {
+            $menu[] = ['slug' => 'categories', 'label' => 'Catégories', 'icon' => 'bi-tags', 'color' => 'clr-emerald'];
         }
-        $groupes[] = ['label' => '', 'items' => [
-            ['type' => 'group', 'label' => 'Ventes', 'icon' => 'bi-cart-check', 'items' => $ventes],
-        ]];
+        $menu[] = ['slug' => 'fournisseurs', 'label' => 'Fournisseurs', 'icon' => 'bi-truck', 'color' => 'clr-emerald'];
+        if (peut('achats_consulter')) {
+            $menu[] = ['slug' => 'commandes_fournisseur', 'label' => "Commandes d'achat", 'icon' => 'bi-cart-plus', 'color' => 'clr-emerald'];
+        }
+        if (peut('inventaire_consulter')) {
+            $menu[] = ['slug' => 'inventaire', 'label' => 'Inventaire', 'icon' => 'bi-clipboard-check', 'color' => 'clr-emerald'];
+        }
+        $menu[] = ['slug' => 'mouvements', 'label' => 'Mouvements', 'icon' => 'bi-arrow-left-right', 'color' => 'clr-emerald'];
+        $menu[] = ['slug' => 'peremptions', 'label' => 'Péremptions', 'icon' => 'bi-calendar-week', 'color' => 'clr-emerald'];
+        if (in_array($role, [ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER], true)) {
+            $menu[] = ['slug' => 'etiquettes', 'label' => 'Étiquettes rayon', 'icon' => 'bi-tag', 'color' => 'clr-emerald'];
+            $menu[] = ['slug' => 'transferts', 'label' => 'Transferts', 'icon' => 'bi-arrow-repeat', 'color' => 'clr-emerald'];
+        }
     }
 
-    if (peut('utilisateurs_gerer')) {
-        $admin_items = [];
-        $admin_items[] = ['slug' => 'utilisateurs', 'label' => 'Utilisateurs', 'icon' => 'bi-people'];
-        if (peut('magasins_consulter')) {
-            $admin_items[] = ['slug' => 'magasins',     'label' => 'Magasins',     'icon' => 'bi-shop'];
+    if ($can_bill) {
+        $menu[] = ['slug' => 'caisse', 'label' => 'Caisse (POS)', 'icon' => 'bi-cash-coin', 'color' => 'clr-sky'];
+        $menu[] = ['slug' => 'factures', 'label' => 'Factures', 'icon' => 'bi-receipt', 'color' => 'clr-sky'];
+        if (peut('retours_consulter')) {
+            $menu[] = ['slug' => 'retours', 'label' => 'Retours / SAV', 'icon' => 'bi-arrow-counterclockwise', 'color' => 'clr-sky'];
         }
-        if (peut('depenses_consulter')) {
-            $admin_items[] = ['slug' => 'depenses', 'label' => 'Dépenses', 'icon' => 'bi-cash-stack'];
+        if (peut('promotions_consulter')) {
+            $menu[] = ['slug' => 'promotions', 'label' => 'Promotions & Remises', 'icon' => 'bi-percent', 'color' => 'clr-sky'];
         }
-        $admin_items[] = ['slug' => 'statistiques', 'label' => 'Statistiques', 'icon' => 'bi-graph-up'];
-        $admin_items[] = ['slug' => 'parametres',   'label' => 'Paramètres',   'icon' => 'bi-gear'];
-        $groupes[] = ['label' => 'Administration', 'items' => [
-            ['type' => 'group', 'label' => 'Administration', 'icon' => 'bi-gear', 'items' => $admin_items],
-        ]];
+        $menu[] = ['slug' => 'cloture', 'label' => 'Clôture de Caisse', 'icon' => 'bi-lock-fill', 'color' => 'clr-sky'];
+    }
+
+    if ($can_admin) {
+        $menu[] = ['slug' => 'depenses', 'label' => 'Dépenses', 'icon' => 'bi-wallet2', 'color' => 'clr-rose'];
+        $menu[] = ['slug' => 'utilisateurs', 'label' => 'Utilisateurs', 'icon' => 'bi-people', 'color' => 'clr-violet'];
+        $menu[] = ['slug' => 'magasins', 'label' => 'Magasins', 'icon' => 'bi-shop', 'color' => 'clr-violet'];
+        $menu[] = ['slug' => 'parametres', 'label' => 'Paramètres', 'icon' => 'bi-gear', 'color' => 'clr-violet'];
+    }
+
+    if (peut('audit_consulter')) {
+        $menu[] = ['slug' => 'audit', 'label' => 'Journal d\'activité', 'icon' => 'bi-clock-history', 'color' => 'clr-slate'];
     }
 }
 
@@ -106,6 +107,7 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
     <title><?= h($titre_page) ?> · <?= h($app_nom) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="<?= BASE_URL ?>assets/images/logo-eStock.ico">
     <link href="<?= BASE_URL ?>assets/css/style.css" rel="stylesheet">
     <style>
         :root {
@@ -123,66 +125,24 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
     <!-- ============ SIDEBAR ============ -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <span class="logo-mark"><i class="bi bi-boxes"></i></span>
+            <img src="<?= BASE_URL ?>assets/images/logo-eStock-3.png" alt="Logo <?= h($app_nom) ?>" class="logo-img">
             <span class="brand-text"><?= h($app_nom) ?></span>
         </div>
 
         <nav class="sidebar-nav">
-            <?php foreach ($groupes as $g): ?>
-                <?php if (!empty($g['label'])): ?>
-                    <div class="nav-section-label"><?= h($g['label']) ?></div>
-                <?php endif; ?>
-                <?php foreach ($g['items'] as $item): ?>
-                    <?php if (($item['type'] ?? '') === 'group'):
-                        $group_slugs = array_column($item['items'], 'slug');
-                        $group_open = in_array($page_courante, $group_slugs, true);
-                    ?>
-                        <div class="nav-group <?= $group_open ? 'active' : '' ?>">
-                            <button class="sidebar-dropdown-toggle"
-                                    aria-expanded="<?= $group_open ? 'true' : 'false' ?>">
-                                <i class="bi <?= h($item['icon']) ?>"></i>
-                                <span><?= h($item['label']) ?></span>
-                                <i class="bi bi-chevron-right dropdown-arrow"></i>
-                            </button>
-                            <div class="sidebar-submenu">
-                                <?php foreach ($item['items'] as $sub): ?>
-                                    <a class="nav-link <?= $page_courante === $sub['slug'] ? 'active' : '' ?>"
-                                       href="<?= $sub['slug'] . '.php' ?>">
-                                        <i class="bi <?= h($sub['icon']) ?>"></i>
-                                        <span><?= h($sub['label']) ?></span>
-                                    </a>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                    <?php else: ?>
-                        <a class="nav-link <?= $page_courante === $item['slug'] ? 'active' : '' ?>"
-                           href="<?= $item['slug'] . '.php' ?>">
-                            <i class="bi <?= h($item['icon']) ?>"></i>
-                            <span><?= h($item['label']) ?></span>
-                        </a>
+            <?php foreach ($menu as $item): ?>
+                <a class="nav-link <?= $page_courante === $item['slug'] ? 'active' : '' ?>"
+                   href="<?= $item['slug'] . '.php' ?>">
+                    <span class="nav-icon <?= $item['color'] ?>"><i class="bi <?= $item['icon'] ?>"></i></span>
+                    <span><?= h($item['label']) ?></span>
+                    <?php if ($item['slug'] === 'peremptions' && $nb_alertes_peremption > 0): ?>
+                        <span class="badge bg-danger ms-auto" style="font-size:.65rem;"><?= $nb_alertes_peremption ?></span>
                     <?php endif; ?>
-                <?php endforeach; ?>
+                </a>
             <?php endforeach; ?>
-
         </nav>
 
         <div class="sidebar-footer">
-            <?php if (peut('audit_consulter')): ?>
-            <a class="side-user <?= $page_courante === 'audit' ? 'active' : '' ?>" href="audit.php" title="Journal d'activité">
-                <span class="avatar avatar-accent"><i class="bi bi-clock-history"></i></span>
-                <span class="meta">
-                    <span class="nm">Journal d'activité</span>
-                </span>
-            </a>
-            <?php endif; ?>
-            <?php if (in_array($role, [ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_VENDEUR])): ?>
-            <a class="side-user <?= $page_courante === 'cloture' ? 'active' : '' ?>" href="cloture.php" title="Clôturer la caisse">
-                <span class="avatar" style="background:#f59e0b;"><i class="bi bi-lock-fill"></i></span>
-                <span class="meta">
-                    <span class="nm">Clôturer la Caisse</span>
-                </span>
-            </a>
-            <?php endif; ?>
             <a class="side-user <?= $page_courante === 'profil' ? 'active' : '' ?>" href="profil.php" title="Mon profil">
                 <span class="avatar avatar-initial"><?= h(strtoupper($initiale)) ?></span>
                 <span class="meta">
@@ -190,15 +150,6 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
                     <span class="rl"><?= h($role) ?></span>
                 </span>
             </a>
-            <form method="POST" action="auth/logout.php" class="d-inline">
-                <?= csrf_field() ?>
-                <button type="submit" class="side-user btn btn-link text-decoration-none" title="Se déconnecter" style="background:none;border:none;">
-                    <span class="avatar avatar-logout"><i class="bi bi-box-arrow-right"></i></span>
-                    <span class="meta">
-                        <span class="nm">Déconnexion</span>
-                    </span>
-                </button>
-            </form>
         </div>
     </aside>
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
@@ -238,6 +189,13 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
                 <?php endif; ?>
                 <a href="<?= 'tableau_bord.php' ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-house-door"></i></a>
             </div>
+            <form method="POST" action="auth/logout.php" class="m-0 d-flex align-items-center">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-outline-danger btn-sm" title="Se déconnecter">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span class="d-none d-md-inline ms-1">Déconnexion</span>
+                </button>
+            </form>
         </header>
 
         <main class="app-content" id="appMain">

@@ -343,7 +343,7 @@ include __DIR__ . '/includes/header.php';
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <form method="post" action="<?= h(page_url('articles', ['action' => 'supprimer'])) ?>" style="display:inline"
-                                  onsubmit="return confirm('Désactiver cet article ?')">
+                                  data-confirm="Désactiver cet article ?">
                                 <input type="hidden" name="id" value="<?= (int)$a['id'] ?>">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Désactiver">

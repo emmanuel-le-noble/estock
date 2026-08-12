@@ -210,7 +210,7 @@ include __DIR__ . '/includes/header.php';
                             <a href="<?= h(generate_signed_url('utilisateurs.php', (int)$u['id'], ['action' => 'editer'])) ?>" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
                             <?php if ((int)$u['id'] !== (int)(user_courant()['id'] ?? 0)): ?>
                             <form method="post" action="<?= h(page_url('utilisateurs', ['action' => 'toggle'])) ?>" style="display:inline"
-                                  onsubmit="return confirm('<?= $u['actif'] ? 'Désactiver' : 'Activer' ?> cet utilisateur ?')">
+                                  data-confirm="<?= $u['actif'] ? 'Désactiver' : 'Activer' ?> cet utilisateur ?">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-outline-secondary" title="Activer/Désactiver">

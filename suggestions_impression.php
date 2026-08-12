@@ -18,6 +18,7 @@ $nb_total = is_array($articles) ? count($articles) : 0;
 <head>
     <meta charset="UTF-8">
     <title>Suggestions d'Achat — <?= h(param_shop_name()) ?></title>
+    <link rel="icon" type="image/x-icon" href="assets/images/logo-eStock.ico">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
@@ -127,8 +128,8 @@ $nb_total = is_array($articles) ? count($articles) : 0;
             </div>
         </div>
         <div class="d-flex gap-2">
-            <button onclick="window.close()" class="btn btn-light btn-sm fw-medium border">Fermer</button>
-            <button onclick="window.print()" class="btn btn-dark btn-sm fw-medium d-flex align-items-center gap-2">
+            <button id="btnClose" class="btn btn-light btn-sm fw-medium border">Fermer</button>
+            <button id="btnPrint" class="btn btn-dark btn-sm fw-medium d-flex align-items-center gap-2">
                 <i class="bi bi-printer"></i> Imprimer le document
             </button>
         </div>
@@ -224,6 +225,11 @@ $nb_total = is_array($articles) ? count($articles) : 0;
         <?php endforeach; ?>
     <?php endif; ?>
 </div>
+
+<script nonce="<?= h(csp_nonce()) ?>">
+    document.getElementById('btnPrint').addEventListener('click', function () { window.print(); });
+    document.getElementById('btnClose').addEventListener('click', function () { window.close(); });
+</script>
 
 </body>
 </html>

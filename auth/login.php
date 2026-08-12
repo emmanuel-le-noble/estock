@@ -58,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="../assets/css/style.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="../assets/images/logo-eStock.ico">
     <style>
         .login-split { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
         @media (max-width: 991.98px) { .login-split { grid-template-columns: 1fr; } .login-aside { display: none; } }
@@ -73,11 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .login-aside::before { width: 320px; height: 320px; background: rgba(129,140,248,.5); top: -80px; right: -60px; }
         .login-aside::after  { width: 280px; height: 280px; background: rgba(244,114,182,.35); bottom: -80px; left: -40px; }
         .login-aside .brand-row { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
-        .login-aside .logo-mark {
+        .login-aside .logo-img {
             width: 46px; height: 46px; border-radius: 13px;
-            background: linear-gradient(135deg, #818cf8, #4f46e5);
-            display: grid; place-items: center; font-size: 1.5rem;
-            box-shadow: 0 10px 26px rgba(99,102,241,.5);
+            object-fit: cover; box-shadow: 0 10px 26px rgba(99,102,241,.5);
         }
         .login-aside .brand-name { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; }
         .login-aside .pitch { position: relative; z-index: 1; }
@@ -99,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Panneau gauche vitrine -->
     <aside class="login-aside">
         <div class="brand-row">
-            <span class="logo-mark"><i class="bi bi-boxes"></i></span>
+            <img src="../assets/images/logo-eStock-3.png" alt="Logo <?= h($app_nom) ?>" class="logo-img">
             <span class="brand-name"><?= h($app_nom) ?></span>
         </div>
         <div class="pitch">

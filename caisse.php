@@ -78,7 +78,7 @@ window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;
                     <i class="bi bi-upc-scan text-primary"></i> Scanner code-barres
                 </label>
                 <div class="input-group input-group-lg">
-                    <span class="input-group-text"><i class="bi bi-barcode"></i></span>
+                    <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
                     <input type="text" id="scanInput" class="form-control"
                            placeholder="<?= $caisse_fermee ? 'Caisse clôturée — scan désactivé' : 'Scannez ou saisissez un code-barres puis Entrée...' ?>"
                            autocomplete="off"

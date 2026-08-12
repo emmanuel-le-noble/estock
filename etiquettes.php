@@ -3,21 +3,29 @@
  * etiquettes.php — Générateur et impression d'étiquettes de rayon.
  * Format A4 grilles (3x8, 4x10) ou étiquettes individuelles avec EAN-13, Prix TTC, Nom shop.
  */
-if (!function_exists('est_connecte'))    { require_once __DIR__ . '/config/connexion.php'; }
+if (!function_exists('est_connecte'))     { require_once __DIR__ . '/config/connexion.php'; }
 if (!function_exists('db_article_insert')) { require_once __DIR__ . '/includes/db_functions.php'; }
-if (!function_exists('csrf_guard'))      { require_once __DIR__ . '/includes/helpers.php'; }
+if (!function_exists('csrf_guard'))       { require_once __DIR__ . '/includes/helpers.php'; }
+
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
 exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER);
 
 $action = $_GET['action'] ?? 'form';
 
 if ($action === 'imprimer') {
-    // Récupérer les articles sélectionnés
+    // Récupérer et sécuriser les articles sélectionnés
     $article_ids = $_POST['articles'] ?? $_GET['articles'] ?? [];
+    
     if (is_string($article_ids)) {
         $article_ids = array_filter(array_map('intval', explode(',', $article_ids)));
+    } elseif (is_array($article_ids)) {
+        $article_ids = array_filter(array_map('intval', $article_ids));
+    } else {
+        $article_ids = [];
     }
-    if (!is_array($article_ids)) $article_ids = [];
 
     $quantites = $_POST['quantites'] ?? [];
     $format    = $_GET['format'] ?? $_POST['format'] ?? 'grid_3x8'; // grid_3x8 (24/page), grid_4x10 (40/page), individuel

@@ -139,7 +139,7 @@ include __DIR__ . '/includes/header.php';
                         <td class="text-center text-nowrap">
                             <a href="<?= h(generate_signed_url('fournisseurs.php', (int)$f['id'], ['action' => 'editer'])) ?>" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
                             <form method="post" action="<?= h(page_url('fournisseurs', ['action' => 'supprimer'])) ?>" style="display:inline"
-                                  onsubmit="return confirm('Supprimer ce fournisseur ?')">
+                                  data-confirm="Supprimer ce fournisseur ?">
                                 <input type="hidden" name="id" value="<?= (int)$f['id'] ?>">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>

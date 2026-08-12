@@ -270,9 +270,10 @@ document.addEventListener('DOMContentLoaded', function () {
                             '<strong>' + (isExpired ? 'LOT PÉRIMÉ' : 'DLC Proche') + '</strong><br>' +
                             '<small>Lot ' + alerte.numero_lot + ' — ' + (isExpired ? 'Périmé depuis ' + Math.abs(alerte.jours_restants) + 'j' : 'Expire dans ' + alerte.jours_restants + 'j') + '</small>' +
                             '</div>' +
-                            '<button class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button>' +
+                            '<button class="btn-close btn-close-white ms-auto" id="btnToastClose"></button>' +
                             '</div>';
                         document.body.appendChild(toast);
+                        toast.querySelector('#btnToastClose').addEventListener('click', function () { toast.remove(); });
 
                         setTimeout(function () { toast.remove(); }, 5000);
                     }
@@ -291,9 +292,10 @@ document.addEventListener('DOMContentLoaded', function () {
                             '<small>' + escapeHtml(promo.label) + '</small><br>' +
                             '<small><s>' + formatMoney(promo.prix_original) + '</s> → <strong>' + formatMoney(promo.prix_remise) + '</strong> (−' + promo.remise_pct + '%)</small>' +
                             '</div>' +
-                            '<button class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button>' +
+                            '<button class="btn-close btn-close-white ms-auto" id="btnToastPromoClose"></button>' +
                             '</div>';
                         document.body.appendChild(toastPromo);
+                        toastPromo.querySelector('#btnToastPromoClose').addEventListener('click', function () { toastPromo.remove(); });
 
                         setTimeout(function () { toastPromo.remove(); }, 5000);
                     }

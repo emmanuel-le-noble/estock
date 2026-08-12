@@ -88,7 +88,7 @@ include __DIR__ . '/includes/header.php';
         <i class="bi bi-arrow-left"></i> Retour à la liste
     </a>
     <div class="d-flex gap-2">
-        <button class="btn btn-primary" onclick="window.print()">
+        <button class="btn btn-primary" id="btnPrintFacture">
             <i class="bi bi-printer"></i> Imprimer / Réimprimer
         </button>
         <a href="<?= h('ticket_print.php?facture_id=' . $id) ?>" class="btn btn-outline-dark" target="_blank">
@@ -229,5 +229,9 @@ include __DIR__ . '/includes/header.php';
     });
 </script>
 <?php endif; ?>
+
+<script nonce="<?= h(csp_nonce()) ?>">
+    document.getElementById('btnPrintFacture').addEventListener('click', function () { window.print(); });
+</script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>

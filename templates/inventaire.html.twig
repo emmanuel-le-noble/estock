@@ -138,12 +138,12 @@
             </div>
             {% if inv.statut == 'En cours' and peut('inventaire_gerer') %}
             <div class="card-footer d-flex gap-2">
-                <form method="post" action="{{ base_url }}inventaire.php?action=valider" onsubmit="return confirm('Valider et appliquer tous les écarts au stock ?')">
+                <form method="post" action="{{ base_url }}inventaire.php?action=valider" data-confirm="Valider et appliquer tous les écarts au stock ?">
                     {{ csrf_field()|raw }}
                     <input type="hidden" name="id" value="{{ inv.id }}">
                     <button class="btn btn-success btn-sm"><i class="bi bi-check-circle"></i> Valider l'inventaire</button>
                 </form>
-                <form method="post" action="{{ base_url }}inventaire.php?action=annuler" onsubmit="return confirm('Annuler cette session sans modifier le stock ?')">
+                <form method="post" action="{{ base_url }}inventaire.php?action=annuler" data-confirm="Annuler cette session sans modifier le stock ?">
                     {{ csrf_field()|raw }}
                     <input type="hidden" name="id" value="{{ inv.id }}">
                     <button class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle"></i> Annuler</button>

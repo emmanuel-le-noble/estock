@@ -43,13 +43,13 @@
             <div class="card shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <h6 class="mb-0"><i class="bi bi-box-seam"></i> Sélectionner les articles</h6>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleSelectAll(this)">Tout sélectionner</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAll">Tout sélectionner</button>
                 </div>
                 <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light sticky-top">
                             <tr>
-                                <th style="width: 40px;"><input type="checkbox" id="checkAll" onclick="toggleAllCheckboxes(this)"></th>
+                                <th style="width: 40px;"><input type="checkbox" id="checkAll"></th>
                                 <th>Article</th>
                                 <th>Code-barres</th>
                                 <th class="text-end">Prix TTC</th>
@@ -91,5 +91,11 @@ function toggleSelectAll(btn) {
     master.checked = !master.checked;
     toggleAllCheckboxes(master);
 }
+document.getElementById('checkAll').addEventListener('change', function () {
+    toggleAllCheckboxes(this);
+});
+document.getElementById('btnSelectAll').addEventListener('click', function () {
+    toggleSelectAll(this);
+});
 </script>
 {% endblock scripts_extra %}

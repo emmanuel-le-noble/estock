@@ -467,7 +467,7 @@ if ($tab_courant === 'droits' && peut('utilisateurs_gerer')):
                                     title="Modifier">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <form method="post" class="d-inline" onsubmit="return confirm('Supprimer cette règle ?')">
+                            <form method="post" class="d-inline" data-confirm="Supprimer cette règle ?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="delete_promotion">
                                 <input type="hidden" name="promo_id" value="<?= $promo['id'] ?>">

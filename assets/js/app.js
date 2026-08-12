@@ -69,104 +69,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.key === 'Escape') closeSidebar();
     });
 
-    document.addEventListener('DOMContentLoaded', function () {
-    // ----- Sous-menus déroulants sidebar (accordion avec persistance localStorage) -----
-    const STORAGE_KEY = 'estock_sidebar_open';
-
-    function getSavedGroup() {
-        try { 
-            return localStorage.getItem(STORAGE_KEY) || ''; 
-        } catch (e) { 
-            return ''; 
-        }
-    }
-
-    function saveGroup(group) {
-        try { 
-            localStorage.setItem(STORAGE_KEY, group || ''); 
-        } catch (e) {}
-    }
-
-    function openGroup(toggle, submenu, parent) {
-        toggle.setAttribute('aria-expanded', 'true');
-        if (submenu) {
-            // Si vous utilisez inline max-height en CSS :
-            submenu.style.maxHeight = submenu.scrollHeight + 'px';
-        }
-        if (parent) {
-            parent.classList.add('active');
-        }
-    }
-
-    function closeGroup(toggle, submenu, parent) {
-        toggle.setAttribute('aria-expanded', 'false');
-        if (submenu) {
-            submenu.style.maxHeight = null;
-        }
-        if (parent) {
-            parent.classList.remove('active');
-        }
-    }
-
-    const dropdownToggles = document.querySelectorAll('.sidebar-dropdown-toggle');
-
-    // Identifie le groupe de la page active si présent
-    const activeInGroup = document.querySelector('.sidebar-submenu .nav-link.active');
-    let activeGroupName = '';
-
-    if (activeInGroup) {
-        const activeParentGroup = activeInGroup.closest('.nav-group');
-        if (activeParentGroup) {
-            const activeToggle = activeParentGroup.querySelector('.sidebar-dropdown-toggle');
-            activeGroupName = activeToggle ? (activeToggle.getAttribute('data-group') || '') : '';
-        }
-    }
-
-    const savedGroup = getSavedGroup();
-
-    // Initialisation et événements des menus
-    dropdownToggles.forEach(function (toggle) {
-        const parent = toggle.closest('.nav-group');
-        const submenu = parent ? parent.querySelector('.sidebar-submenu') : null;
-        const groupName = toggle.getAttribute('data-group') || '';
-
-        // Déterminer si ce groupe doit être ouvert au chargement
-        let shouldOpen = false;
-        if (activeGroupName && groupName === activeGroupName) {
-            shouldOpen = true; // Page active prioritaire
-        } else if (!activeGroupName && savedGroup && groupName === savedGroup) {
-            shouldOpen = true; // Restaurer la persistance si pas de page active
-        }
-
-        if (shouldOpen) {
-            openGroup(toggle, submenu, parent);
-        }
-
-        toggle.addEventListener('click', function (e) {
-            e.preventDefault();
-            const isOpen = toggle.getAttribute('aria-expanded') === 'true';
-
-            // Accordion : fermer tous les autres groupes
-            dropdownToggles.forEach(function (otherToggle) {
-                if (otherToggle !== toggle) {
-                    const otherParent = otherToggle.closest('.nav-group');
-                    const otherSubmenu = otherParent ? otherParent.querySelector('.sidebar-submenu') : null;
-                    closeGroup(otherToggle, otherSubmenu, otherParent);
-                }
-            });
-
-            // Basculer l'état du groupe sélectionné
-            if (isOpen) {
-                closeGroup(toggle, submenu, parent);
-                saveGroup('');
-            } else {
-                openGroup(toggle, submenu, parent);
-                saveGroup(groupName);
-            }
-        });
-    });
-});
-
     // ----- Auto-focus -----
     var focusEl = document.querySelector('[data-autofocus]');
     if (focusEl) focusEl.focus();
@@ -187,6 +89,30 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         })(filterInputs[i]);
     }
+
+    // ----- Confirmations (CSP-safe : pas de handlers inline) -----
+    // Formulaire : data-confirm="Message ?"
+    document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            if (!confirm(form.getAttribute('data-confirm'))) e.preventDefault();
+        });
+    });
+    // Élément cliquable : data-confirm-click="Message ?"
+    document.querySelectorAll('[data-confirm-click]').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+            if (!confirm(el.getAttribute('data-confirm-click'))) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+    });
+
+    // Select : data-auto-submit (soumission auto au changement)
+    document.querySelectorAll('select[data-auto-submit]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+            if (sel.form) sel.form.submit();
+        });
+    });
 
     // ----- Auto-dismiss des alertes "success" / "info" -----
     var alerts = document.querySelectorAll('.alert-success, .alert-info');

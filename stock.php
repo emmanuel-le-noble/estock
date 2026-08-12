@@ -63,7 +63,7 @@ include __DIR__ . '/includes/header.php';
     <form method="get" class="d-flex flex-wrap gap-2 align-items-center" role="search">
         <!-- Permettre le choix du magasin si l'utilisateur possède les droits d'administration -->
         <?php if (peut_administrer()): ?>
-            <select name="magasin_id" class="form-select w-auto" onchange="this.form.submit()">
+            <select name="magasin_id" class="form-select w-auto" data-auto-submit>
                 <option value="0">Tous les magasins (Global)</option>
                 <?php foreach ($magasins_all as $m): ?>
                     <option value="<?= (int)$m['id'] ?>" <?= $magasin_id === (int)$m['id'] ? 'selected' : '' ?>>
@@ -75,7 +75,7 @@ include __DIR__ . '/includes/header.php';
             <input type="hidden" name="magasin_id" value="<?= $magasin_id ?>">
         <?php endif; ?>
 
-        <select name="categorie_id" class="form-select w-auto" onchange="this.form.submit()">
+        <select name="categorie_id" class="form-select w-auto" data-auto-submit>
             <option value="0">Toutes les catégories</option>
             <?php foreach ($categories_all as $c): ?>
                 <option value="<?= (int)$c['id'] ?>" <?= $categorie_id === (int)$c['id'] ? 'selected' : '' ?>>

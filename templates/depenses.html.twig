@@ -110,8 +110,7 @@
                                 <td>{{ d.utilisateur_nom|e ?: 'Système' }}</td>
                                 <td class="text-center">
                                     {% if is_directeur|default(false) %}
-                                    <form method="post" class="d-inline"
-                                          onsubmit="return confirm('Supprimer cette dépense ?')">
+                                    <form method="post" class="d-inline" data-confirm="Supprimer cette dépense ?">
                                         {{ csrf_field() }}
                                         <input type="hidden" name="action" value="supprimer">
                                         <input type="hidden" name="depense_id" value="{{ d.id }}">

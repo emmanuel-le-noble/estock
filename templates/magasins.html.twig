@@ -72,18 +72,16 @@
                             </td>
                             <td class="text-center text-muted small">{{ date_fr(m.date_creation) }}</td>
                             <td class="text-end">
-                                <form method="post" class="d-inline">
+                                <form method="post" class="d-inline" data-confirm="Désactiver ce magasin ?">
                                     {{ csrf_field() }}
                                     <input type="hidden" name="action" value="toggle">
                                     <input type="hidden" name="id" value="{{ m.id }}">
                                     {% if m.actif %}
-                                        <button type="submit" class="btn btn-outline-danger btn-sm"
-                                                onclick="return confirm('Désactiver ce magasin ?')">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">
                                             <i class="bi bi-eye-slash"></i> Désactiver
                                         </button>
                                     {% else %}
-                                        <button type="submit" class="btn btn-outline-success btn-sm"
-                                                onclick="return confirm('Activer ce magasin ?')">
+                                        <button type="submit" class="btn btn-outline-success btn-sm">
                                             <i class="bi bi-eye"></i> Activer
                                         </button>
                                     {% endif %}

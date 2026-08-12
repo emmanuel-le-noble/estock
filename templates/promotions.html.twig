@@ -5,7 +5,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h1 class="h4 mb-0"><i class="bi bi-percent"></i> Promotions & Codes Promo</h1>
     {% if peut_gerer %}
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalPromo" onclick="resetForm()">
+    <button class="btn btn-primary" id="btnNewPromo" data-bs-toggle="modal" data-bs-target="#modalPromo">
         <i class="bi bi-plus-lg"></i> Nouvelle promotion
     </button>
     {% endif %}
@@ -92,11 +92,11 @@
                 </td>
                 <td>
                     {% if peut_gerer %}
-                    <button class="btn btn-sm btn-outline-primary me-1" onclick='editPromo({{ row|json_encode|raw }})'>
+                    <button class="btn btn-sm btn-outline-primary me-1" data-edit-promo="{{ row|json_encode|e('html_attr') }}">
                         <i class="bi bi-pencil"></i>
                     </button>
                     {% if row.actif %}
-                    <form method="post" action="{{ base_url }}promotions.php?action=desactiver" class="d-inline" onsubmit="return confirm('Désactiver cette promotion ?')">
+                    <form method="post" action="{{ base_url }}promotions.php?action=desactiver" class="d-inline" data-confirm="Désactiver cette promotion ?">
                         {{ csrf_field()|raw }}
                         <input type="hidden" name="id" value="{{ row.id }}">
                         <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle"></i></button>
@@ -235,5 +235,14 @@ function editPromo(p) {
     const modal = new bootstrap.Modal(document.getElementById('modalPromo'));
     modal.show();
 }
+
+document.getElementById('btnNewPromo').addEventListener('click', function () {
+    resetForm();
+});
+document.querySelectorAll('[data-edit-promo]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        editPromo(JSON.parse(btn.getAttribute('data-edit-promo')));
+    });
+});
 </script>
 {% endblock scripts_extra %}
