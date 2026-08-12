@@ -20,6 +20,12 @@ $magasin_id = (int)($u['magasin_id'] ?? 0);
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'transferer') {
     csrf_guard('transferts.php');
 
+    // Les transferts sont réservés à la direction : contrôle serveur (l'UI le masque aussi)
+    if (!in_array(user_role(), [ROLE_DIRECTEUR, ROLE_ADMIN], true)) {
+        flash_error('Droits insuffisants pour effectuer un transfert.');
+        redirect('transferts.php');
+    }
+
     $data = extract_post_data([
         'article_id'          => ['type' => 'int'],
         'magasin_source_id'   => ['type' => 'int'],
@@ -51,7 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'trans
         );
         flash_success('Transfert enregistré avec succès.');
     } catch (Throwable $e) {
-        $pdo->rollBack();
+        // db_transferer_stock() gère déjà sa propre transaction (rollback interne) :
+        // appeler rollBack() ici provoquerait une PDOException "no active transaction".
         error_log('Erreur transfert: ' . $e->getMessage());
         flash_error('Erreur lors du transfert. Veuillez réessayer.');
     }

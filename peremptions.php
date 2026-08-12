@@ -55,8 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
             redirect('peremptions.php');
         }
         
+        $pdo->beginTransaction();
         db_lot_upsert($pdo, $data['article_id'], $magasin_id, $data['numero_lot'], $data['quantite'], $dlc);
         db_stock_magasin_increment($pdo, $magasin_id, $data['article_id'], $data['quantite']);
+        $pdo->commit();
         
         if (function_exists('suivre_activite')) {
             suivre_activite('LOT_AJOUTE', 'Lot ' . $data['numero_lot'] . ' - ' . $data['quantite'] . ($dlc ? ' - DLC ' . $dlc : ''));
@@ -64,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
         
         flash_success('Lot "' . h($data['numero_lot']) . '" enregistré avec succès (+' . $data['quantite'] . ' unités).');
     } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         error_log('Erreur ajout lot: ' . $e->getMessage());
         flash_error('Erreur lors de l\'enregistrement du lot.');
     }

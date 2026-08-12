@@ -34,18 +34,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         redirect('retours.php');
     }
 
+    // Restreindre le retour à la facture du magasin de l'utilisateur (Directeur/Admin exemptés)
+    $role_retour = user_role();
+    if ($role_retour !== ROLE_DIRECTEUR && $role_retour !== ROLE_ADMIN
+        && $magasin_id > 0 && (int)($facture['magasin_id'] ?? 0) !== $magasin_id) {
+        flash_error('Cette facture appartient à un autre magasin. Retour impossible.');
+        redirect('retours.php');
+    }
+
+    // Lignes de la facture : quantités vendues par ligne (référence pour le plafond de retour)
+    $lignes_facture = db_facture_get_lignes($pdo, $facture_id);
+    $qteVendueParLigne = [];
+    $articleParLigne = [];
+    foreach ($lignes_facture as $lf) {
+        $qteVendueParLigne[(int)$lf['id']] = (int)$lf['quantite'];
+        $articleParLigne[(int)$lf['id']]   = (int)$lf['article_id'];
+    }
+    // Quantités déjà retournées par ligne de facture
+    $dejaRetourneParLigne = [];
+    if ($lignes_facture) {
+        $stmt_deja = $pdo->prepare("SELECT ligne_facture_id, SUM(quantite) AS total FROM lignes_retour WHERE ligne_facture_id IN (" . implode(',', array_map('intval', array_keys($qteVendueParLigne))) . ") GROUP BY ligne_facture_id");
+        $stmt_deja->execute();
+        foreach ($stmt_deja->fetchAll() as $dr) {
+            $dejaRetourneParLigne[(int)$dr['ligne_facture_id']] = (int)$dr['total'];
+        }
+    }
+
     // Filtrer les lignes ayant une quantité > 0
     $lignesRetour = [];
     foreach ($lignes_post as $lf_id => $row) {
         $qte = (int)($row['quantite'] ?? 0);
-        if ($qte > 0) {
-            $lignesRetour[] = [
-                'ligne_facture_id' => (int)$lf_id,
-                'article_id'       => (int)($row['article_id'] ?? 0),
-                'quantite'         => $qte,
-                'prix_unitaire'    => (float)($row['prix_unitaire'] ?? 0),
-            ];
+        if ($qte <= 0) continue;
+
+        $lf_id_int = (int)$lf_id;
+        $qte_vendue = $qteVendueParLigne[$lf_id_int] ?? 0;
+        $qte_deja   = $dejaRetourneParLigne[$lf_id_int] ?? 0;
+        $qte_max    = max(0, $qte_vendue - $qte_deja);
+
+        // Sécurité : la ligne doit exister, appartenir à la facture et la quantité doit être valide
+        if ($qte_max <= 0 || $qte > $qte_max) {
+            flash_error('Quantité de retour invalide (maximum retournable dépassé).');
+            redirect(generate_signed_url('retours.php', $facture_id, ['action' => 'nouveau_facture']));
         }
+        if ((int)($row['article_id'] ?? 0) !== ($articleParLigne[$lf_id_int] ?? 0)) {
+            flash_error('Article incohérent pour cette ligne de facture.');
+            redirect(generate_signed_url('retours.php', $facture_id, ['action' => 'nouveau_facture']));
+        }
+
+        $lignesRetour[] = [
+            'ligne_facture_id' => $lf_id_int,
+            'article_id'       => (int)($row['article_id'] ?? 0),
+            'quantite'         => $qte,
+            'prix_unitaire'    => (float)($row['prix_unitaire'] ?? 0),
+        ];
     }
 
     if (empty($lignesRetour)) {
@@ -93,6 +134,10 @@ if ($action === 'detail') {
 // ---- Formulaire nouveau retour pour une facture spécifique ----
 if ($action === 'nouveau_facture') {
     $facture_id = (int)($_GET['id'] ?? 0);
+    $token      = $_GET['token'] ?? '';
+    if ($facture_id <= 0 || !verify_url_signature($facture_id, $token, ['action' => 'nouveau_facture'])) {
+        flash_error('Lien invalide ou expiré.'); redirect('retours.php');
+    }
     $facture    = db_facture_get_by_id($pdo, $facture_id);
     if (!$facture || $facture['statut'] !== 'Payee') {
         flash_error('Facture introuvable ou non éligible.'); redirect('retours.php');
@@ -115,8 +160,15 @@ if ($action === 'nouveau') {
     $lignes     = [];
 
     if ($num_search !== '') {
-        $stmt = $pdo->prepare("SELECT * FROM factures WHERE numero_facture = ? AND statut = 'Payee'");
-        $stmt->execute([$num_search]);
+        $sql_facture = "SELECT * FROM factures WHERE numero_facture = ? AND statut = 'Payee'";
+        $params_facture = [$num_search];
+        $role_search = user_role();
+        if ($role_search !== ROLE_DIRECTEUR && $role_search !== ROLE_ADMIN && $magasin_id > 0) {
+            $sql_facture .= " AND magasin_id = ?";
+            $params_facture[] = $magasin_id;
+        }
+        $stmt = $pdo->prepare($sql_facture);
+        $stmt->execute($params_facture);
         $facture = $stmt->fetch() ?: null;
         if ($facture) {
             $lignes = db_facture_get_lignes($pdo, (int)$facture['id']);

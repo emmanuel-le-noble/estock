@@ -54,6 +54,13 @@ if (!$facture) {
     exit('Facture introuvable.');
 }
 
+// Un Vendeur connecté ne peut imprimer que ses propres factures (même règle que facture_view.php)
+if (est_connecte() && user_role() === ROLE_VENDEUR
+    && (int)($facture['utilisateur_id'] ?? 0) !== (int)(user_courant()['id'] ?? 0)) {
+    http_response_code(403);
+    exit('Accès non autorisé.');
+}
+
 // CORRECTION : Appel de la fonction appropriée
 $lignes = db_facture_get_lignes($pdo, $factureId);
 

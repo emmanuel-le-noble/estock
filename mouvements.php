@@ -41,10 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
         $date_peremption = !empty($_POST['date_peremption']) ? $_POST['date_peremption'] : null;
         
         // 1. Enregistrement de l'historique du mouvement (et stock par magasin)
+        //    process_stock_movement() synchronise déjà le stock global via
+        //    db_stock_magasin_update() : aucun ajustement supplémentaire requis.
         $art = process_stock_movement($pdo, $data['article_id'], $data['type'], $data['quantite'], $data['motif'], $u['id'] ?? 0, $magasin_id, $numero_lot, $date_peremption);
-        
-        // 2. CORRECTION CENTRALISÉE : Appel de la fonction de mise à jour du stock global
-        db_article_update_stock_global($pdo, $data['article_id'], $data['type'], $data['quantite']);
 
         $pdo->commit();
         suivre_activite('MOUVEMENT_STOCK', $data['type'] . ' de ' . $data['quantite'] . ' unité(s) — ' . $art['nom']);
@@ -222,7 +221,7 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
                 <button class="btn btn-primary"><i class="bi bi-save"></i> Enregistrer</button>
             </div>
         </form>
-        <script>
+        <script nonce="<?= h(csp_nonce()) ?>">
         document.addEventListener('DOMContentLoaded', function() {
             var typeSelect = document.getElementById('type_mouvement');
             var lotFields = document.getElementById('lotFields');

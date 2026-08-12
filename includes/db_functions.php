@@ -1123,6 +1123,10 @@ function db_stock_magasin_increment(PDO $pdo, int $magasin_id, int $article_id, 
         ':qte'  => $quantite_ajoutee,
         ':qte2' => $quantite_ajoutee,
     ]);
+
+    // Maintenir le stock global (articles.quantite_stock) synchronisé
+    $pdo->prepare("UPDATE articles SET quantite_stock = quantite_stock + :qte WHERE id = :art")
+        ->execute([':qte' => $quantite_ajoutee, ':art' => $article_id]);
 }
 
 /**
@@ -1234,12 +1238,17 @@ function db_transferts_list(PDO $pdo, int $magasin_id = 0, int $limit = 50): arr
 }
 
 /**
- * Initialiser le stock d'un article dans tous les magasins actifs (appelé à la création d'article).
+ * Initialiser le stock d'un article dans les magasins actifs (appelé à la création d'article).
+ * Le stock initial est affecté au PREMIER magasin actif uniquement pour éviter de
+ * dupliquer la quantité dans chaque magasin (la somme des stocks magasins doit rester
+ * égale à articles.quantite_stock). Les autres magasins démarrent à 0.
  */
 function db_stock_magasin_init_for_article(PDO $pdo, int $article_id, int $quantite = 0, int $alerte = 5): void {
-    $magasins = $pdo->query("SELECT id FROM magasins WHERE actif = 1")->fetchAll(PDO::FETCH_COLUMN);
+    $magasins = $pdo->query("SELECT id FROM magasins WHERE actif = 1 ORDER BY id ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $qte_magasin = $quantite;
     foreach ($magasins as $mid) {
-        db_stock_magasin_upsert($pdo, (int)$mid, $article_id, $quantite, $alerte);
+        db_stock_magasin_upsert($pdo, (int)$mid, $article_id, $qte_magasin, $alerte);
+        $qte_magasin = 0;
     }
 }
 
@@ -1463,18 +1472,21 @@ function db_cloture_verrouiller_ventes(PDO $pdo, int $cloture_id, int $magasin_i
 }
 
 /**
- * Récupérer la dernière clôture d'un magasin.
+ * Récupérer la dernière clôture d'un magasin (et éventuellement d'un utilisateur précis).
  */
-function db_cloture_get_derniere(PDO $pdo, int $magasin_id): ?array {
-    $stmt = $pdo->prepare(
-        "SELECT c.*, u.nom AS vendeur_nom
-         FROM clotures_caisse c
-         LEFT JOIN utilisateurs u ON u.id = c.utilisateur_id
-         WHERE c.magasin_id = ? AND c.statut = 'VALIDE'
-         ORDER BY c.date_cloture DESC, c.id DESC
-         LIMIT 1"
-    );
-    $stmt->execute([$magasin_id]);
+function db_cloture_get_derniere(PDO $pdo, int $magasin_id, ?int $utilisateur_id = null): ?array {
+    $sql = "SELECT c.*, u.nom AS vendeur_nom
+            FROM clotures_caisse c
+            LEFT JOIN utilisateurs u ON u.id = c.utilisateur_id
+            WHERE c.magasin_id = ? AND c.statut = 'VALIDE'";
+    $params = [$magasin_id];
+    if ($utilisateur_id !== null && $utilisateur_id > 0) {
+        $sql .= " AND c.utilisateur_id = ?";
+        $params[] = $utilisateur_id;
+    }
+    $sql .= " ORDER BY c.date_cloture DESC, c.id DESC LIMIT 1";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     return $stmt->fetch() ?: null;
 }
 
@@ -1650,11 +1662,18 @@ function db_lot_upsert(PDO $pdo, int $article_id, int $magasin_id, string $numer
     $existing = $stmt->fetch();
     
     if ($existing) {
-        // Incrémenter la quantité
-        $update = $pdo->prepare(
-            'UPDATE article_lots SET quantite = quantite + :qte WHERE id = :id'
-        );
-        $update->execute([':qte' => $quantite, ':id' => $existing['id']]);
+        // Incrémenter la quantité (et mettre à jour la DLC si fournie)
+        if ($date_peremption !== null) {
+            $update = $pdo->prepare(
+                'UPDATE article_lots SET quantite = quantite + :qte, date_peremption = :dlc WHERE id = :id'
+            );
+            $update->execute([':qte' => $quantite, ':dlc' => $date_peremption, ':id' => $existing['id']]);
+        } else {
+            $update = $pdo->prepare(
+                'UPDATE article_lots SET quantite = quantite + :qte WHERE id = :id'
+            );
+            $update->execute([':qte' => $quantite, ':id' => $existing['id']]);
+        }
         return (int)$existing['id'];
     } else {
         // Créer un nouveau lot
@@ -1917,9 +1936,20 @@ function db_calculer_prix_article(PDO $pdo, int $article_id, int $magasin_id): ?
         return null;
     }
 
-    // Récupérer le prix de vente de l'article
-    $stmt = $pdo->prepare("SELECT prix_vente, quantite_stock FROM articles WHERE id = :id");
-    $stmt->execute([':id' => $article_id]);
+    // Récupérer le prix de vente de l'article et le stock pertinent :
+    // stock du magasin si magasin défini, sinon stock global (rétro-compat)
+    if ($magasin_id > 0) {
+        $stmt = $pdo->prepare(
+            "SELECT a.prix_vente, COALESCE(sm.quantite, 0) AS quantite_stock
+             FROM articles a
+             LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = :mag
+             WHERE a.id = :id"
+        );
+        $stmt->execute([':id' => $article_id, ':mag' => $magasin_id]);
+    } else {
+        $stmt = $pdo->prepare("SELECT prix_vente, quantite_stock FROM articles WHERE id = :id");
+        $stmt->execute([':id' => $article_id]);
+    }
     $article = $stmt->fetch();
     if (!$article) {
         return null;
@@ -2557,9 +2587,12 @@ function db_inventaire_appliquer_ecarts(PDO $pdo, int $inventaire_id, int $user_
 
         $article_id = (int)$l['article_id'];
 
-        // Maj du stock global via delta (évite tout double décompte)
-        $pdo->prepare("UPDATE articles SET quantite_stock = GREATEST(0, quantite_stock + :delta) WHERE id = :id")
-            ->execute([':delta' => $ecart, ':id' => $article_id]);
+        // Sans magasin défini : mise à jour directe du stock global uniquement.
+        // Avec magasin, process_stock_movement() synchronise déjà le stock global (évite tout double décompte).
+        if ($magasin_id <= 0) {
+            $pdo->prepare("UPDATE articles SET quantite_stock = GREATEST(0, quantite_stock + :delta) WHERE id = :id")
+                ->execute([':delta' => $ecart, ':id' => $article_id]);
+        }
 
         // Maj du stock magasin + mouvement de traçabilité (Entree/Sortie)
         if ($magasin_id > 0) {

@@ -125,7 +125,7 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
     <!-- ============ SIDEBAR ============ -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <img src="<?= BASE_URL ?>assets/images/logo-eStock-3.png" alt="Logo <?= h($app_nom) ?>" class="logo-img">
+            <img src="<?= BASE_URL ?>assets/images/logo-eStock-2.png" alt="Logo <?= h($app_nom) ?>" class="logo-img">
             <span class="brand-text"><?= h($app_nom) ?></span>
         </div>
 

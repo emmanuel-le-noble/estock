@@ -7,10 +7,6 @@ if (!function_exists('est_connecte'))     { require_once __DIR__ . '/config/conn
 if (!function_exists('db_article_insert')) { require_once __DIR__ . '/includes/db_functions.php'; }
 if (!function_exists('csrf_guard'))       { require_once __DIR__ . '/includes/helpers.php'; }
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER);
 
 $action = $_GET['action'] ?? 'form';

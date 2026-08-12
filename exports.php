@@ -110,6 +110,11 @@ switch ($type) {
     // ---- EXPORT SESSION INVENTAIRE ----
     case 'inventaire':
         $inv_id = (int)($_GET['id'] ?? 0);
+        $token  = $_GET['token'] ?? '';
+        if ($inv_id <= 0 || !verify_url_signature($inv_id, $token, ['type' => 'inventaire'])) {
+            fputcsv($output, ['Lien invalide ou expiré.'], ';', '"', "\\");
+            break;
+        }
         $inv    = db_inventaire_get_by_id($pdo, $inv_id);
         if ($inv) {
             fputcsv($output, ['Réf Inventaire', $inv['reference'], 'Statut', $inv['statut'], 'Date', $inv['date_debut']], ';', '"', "\\");

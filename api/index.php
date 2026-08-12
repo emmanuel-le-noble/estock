@@ -80,6 +80,14 @@ match (true) {
 //  AUTH HANDLERS
 // ============================================================
 
+/**
+ * Vérifier le token CSRF transmis via l'en-tête X-CSRF-Token.
+ */
+function api_csrf_ok(): bool {
+    $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    return !empty($token) && verify_csrf_token($token);
+}
+
 function handle_login(): void {
     // SEC-11 : Vérifier que la requête vient d'une interface interne (pas cross-origin)
     $isXHR = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest';
@@ -187,6 +195,9 @@ function handle_article_create(): void {
     if (!peut_administrer()) {
         json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
     }
+    if (!api_csrf_ok()) {
+        json_out(['error' => 'Token CSRF invalide.'], 403);
+    }
 
     $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) $input = [];
@@ -239,6 +250,9 @@ function handle_article_update(int $id): void {
     if (!peut_administrer()) {
         json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
     }
+    if (!api_csrf_ok()) {
+        json_out(['error' => 'Token CSRF invalide.'], 403);
+    }
 
     global $pdo;
     $existing = db_article_get_by_id($pdo, $id);
@@ -288,6 +302,9 @@ function handle_article_delete(int $id): void {
     }
     if (!peut_administrer()) {
         json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
+    }
+    if (!api_csrf_ok()) {
+        json_out(['error' => 'Token CSRF invalide.'], 403);
     }
 
     global $pdo;
@@ -374,6 +391,7 @@ function handle_scan(): void {
         'prix_unitaire' => $prix_final,
         'prix_display'  => money($prix_final),
         'stock_dispo'   => (int)$article['quantite_stock'],
+        'taux_tva'      => ($article['taux_tva'] ?? null) !== null && $article['taux_tva'] !== '' ? (float)$article['taux_tva'] : null,
         'alerte'        => $alerte,
     ];
 
@@ -399,6 +417,9 @@ function handle_caisse_sync(): void {
     }
     if (!peut('caisse_gerer')) {
         json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
+    }
+    if (!api_csrf_ok()) {
+        json_out(['error' => 'Token CSRF invalide.'], 403);
     }
 
     $input = json_decode(file_get_contents('php://input'), true);
@@ -427,6 +448,11 @@ function handle_caisse_sync(): void {
 
     global $pdo;
 
+    // Ne pas synchroniser une vente si la caisse est clôturée pour aujourd'hui
+    if ($magasinId > 0 && db_cloture_deja_ferme($pdo, $magasinId, (int)(user_courant()['id'] ?? 0))) {
+        json_out(['success' => false, 'error' => 'La caisse est déjà clôturée pour aujourd\'hui. Vente non synchronisée.'], 409);
+    }
+
     $stmt = $pdo->prepare("SELECT id FROM factures WHERE client_sale_id = ? LIMIT 1");
     $stmt->execute([$clientSaleId]);
     if ($row = $stmt->fetch()) {
@@ -442,6 +468,7 @@ function handle_caisse_sync(): void {
         $pdo->beginTransaction();
 
         $numero = generate_invoice_number($pdo);
+        $tauxTva = param_tva_taux();
         $totalHt = 0.0;
         $lignesValides = [];
 
@@ -483,18 +510,31 @@ function handle_caisse_sync(): void {
                 $prixOriginal = $promo['prix_original'];
                 $remisePct = $promo['remise_pct'];
             }
+            // Taux TVA effectif : spécifique à l'article si défini, sinon taux global
+            // (même logique que valider_facture.php pour une cohérence en ligne/hors-ligne)
+            $tauxTvaLigne = ($art['taux_tva'] !== null && $art['taux_tva'] !== '')
+                ? (float)$art['taux_tva']
+                : $tauxTva;
             $sousTotal = calc_line_subtotal($prixUnitaire, $quantite);
             $totalHt += $sousTotal;
 
-            $lignesValides[] = compact('articleId', 'quantite', 'prixUnitaire', 'prixOriginal', 'remisePct');
+            $lignesValides[] = compact('articleId', 'quantite', 'prixUnitaire', 'prixOriginal', 'remisePct', 'tauxTvaLigne', 'sousTotal');
         }
 
         if (empty($lignesValides)) {
             throw new RuntimeException('Aucune ligne valide dans la vente.');
         }
 
-        $tauxTva = param_tva_taux();
-        $totalTtcCalc = round($totalHt * (1 + $tauxTva / 100), 2);
+        // Calcul TTC multi-taux : somme des TTC par ligne (identique à valider_facture.php)
+        $totalTtcCalc = 0.0;
+        foreach ($lignesValides as $lv) {
+            $totalTtcCalc += $lv['sousTotal'] * (1 + $lv['tauxTvaLigne'] / 100);
+        }
+        $totalTtcCalc = round($totalTtcCalc, 2);
+        $tauxTvaDominant = $tauxTva;
+        if (count($lignesValides) === 1) {
+            $tauxTvaDominant = $lignesValides[0]['tauxTvaLigne'];
+        }
         $monnaieRendue = max(0.0, $montantPaye - $totalTtcCalc);
 
         // NOU-5 : Vérifier que le total_ttc envoyé correspond au calculé (tolérance 0.02)
@@ -510,7 +550,7 @@ function handle_caisse_sync(): void {
             'numero_facture' => $numero,
             'utilisateur_id' => user_courant()['id'] ?? null,
             'total_ht'       => round($totalHt, 2),
-            'tva_taux'       => round($tauxTva, 2),
+            'tva_taux'       => round($tauxTvaDominant, 2),
             'total_ttc'      => $totalTtcCalc,
             'montant_paye'   => round($montantPaye, 2),
             'monnaie_rendue' => round($monnaieRendue, 2),
@@ -521,7 +561,7 @@ function handle_caisse_sync(): void {
             ->execute([$clientSaleId, $factureId]);
 
         foreach ($lignesValides as $lv) {
-            db_ligne_facture_insert($pdo, $factureId, $lv['articleId'], $lv['quantite'], $lv['prixUnitaire'], $lv['prixOriginal'], $lv['remisePct']);
+            db_ligne_facture_insert($pdo, $factureId, $lv['articleId'], $lv['quantite'], $lv['prixUnitaire'], $lv['prixOriginal'], $lv['remisePct'], $lv['tauxTvaLigne'] ?? null);
             $lots_decrementes = db_deduire_stock_lot($pdo, $lv['articleId'], $magasinId, $lv['quantite'], $numero);
             
             $lot_parts = [];
@@ -539,6 +579,14 @@ function handle_caisse_sync(): void {
                 'Vente hors-ligne ' . $numero . $lots_info,
                 $magasinId
             );
+        }
+
+        // Enregistrer les paiements multi-modes (même logique que valider_facture.php)
+        if (!empty($input['paiements_json'])) {
+            $paiementsList = json_decode((string)$input['paiements_json'], true);
+            if (is_array($paiementsList) && !empty($paiementsList)) {
+                db_paiements_insert($pdo, $factureId, $paiementsList);
+            }
         }
 
         $pdo->commit();

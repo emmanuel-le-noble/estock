@@ -33,9 +33,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'preremplir') {
         redirect('suggestions_achat.php');
     }
 
-    $magasin_id = $user_magasin_id > 0 ? $user_magasin_id : 1;
+    // Correction : plus de magasin par défaut codé en dur ("1"). Si l'utilisateur
+    // n'a pas de magasin associé, on refuse explicitement plutôt que de rattacher
+    // silencieusement la commande à un magasin potentiellement erroné.
+    if ($user_magasin_id <= 0) {
+        flash_error('Aucun magasin associé à votre compte. Impossible de générer la commande.');
+        redirect('suggestions_achat.php');
+    }
+    $magasin_id = $user_magasin_id;
+
     $articles = db_articles_low_stock_with_supplier($pdo, 200, $magasin_id);
-    
+
     $lignes_a_creer = [];
     foreach ($articles as $a) {
         if ((int)($a['fournisseur_id'] ?? 0) === $fournisseur_id) {
@@ -73,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'preremplir') {
         suivre_activite('COMMANDE_CREEE', "Commande fournisseur #{$commande_id} pré-remplie depuis les suggestions");
         redirect(generate_signed_url('commandes_fournisseur.php', $commande_id, ['action' => 'voir']));
     } catch (Throwable $e) {
+        error_log('Erreur pré-remplissage commande: ' . $e->getMessage());
         flash_error('Erreur lors du pré-remplissage de la commande.');
         redirect('suggestions_achat.php');
     }
@@ -117,21 +126,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'creer') {
     }
 
     try {
-        $commande_id = db_commande_fournisseur_insert($pdo, [
-            'fournisseur_id' => $fournisseur_id,
-            'magasin_id'     => $magasin_id,
-            'utilisateur_id' => $user_id,
-            'statut'         => 'Brouillon',
-            'date_reception_prevue' => $date_rec,
-            'notes'          => $notes
-        ]);
+        $commande_id = db_transaction(function(PDO $pdo) use ($fournisseur_id, $magasin_id, $user_id, $date_rec, $notes, $lignes) {
+            $cmd_id = db_commande_fournisseur_insert($pdo, [
+                'fournisseur_id' => $fournisseur_id,
+                'magasin_id'     => $magasin_id,
+                'utilisateur_id' => $user_id,
+                'statut'         => 'Brouillon',
+                'date_reception_prevue' => $date_rec ?: null,
+                'notes'          => $notes
+            ]);
 
-        db_commande_fournisseur_lignes_save($pdo, $commande_id, $lignes);
+            db_commande_fournisseur_lignes_save($pdo, $cmd_id, $lignes);
+            return $cmd_id;
+        }, '', 'Erreur lors de la création de la commande.', 'commandes_fournisseur.php?action=nouveau');
+
         suivre_activite('COMMANDE_CREEE', "Création manuelle de la commande fournisseur #{$commande_id}");
         flash_success("Commande fournisseur #{$commande_id} enregistrée en brouillon.");
         redirect(generate_signed_url('commandes_fournisseur.php', $commande_id, ['action' => 'voir']));
     } catch (Throwable $e) {
-        flash_error("Erreur lors de la création de la commande : " . $e->getMessage());
+        error_log('Erreur création commande: ' . $e->getMessage());
+        flash_error('Erreur lors de la création de la commande. Veuillez vérifier les données saisies.');
         redirect('commandes_fournisseur.php?action=nouveau');
     }
 }
@@ -171,21 +185,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'editer') {
         }
     }
 
-    db_commande_fournisseur_update($pdo, $cmd_id, [
-        'fournisseur_id' => $fournisseur_id,
-        'magasin_id'     => $magasin_id,
-        'date_reception_prevue' => $date_rec,
-        'notes'          => $notes
-    ]);
-    db_commande_fournisseur_lignes_save($pdo, $cmd_id, $lignes);
+    // Correction : db_commande_fournisseur_lignes_save() supprime d'abord TOUTES les
+    // lignes existantes avant de ré-insérer. Sans ce garde-fou, soumettre le formulaire
+    // avec un tableau de lignes vide (ou sans lignes valides) effaçait silencieusement
+    // le contenu de la commande.
+    if (empty($lignes)) {
+        flash_error('Veuillez ajouter au moins un article avec une quantité valide.');
+        redirect(generate_signed_url('commandes_fournisseur.php', $cmd_id, ['action' => 'editer_form']));
+    }
 
-    suivre_activite('COMMANDE_MODIFIEE', "Modification de la commande fournisseur #{$cmd_id}");
-    flash_success("Commande #{$cmd_id} mise à jour.");
-    redirect(generate_signed_url('commandes_fournisseur.php', $cmd_id, ['action' => 'voir']));
+    try {
+        db_transaction(function(PDO $pdo) use ($cmd_id, $fournisseur_id, $magasin_id, $date_rec, $notes, $lignes) {
+            db_commande_fournisseur_update($pdo, $cmd_id, [
+                'fournisseur_id' => $fournisseur_id,
+                'magasin_id'     => $magasin_id,
+                'date_reception_prevue' => $date_rec ?: null,
+                'notes'          => $notes
+            ]);
+            db_commande_fournisseur_lignes_save($pdo, $cmd_id, $lignes);
+        }, '', 'Erreur lors de la mise à jour.', 'commandes_fournisseur.php');
+
+        suivre_activite('COMMANDE_MODIFIEE', "Modification de la commande fournisseur #{$cmd_id}");
+        flash_success("Commande #{$cmd_id} mise à jour.");
+        redirect(generate_signed_url('commandes_fournisseur.php', $cmd_id, ['action' => 'voir']));
+    } catch (Throwable $e) {
+        error_log('Erreur édition commande: ' . $e->getMessage());
+        flash_error('Erreur lors de la mise à jour de la commande.');
+        redirect(generate_signed_url('commandes_fournisseur.php', $cmd_id, ['action' => 'editer_form']));
+    }
 }
 
 // ---- ACTION POST : CHANGER STATUT (ENVOYER / ANNULER) ----
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['envoyer', 'annuler'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['envoyer', 'annuler'], true)) {
     exiger_permission('achats_gerer');
     $cmd_id = (int)($_POST['id'] ?? 0);
     csrf_guard('commandes_fournisseur.php');
@@ -196,14 +227,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['envoyer', 'annu
         redirect('commandes_fournisseur.php');
     }
 
+    // Correction : un statut incompatible tombait auparavant dans un trou silencieux
+    // (ni succès ni erreur affichée) -> ajout d'un cas "else" explicite.
     if ($action === 'envoyer' && $cmd['statut'] === 'Brouillon') {
         db_commande_fournisseur_update_statut($pdo, $cmd_id, 'Envoyee');
         suivre_activite('COMMANDE_ENVOYEE', "Commande fournisseur #{$cmd_id} marquée comme envoyée");
         flash_success("Commande #{$cmd_id} marquée comme envoyée au fournisseur.");
-    } elseif ($action === 'annuler' && in_array($cmd['statut'], ['Brouillon', 'Envoyee'])) {
+    } elseif ($action === 'annuler' && in_array($cmd['statut'], ['Brouillon', 'Envoyee'], true)) {
         db_commande_fournisseur_update_statut($pdo, $cmd_id, 'Annulee');
         suivre_activite('COMMANDE_ANNULEE', "Annulation de la commande fournisseur #{$cmd_id}");
         flash_success("Commande #{$cmd_id} annulée.");
+    } else {
+        flash_error("Action impossible : le statut actuel de la commande (« {$cmd['statut']} ») ne le permet pas.");
     }
 
     redirect(generate_signed_url('commandes_fournisseur.php', $cmd_id, ['action' => 'voir']));
@@ -216,67 +251,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'receptionner') {
     csrf_guard('commandes_fournisseur.php');
 
     $cmd = db_commande_fournisseur_get_by_id($pdo, $cmd_id);
-    if (!$cmd || in_array($cmd['statut'], ['Recue', 'Annulee'])) {
+    if (!$cmd || in_array($cmd['statut'], ['Recue', 'Annulee'], true)) {
         flash_error('Commande introuvable ou déjà clôturée.');
         redirect('commandes_fournisseur.php');
     }
 
     $receptions = $_POST['reception'] ?? [];
-    if (!is_array($receptions)) $receptions = [];
+    if (!is_array($receptions)) {
+        $receptions = [];
+    }
 
-    $nb_reçus = 0;
+    // Correction : renommage de $nb_reçus -> $nb_recus (identifiant non-ASCII fragile
+    // selon l'encodage du fichier / des outils utilisés).
+    $nb_recus = 0;
     try {
-        $pdo->beginTransaction();
+        db_transaction(function(PDO $pdo) use ($cmd_id, $receptions, $user_id, $cmd, &$nb_recus) {
+            $lignes = db_commande_fournisseur_lignes_get($pdo, $cmd_id);
+            foreach ($lignes as $l) {
+                $lid = (int)$l['id'];
+                $qte_rec_ajout = (int)($receptions[$lid] ?? 0);
+                if ($qte_rec_ajout <= 0) {
+                    continue;
+                }
 
-        $lignes = db_commande_fournisseur_lignes_get($pdo, $cmd_id);
-        foreach ($lignes as $l) {
-            $lid = (int)$l['id'];
-            $qte_rec_ajout = (int)($receptions[$lid] ?? 0);
-            if ($qte_rec_ajout <= 0) continue;
+                $art_id = (int)$l['article_id'];
+                $qte_restante = (int)$l['quantite_commandee'] - (int)$l['quantite_recue'];
+                if ($qte_rec_ajout > $qte_restante) {
+                    throw new RuntimeException("La quantité reçue pour « {$l['article_nom']} » excède le restant à recevoir ({$qte_restante}).");
+                }
 
-            $art_id = (int)$l['article_id'];
-            $qte_restante = (int)$l['quantite_commandee'] - (int)$l['quantite_recue'];
-            if ($qte_rec_ajout > $qte_restante) {
-                throw new RuntimeException("La quantité reçue pour « {$l['article_nom']} » excède le restant à recevoir ({$qte_restante}).");
+                // Incrémenter la quantité reçue sur la ligne de commande
+                db_commande_fournisseur_lignes_update_reception($pdo, $lid, $qte_rec_ajout);
+
+                // Entrée en stock via process_stock_movement
+                $motif = "Réception commande fournisseur #{$cmd_id}";
+                process_stock_movement($pdo, $art_id, 'Entree', $qte_rec_ajout, $motif, $user_id, (int)$cmd['magasin_id']);
+
+                $nb_recus += $qte_rec_ajout;
             }
 
-            // Incrémenter la quantité reçue sur la ligne de commande
-            db_commande_fournisseur_lignes_update_reception($pdo, $lid, $qte_rec_ajout);
-
-            // Entrée en stock via process_stock_movement
-            $motif = "Réception commande fournisseur #{$cmd_id}";
-            process_stock_movement($pdo, $art_id, 'Entree', $qte_rec_ajout, $motif, $user_id, (int)$cmd['magasin_id']);
-
-            $nb_reçus += $qte_rec_ajout;
-        }
-
-        if ($nb_reçus <= 0) {
-            throw new RuntimeException('Aucune quantité reçue valide saisie.');
-        }
-
-        // Vérifier l'état global de réception de la commande
-        $lignes_apres = db_commande_fournisseur_lignes_get($pdo, $cmd_id);
-        $tout_recu = true;
-        $au_moins_un_recu = false;
-        foreach ($lignes_apres as $l) {
-            if ((int)$l['quantite_recue'] < (int)$l['quantite_commandee']) {
-                $tout_recu = false;
+            if ($nb_recus <= 0) {
+                throw new RuntimeException('Aucune quantité reçue valide saisie.');
             }
-            if ((int)$l['quantite_recue'] > 0) {
-                $au_moins_un_recu = true;
+
+            // Vérifier l'état global de réception de la commande
+            $lignes_apres = db_commande_fournisseur_lignes_get($pdo, $cmd_id);
+            $tout_recu = true;
+            $au_moins_un_recu = false;
+            foreach ($lignes_apres as $l) {
+                if ((int)$l['quantite_recue'] < (int)$l['quantite_commandee']) {
+                    $tout_recu = false;
+                }
+                if ((int)$l['quantite_recue'] > 0) {
+                    $au_moins_un_recu = true;
+                }
             }
-        }
 
-        $nouveau_statut = $tout_recu ? 'Recue' : ($au_moins_un_recu ? 'Recue_Partielle' : $cmd['statut']);
-        db_commande_fournisseur_update_statut($pdo, $cmd_id, $nouveau_statut);
+            $nouveau_statut = $tout_recu ? 'Recue' : ($au_moins_un_recu ? 'Recue_Partielle' : $cmd['statut']);
+            db_commande_fournisseur_update_statut($pdo, $cmd_id, $nouveau_statut);
+        }, '', '', '');
 
-        $pdo->commit();
-        suivre_activite('COMMANDE_RECUE', "Réception de {$nb_reçus} produit(s) sur la commande #{$cmd_id} (Statut: {$nouveau_statut})");
-        flash_success("Réception enregistrée avec succès ({$nb_reçus} produit(s) entré(s) en stock).");
+        suivre_activite('COMMANDE_RECUE', "Réception de {$nb_recus} produit(s) sur la commande #{$cmd_id}");
+        flash_success("Réception enregistrée avec succès ({$nb_recus} produit(s) entré(s) en stock).");
 
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        flash_error("Erreur lors de la réception : " . $e->getMessage());
+        error_log('Erreur réception commande: ' . $e->getMessage());
+        flash_error($e->getMessage() ?: 'Erreur lors de la réception. Veuillez vérifier les quantités saisies.');
     }
 
     redirect(generate_signed_url('commandes_fournisseur.php', $cmd_id, ['action' => 'voir']));
@@ -298,18 +338,18 @@ if ($action === 'voir' && $id_get > 0) {
     $lignes = db_commande_fournisseur_lignes_get($pdo, $id_get);
 
     echo $twig->render('commandes_fournisseur.html.twig', [
-        'titre_page'     => "Commande Fournisseur #{$id_get}",
-        'page_courante'  => 'commandes_fournisseur',
-        'commande'       => $cmd,
-        'lignes'         => $lignes,
-        'vue'            => 'detail',
-        'can_manage'     => $can_manage
+        'titre_page'    => "Commande Fournisseur #{$id_get}",
+        'page_courante' => 'commandes_fournisseur',
+        'commande'      => $cmd,
+        'lignes'        => $lignes,
+        'vue'           => 'detail',
+        'can_manage'    => $can_manage
     ]);
     exit;
 }
 
 // ---- AFFICHAGE : FORMULAIRE DE CRÉATION / ÉDITION MANUELLE ----
-if (in_array($action, ['nouveau', 'editer_form']) && $can_manage) {
+if (in_array($action, ['nouveau', 'editer_form'], true) && $can_manage) {
     $cmd = null;
     $lignes = [];
     if ($action === 'editer_form' && $id_get > 0) {
@@ -328,7 +368,10 @@ if (in_array($action, ['nouveau', 'editer_form']) && $can_manage) {
 
     $fournisseurs = db_fournisseurs_list($pdo);
     $magasins     = db_magasins_list_all($pdo);
-    $articles     = db_articles_search_sql([]) ? $pdo->query("SELECT id, nom, code_barre, prix_achat, fournisseur_id FROM articles WHERE actif = 1 ORDER BY nom ASC")->fetchAll() : [];
+
+    // Récupération des articles actifs
+    $stmt_art = $pdo->query("SELECT id, nom, code_barre, prix_achat, fournisseur_id FROM articles WHERE actif = 1 ORDER BY nom ASC");
+    $articles = $stmt_art ? $stmt_art->fetchAll() : [];
 
     echo $twig->render('commandes_fournisseur.html.twig', [
         'titre_page'    => $cmd ? "Éditer Commande #{$cmd['id']}" : "Nouvelle Commande Fournisseur",

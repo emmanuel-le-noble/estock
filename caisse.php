@@ -40,6 +40,7 @@ include __DIR__ . '/includes/header.php';
 window.POS_CONFIG = <?= json_encode(array_merge(param_pos_config(), [
     'user_id'    => $user_id,
     'magasin_id' => $magasin_id,
+    'csrf_token' => csrf_token(),
 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 window.BASE_URL = <?= json_encode(BASE_URL, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;

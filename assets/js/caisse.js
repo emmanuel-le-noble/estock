@@ -160,7 +160,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-Token': (config.csrf_token || '')
                     },
                     body: JSON.stringify(vente)
                 });
@@ -415,8 +416,15 @@ document.addEventListener('DOMContentLoaded', function () {
     // ============================================================
     function rafraichirPanier() {
         var totalHt = 0;
+        var totalTva = 0;
         var nbArticles = 0;
         var lignes = Object.values(panier);
+
+        // Taux TVA effectif d'une ligne : taux spécifique article si défini, sinon taux global
+        var tauxTvaDe = function (art) {
+            var t = parseFloat(art && art.taux_tva);
+            return isFinite(t) ? t : TAUX_TVA;
+        };
 
         if (lignes.length === 0) {
             panierTbody.innerHTML =
@@ -429,6 +437,7 @@ document.addEventListener('DOMContentLoaded', function () {
             panierTbody.innerHTML = lignes.map(function (l) {
                 var sousTotal = l.article.prix_unitaire * l.qte;
                 totalHt += sousTotal;
+                totalTva += sousTotal * tauxTvaDe(l.article) / 100;
                 nbArticles += l.qte;
 
                 // Déterminer l'affichage du prix (promo ou normal)
@@ -475,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function () {
             btnValider.disabled = false;
         }
 
-        var montantTva = totalHt * (TAUX_TVA / 100);
+        var montantTva = totalTva;
         var totalTtc = totalHt + montantTva;
 
         totalHtEl.textContent    = formatMoney(totalHt);
@@ -538,7 +547,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var totalPaye = especes + mobile + carte;
         var reste = ttc - totalPaye;
-        var monnaie = especes > 0 ? Math.max(0, especes - ttc) : 0;
+        // Monnaie à rendre : excédent de l'ensemble des paiements (tous modes confondus),
+        // cohérent avec le calcul serveur (montant_paye - total_ttc).
+        var monnaie = totalPaye > ttc ? Math.max(0, totalPaye - ttc) : 0;
 
         // Monnaie (uniquement en mode Espèces avec paiement suffisant)
         var monnaieEl = document.getElementById('monnaieRendue');
@@ -635,12 +646,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 code_barre:    l.article.code_barre || '',
                 nom:           l.article.nom || '',
                 quantite:      l.qte,
-                prix_unitaire: l.article.prix_unitaire
+                prix_unitaire: l.article.prix_unitaire,
+                taux_tva:      (l.article.taux_tva != null && isFinite(parseFloat(l.article.taux_tva)))
+                    ? parseFloat(l.article.taux_tva)
+                    : TAUX_TVA
             };
         });
 
-        var montantTva = totalTtc - (totalTtc / (1 + TAUX_TVA / 100));
-        var totalHt = totalTtc - montantTva;
+        // HT et TVA calculées ligne par ligne (taux spécifique article ou taux global)
+        var totalHt = 0;
+        var totalTva = 0;
+        lignes.forEach(function (l) {
+            var ht = l.prix_unitaire * l.quantite;
+            totalHt += ht;
+            totalTva += ht * l.taux_tva / 100;
+        });
 
         var vente = {
             client_sale_id: genererUUID(),

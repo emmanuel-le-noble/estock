@@ -22,7 +22,7 @@ $nb_ventes = 0;
 $derniere_cloture = null;
 
 if ($deja_ferme) {
-    $derniere_cloture = db_cloture_get_derniere($pdo, $magasin_id);
+    $derniere_cloture = db_cloture_get_derniere($pdo, $magasin_id, $user_id);
 } else {
     $montant_attendu = (float)db_calculer_ventes_du_jour($pdo, $magasin_id, $user_id);
     $nb_ventes = (int)db_compter_ventes_du_jour($pdo, $magasin_id, $user_id);
@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$deja_ferme) {
 
 $recap_mode = isset($_GET['recap']) && $deja_ferme;
 if ($recap_mode && !$derniere_cloture) {
-    $derniere_cloture = db_cloture_get_derniere($pdo, $magasin_id);
+    $derniere_cloture = db_cloture_get_derniere($pdo, $magasin_id, $user_id);
 }
 
 $titre_page = 'Clôture de Caisse';

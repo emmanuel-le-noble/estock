@@ -505,7 +505,7 @@ $twig = new \Twig\Environment($loader, [
 
 $twig->addFunction(new \Twig\TwigFunction('money', 'money'));
 $twig->addFunction(new \Twig\TwigFunction('date_fr', 'date_fr'));
-$twig->addFunction(new \Twig\TwigFunction('h', 'h'));
+$twig->addFunction(new \Twig\TwigFunction('h', 'h', ['is_safe' => ['html']]));
 $twig->addFunction(new \Twig\TwigFunction('csrf_field', 'csrf_field'));
 $twig->addFunction(new \Twig\TwigFunction('csp_nonce', 'csp_nonce'));
 $twig->addFunction(new \Twig\TwigFunction('param', 'param'));
