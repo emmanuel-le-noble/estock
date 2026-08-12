@@ -1,7 +1,7 @@
 {% extends "base.html.twig" %}
 {% block title %}Inventaire physique{% endblock %}
 
-{% block content %}
+{% block body %}
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h1 class="h4 mb-0"><i class="bi bi-clipboard-check"></i> Inventaire physique</h1>
     {% if view == 'liste' and peut_gerer %}
@@ -14,8 +14,7 @@
     {% endif %}
 </div>
 
-{% for msg in app.flashes('success') %}<div class="alert alert-success">{{ msg }}</div>{% endfor %}
-{% for msg in app.flashes('error') %}<div class="alert alert-danger">{{ msg }}</div>{% endfor %}
+
 
 {# ======================== LISTE ======================== #}
 {% if view == 'liste' %}
@@ -100,7 +99,7 @@
                     <label class="form-label">Magasin</label>
                     <select name="magasin_id" class="form-select" required>
                         {% for mag in magasins %}
-                        <option value="{{ mag.id }}">{{ mag.nom_magasin }}</option>
+                        <option value="{{ mag.id }}">{{ mag.nom }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -250,12 +249,11 @@
         </table>
     </div>
 </div>
-
 {% endif %}{# end view #}
-{% endblock %}
+{% endblock body %}
 
-{% block scripts %}
-{% if view == 'detail' and inv.statut == 'En cours' and peut('inventaire_gerer') %}
+{% block scripts_extra %}
+{% if view == 'detail' and inv is defined and inv.statut == 'En cours' and peut('inventaire_gerer') %}
 <script nonce="{{ csp_nonce_val }}">
 (function() {
     const CSRF      = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -350,4 +348,4 @@
 })();
 </script>
 {% endif %}
-{% endblock %}
+{% endblock scripts_extra %}

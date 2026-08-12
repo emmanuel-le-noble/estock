@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Impression d'étiquettes rayon</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #fff; color: #000; }
+
+        @page { size: A4 portrait; margin: 10mm; }
+
+        /* Grille 3x8 (24 étiquettes par page A4) */
+        .grid-3x8 {
+            display: grid;
+            grid-template-columns: repeat(3, 63mm);
+            grid-auto-rows: 33mm;
+            gap: 2mm 3mm;
+            justify-content: center;
+        }
+        /* Grille 4x10 (40 étiquettes par page A4) */
+        .grid-4x10 {
+            display: grid;
+            grid-template-columns: repeat(4, 46mm);
+            grid-auto-rows: 25mm;
+            gap: 1.5mm 2mm;
+            justify-content: center;
+        }
+
+        .label-card {
+            border: 1px dashed #ccc;
+            padding: 2mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            text-align: center;
+            overflow: hidden;
+            background: #fff;
+            page-break-inside: avoid;
+        }
+
+        .label-shop { font-size: 8px; font-weight: bold; text-transform: uppercase; color: #555; }
+        .label-title { font-size: 11px; font-weight: bold; line-height: 1.1; margin: 1mm 0; max-height: 22px; overflow: hidden; }
+        .label-price { font-size: 14px; font-weight: 900; color: #000; }
+        .label-barcode { margin-top: auto; }
+        .label-barcode svg { max-width: 100%; height: auto; }
+
+        @media print {
+            .no-print { display: none !important; }
+            .label-card { border: 1px solid #ddd; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print" style="padding: 10px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+    <button onclick="window.print()" style="padding: 8px 16px; background: #0d6efd; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+        🖨️ Imprimer les étiquettes ({{ articles|length }})
+    </button>
+    <button onclick="window.close()" style="padding: 8px 16px; background: #6c757d; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+        Fermer
+    </button>
+</div>
+
+<div class="{{ format == 'grid_4x10' ? 'grid-4x10' : 'grid-3x8' }}">
+    {% for art in articles %}
+    <div class="label-card">
+        {% if afficher_shop %}<div class="label-shop">{{ nom_boutique }}</div>{% endif %}
+        <div class="label-title">{{ art.nom }}</div>
+        {% if afficher_prix %}
+        <div class="label-price">{{ art.prix_vente|number_format(0, ',', ' ') }} {{ devise }}</div>
+        {% endif %}
+        <div class="label-barcode">
+            <svg class="barcode-svg" data-code="{{ art.code_barre }}"></svg>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+    document.querySelectorAll('.barcode-svg').forEach(function(svg) {
+        var code = svg.getAttribute('data-code');
+        if (code && code.length >= 8) {
+            try {
+                JsBarcode(svg, code, {
+                    format: code.length === 13 ? 'EAN13' : 'CODE128',
+                    width: 1.2,
+                    height: 25,
+                    displayValue: true,
+                    fontSize: 9,
+                    margin: 1
+                });
+            } catch(e) {}
+        }
+    });
+</script>
+</body>
+</html>

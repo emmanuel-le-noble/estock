@@ -9,5 +9,5 @@ if (!headers_sent()) {
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     $nonce = csp_nonce();
-    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; connect-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net;");
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net;");
 }

@@ -69,52 +69,103 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.key === 'Escape') closeSidebar();
     });
 
-    // ----- Sous-menus déroulants sidebar (accordion) -----
-    var dropdownToggles = document.querySelectorAll('.sidebar-dropdown-toggle');
-    for (var i = 0; i < dropdownToggles.length; i++) {
-        dropdownToggles[i].addEventListener('click', function (e) {
-            e.preventDefault();
-            var parent = this.closest('.nav-group');
-            var submenu = parent ? parent.querySelector('.sidebar-submenu') : null;
-            var isOpen = this.getAttribute('aria-expanded') === 'true';
+    document.addEventListener('DOMContentLoaded', function () {
+    // ----- Sous-menus déroulants sidebar (accordion avec persistance localStorage) -----
+    const STORAGE_KEY = 'estock_sidebar_open';
 
-            // Fermer les autres groupes ouverts (accordion)
-            var allToggles = document.querySelectorAll('.sidebar-dropdown-toggle');
-            for (var j = 0; j < allToggles.length; j++) {
-                if (allToggles[j] !== this) {
-                    var otherParent = allToggles[j].closest('.nav-group');
-                    var otherSubmenu = otherParent ? otherParent.querySelector('.sidebar-submenu') : null;
-                    allToggles[j].setAttribute('aria-expanded', 'false');
-                    if (otherSubmenu) otherSubmenu.style.maxHeight = null;
-                    if (otherParent) otherParent.classList.remove('active');
-                }
-            }
-
-            if (isOpen) {
-                // FERMETURE
-                this.setAttribute('aria-expanded', 'false');
-                if (submenu) submenu.style.maxHeight = null;
-                if (parent) parent.classList.remove('active');
-            } else {
-                // OUVERTURE
-                this.setAttribute('aria-expanded', 'true');
-                if (submenu) submenu.style.maxHeight = submenu.scrollHeight + 'px';
-                if (parent) parent.classList.add('active');
-            }
-        });
-    }
-    // Auto-ouvrir le groupe contenant la page active
-    var activeInGroup = document.querySelector('.sidebar-submenu .nav-link.active');
-    if (activeInGroup) {
-        var parentGroup = activeInGroup.closest('.nav-group');
-        if (parentGroup) {
-            parentGroup.classList.add('active');
-            var submenuEl = parentGroup.querySelector('.sidebar-submenu');
-            var toggleBtn = parentGroup.querySelector('.sidebar-dropdown-toggle');
-            if (submenuEl) submenuEl.style.maxHeight = submenuEl.scrollHeight + 'px';
-            if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+    function getSavedGroup() {
+        try { 
+            return localStorage.getItem(STORAGE_KEY) || ''; 
+        } catch (e) { 
+            return ''; 
         }
     }
+
+    function saveGroup(group) {
+        try { 
+            localStorage.setItem(STORAGE_KEY, group || ''); 
+        } catch (e) {}
+    }
+
+    function openGroup(toggle, submenu, parent) {
+        toggle.setAttribute('aria-expanded', 'true');
+        if (submenu) {
+            // Si vous utilisez inline max-height en CSS :
+            submenu.style.maxHeight = submenu.scrollHeight + 'px';
+        }
+        if (parent) {
+            parent.classList.add('active');
+        }
+    }
+
+    function closeGroup(toggle, submenu, parent) {
+        toggle.setAttribute('aria-expanded', 'false');
+        if (submenu) {
+            submenu.style.maxHeight = null;
+        }
+        if (parent) {
+            parent.classList.remove('active');
+        }
+    }
+
+    const dropdownToggles = document.querySelectorAll('.sidebar-dropdown-toggle');
+
+    // Identifie le groupe de la page active si présent
+    const activeInGroup = document.querySelector('.sidebar-submenu .nav-link.active');
+    let activeGroupName = '';
+
+    if (activeInGroup) {
+        const activeParentGroup = activeInGroup.closest('.nav-group');
+        if (activeParentGroup) {
+            const activeToggle = activeParentGroup.querySelector('.sidebar-dropdown-toggle');
+            activeGroupName = activeToggle ? (activeToggle.getAttribute('data-group') || '') : '';
+        }
+    }
+
+    const savedGroup = getSavedGroup();
+
+    // Initialisation et événements des menus
+    dropdownToggles.forEach(function (toggle) {
+        const parent = toggle.closest('.nav-group');
+        const submenu = parent ? parent.querySelector('.sidebar-submenu') : null;
+        const groupName = toggle.getAttribute('data-group') || '';
+
+        // Déterminer si ce groupe doit être ouvert au chargement
+        let shouldOpen = false;
+        if (activeGroupName && groupName === activeGroupName) {
+            shouldOpen = true; // Page active prioritaire
+        } else if (!activeGroupName && savedGroup && groupName === savedGroup) {
+            shouldOpen = true; // Restaurer la persistance si pas de page active
+        }
+
+        if (shouldOpen) {
+            openGroup(toggle, submenu, parent);
+        }
+
+        toggle.addEventListener('click', function (e) {
+            e.preventDefault();
+            const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+
+            // Accordion : fermer tous les autres groupes
+            dropdownToggles.forEach(function (otherToggle) {
+                if (otherToggle !== toggle) {
+                    const otherParent = otherToggle.closest('.nav-group');
+                    const otherSubmenu = otherParent ? otherParent.querySelector('.sidebar-submenu') : null;
+                    closeGroup(otherToggle, otherSubmenu, otherParent);
+                }
+            });
+
+            // Basculer l'état du groupe sélectionné
+            if (isOpen) {
+                closeGroup(toggle, submenu, parent);
+                saveGroup('');
+            } else {
+                openGroup(toggle, submenu, parent);
+                saveGroup(groupName);
+            }
+        });
+    });
+});
 
     // ----- Auto-focus -----
     var focusEl = document.querySelector('[data-autofocus]');

@@ -215,7 +215,7 @@ function db_articles_search_stock(PDO $pdo, string $search = '', int $limit = 20
 
     if ($magasin_id > 0) {
         $sql = "
-            SELECT a.id, a.code_barre, a.nom, a.sku, a.prix_vente,
+            SELECT a.id, a.code_barre, a.nom, a.sku, a.prix_achat, a.prix_vente,
                    COALESCE(sm.quantite, 0) AS quantite_stock,
                    COALESCE(sm.stock_alerte, a.seuil_alerte) AS seuil_alerte,
                    a.emplacement, c.nom AS categorie_nom
@@ -226,7 +226,7 @@ function db_articles_search_stock(PDO $pdo, string $search = '', int $limit = 20
         $params[':mid'] = $magasin_id;
     } else {
         $sql = "
-            SELECT a.id, a.code_barre, a.nom, a.sku, a.prix_vente, a.quantite_stock, a.seuil_alerte,
+            SELECT a.id, a.code_barre, a.nom, a.sku, a.prix_achat, a.prix_vente, a.quantite_stock, a.seuil_alerte,
                    a.emplacement, c.nom AS categorie_nom
             FROM articles a
             LEFT JOIN categories c ON c.id = a.categorie_id
@@ -1082,6 +1082,10 @@ function db_stock_magasin_get_for_update(PDO $pdo, int $magasin_id, int $article
 function db_stock_magasin_update(PDO $pdo, int $magasin_id, int $article_id, int $delta): void {
     $stmt = $pdo->prepare("UPDATE stock_magasins SET quantite = quantite + :delta WHERE magasin_id = :mag AND article_id = :art");
     $stmt->execute([':delta' => $delta, ':mag' => $magasin_id, ':art' => $article_id]);
+
+    // Conserver le stock global cohérent avec les mouvements par magasin
+    $pdo->prepare("UPDATE articles SET quantite_stock = GREATEST(0, quantite_stock + :delta) WHERE id = :art")
+        ->execute([':delta' => $delta, ':art' => $article_id]);
 }
 
 /**
@@ -2112,6 +2116,10 @@ function db_deduire_stock_lot(PDO $pdo, int $article_id, int $magasin_id, int $q
             );
         }
 
+        // 3bis. Maintenir le stock global (articles.quantite_stock) synchronisé
+        $pdo->prepare("UPDATE articles SET quantite_stock = GREATEST(0, quantite_stock - :qte) WHERE id = :art")
+            ->execute([':qte' => $a_prendre, ':art' => $article_id]);
+
         // 4. Enregistrer la traçabilité
         $date_peremption = $lot['date_peremption'] ? " (DLC: {$lot['date_peremption']})" : '';
         $motif = "Vente {$numero_facture} : -{$a_prendre} unité(s) du lot {$lot_numero}{$date_peremption}";
@@ -2245,7 +2253,7 @@ function db_commandes_fournisseur_search_sql(array $filters = []): array {
  */
 function db_commande_fournisseur_get_by_id(PDO $pdo, int $id): ?array {
     $stmt = $pdo->prepare("
-        SELECT cf.*, f.nom AS fournisseur_nom, f.telephone AS fournisseur_telephone, f.email AS fournisseur_email,
+        SELECT cf.*, f.nom AS fournisseur_nom, f.telephone AS fournisseur_telephone,
                m.nom AS magasin_nom, u.nom AS utilisateur_nom
         FROM commandes_fournisseur cf
         LEFT JOIN fournisseurs f ON f.id = cf.fournisseur_id
@@ -2444,7 +2452,7 @@ function db_inventaire_insert(PDO $pdo, array $data): int {
  */
 function db_inventaire_get_by_id(PDO $pdo, int $id): ?array {
     $stmt = $pdo->prepare("
-        SELECT i.*, u.nom AS createur_nom, m.nom_magasin
+        SELECT i.*, u.nom AS createur_nom, m.nom AS nom_magasin
         FROM inventaires i
         LEFT JOIN utilisateurs u ON u.id = i.utilisateur_id
         LEFT JOIN magasins m ON m.id = i.magasin_id
@@ -2478,7 +2486,7 @@ function db_inventaires_search_sql(array $filters = []): array {
         $params[] = "%$search%";
     }
 
-    $sql = "SELECT i.*, u.nom AS createur_nom, m.nom_magasin,
+    $sql = "SELECT i.*, u.nom AS createur_nom, m.nom AS nom_magasin,
                    COUNT(il.id) AS nb_lignes
             FROM inventaires i
             LEFT JOIN utilisateurs u  ON u.id  = i.utilisateur_id
@@ -2520,15 +2528,17 @@ function db_inventaire_lignes_get(PDO $pdo, int $inventaire_id): array {
  * Utilise INSERT … ON DUPLICATE KEY UPDATE pour l'idempotence.
  */
 function db_inventaire_ligne_upsert(PDO $pdo, int $inventaire_id, int $article_id, int $qte_comptee, int $qte_theorique, ?string $notes = null): void {
+    $ecart = $qte_comptee - $qte_theorique;
     $stmt = $pdo->prepare("
-        INSERT INTO inventaire_lignes (inventaire_id, article_id, quantite_theorique, quantite_comptee, notes)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO inventaire_lignes (inventaire_id, article_id, quantite_theorique, quantite_comptee, ecart, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             quantite_theorique = VALUES(quantite_theorique),
             quantite_comptee   = VALUES(quantite_comptee),
+            ecart              = VALUES(ecart),
             notes              = VALUES(notes)
     ");
-    $stmt->execute([$inventaire_id, $article_id, $qte_theorique, $qte_comptee, $notes]);
+    $stmt->execute([$inventaire_id, $article_id, $qte_theorique, $qte_comptee, $ecart, $notes]);
 }
 
 /**
@@ -2538,34 +2548,26 @@ function db_inventaire_ligne_upsert(PDO $pdo, int $inventaire_id, int $article_i
  */
 function db_inventaire_appliquer_ecarts(PDO $pdo, int $inventaire_id, int $user_id): void {
     $lignes = db_inventaire_lignes_get($pdo, $inventaire_id);
+    $inv = db_inventaire_get_by_id($pdo, $inventaire_id);
+    $magasin_id = (int)($inv['magasin_id'] ?? 0);
+
     foreach ($lignes as $l) {
         $ecart = (int)$l['ecart'];
         if ($ecart === 0) continue;
 
-        // Obtenir le magasin_id de l'inventaire
-        $inv = db_inventaire_get_by_id($pdo, $inventaire_id);
-        $magasin_id = (int)($inv['magasin_id'] ?? 0);
+        $article_id = (int)$l['article_id'];
 
-        // Correction directe : SET quantite_comptee dans stock_magasins
+        // Maj du stock global via delta (évite tout double décompte)
+        $pdo->prepare("UPDATE articles SET quantite_stock = GREATEST(0, quantite_stock + :delta) WHERE id = :id")
+            ->execute([':delta' => $ecart, ':id' => $article_id]);
+
+        // Maj du stock magasin + mouvement de traçabilité (Entree/Sortie)
         if ($magasin_id > 0) {
-            $pdo->prepare("
-                UPDATE stock_magasins SET quantite = :qte WHERE article_id = :aid AND magasin_id = :mid
-            ")->execute([
-                ':qte' => (int)$l['quantite_comptee'],
-                ':aid' => (int)$l['article_id'],
-                ':mid' => $magasin_id,
-            ]);
-        }
-
-        // Mise à jour du stock global articles
-        $pdo->prepare("UPDATE articles SET quantite_stock = :qte WHERE id = :id")
-            ->execute([':qte' => (int)$l['quantite_comptee'], ':id' => (int)$l['article_id']]);
-
-        // Mouvement de stock
-        $type   = $ecart > 0 ? 'Entree' : 'Sortie';
-        $motif  = 'Ajustement inventaire #' . $inventaire_id;
-        if (function_exists('process_stock_movement')) {
-            process_stock_movement($pdo, (int)$l['article_id'], $type, abs($ecart), $motif, $user_id, $magasin_id);
+            $type  = $ecart > 0 ? 'Entree' : 'Sortie';
+            $motif = 'Ajustement inventaire #' . $inventaire_id;
+            if (function_exists('process_stock_movement')) {
+                process_stock_movement($pdo, $article_id, $type, abs($ecart), $motif, $user_id, $magasin_id);
+            }
         }
     }
 }
@@ -2598,7 +2600,7 @@ function db_retour_insert(PDO $pdo, array $data): int {
  */
 function db_retour_get_by_id(PDO $pdo, int $id): ?array {
     $stmt = $pdo->prepare("
-        SELECT r.*, f.numero_facture, u.nom AS agent_nom, m.nom_magasin
+        SELECT r.*, f.numero_facture, u.nom AS agent_nom, m.nom AS nom_magasin
         FROM retours_factures r
         JOIN factures f ON f.id = r.facture_id
         LEFT JOIN utilisateurs u ON u.id = r.utilisateur_id
@@ -2644,7 +2646,7 @@ function db_retours_search_sql(array $filters = []): array {
         $params[] = "%$search%";
     }
 
-    $sql = "SELECT r.*, f.numero_facture, u.nom AS agent_nom, m.nom_magasin,
+    $sql = "SELECT r.*, f.numero_facture, u.nom AS agent_nom, m.nom AS nom_magasin,
                    COUNT(lr.id) AS nb_articles
             FROM retours_factures r
             JOIN factures f ON f.id = r.facture_id

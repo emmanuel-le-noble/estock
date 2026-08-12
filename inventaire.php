@@ -148,8 +148,7 @@ $filters = [
     'search'     => $_GET['search'] ?? '',
 ];
 $built = db_inventaires_search_sql($filters);
-$page  = max(1, (int)($_GET['page'] ?? 1));
-$pagination = paginate($pdo, $built['sql'], $built['params'], $page, 15);
+$pagination = paginate($built['sql'], $built['params'], 15);
 
 echo $twig->render('inventaire.html.twig', [
     'view'         => 'liste',

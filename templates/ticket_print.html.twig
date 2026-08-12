@@ -44,7 +44,7 @@
 
     {# --- En-tête magasin --- #}
     {% if magasin is defined and magasin %}
-        <h1>{{ magasin.nom_magasin }}</h1>
+        <h1>{{ magasin.nom }}</h1>
         <div class="shop-info">
             {% if magasin.adresse is defined and magasin.adresse %}{{ magasin.adresse }}<br>{% endif %}
             {% if magasin.telephone is defined and magasin.telephone %}Tél: {{ magasin.telephone }}<br>{% endif %}
@@ -94,7 +94,7 @@
         {% for ligne in lignes %}
             <tr>
                 <td>
-                    {{ ligne.nom|default('')|slice(0, 24) }}
+                    {{ ligne.article_nom|default('')|slice(0, 24) }}
                     {% if ligne.remise_pct is defined and ligne.remise_pct %}
                         <br><span class="fs-sm">  -{{ ligne.remise_pct }}%</span>
                     {% endif %}
@@ -180,7 +180,7 @@
 
 {# Script JsBarcode pour code-barres facture (impression) #}
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script>
+<script nonce="{{ csp_nonce_val|default('') }}">
     try {
         JsBarcode('#barcodeFacture', '{{ facture.numero_facture|e('js') }}', {
             format: 'CODE128',

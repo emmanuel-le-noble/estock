@@ -28,7 +28,7 @@ switch ($type) {
 
     // ---- EXPORT STOCK / ARTICLES ----
     case 'articles':
-        fputcsv($output, ['ID', 'Code-barres', 'Nom Article', 'SKU', 'Catégorie', 'Prix Achat', 'Prix Vente', 'Stock', 'Seuil Alerte', 'Valeur Stock HT', 'Emplacement'], ';');
+        fputcsv($output, ['ID', 'Code-barres', 'Nom Article', 'SKU', 'Catégorie', 'Prix Achat', 'Prix Vente', 'Stock', 'Seuil Alerte', 'Valeur Stock HT', 'Emplacement'], ';', '"', "\\");
         $search = $_GET['search'] ?? '';
         $cat_id = (int)($_GET['categorie_id'] ?? 0);
         $rows   = db_articles_search_stock($pdo, $search, 5000, $magasin_id, $cat_id);
@@ -41,20 +41,20 @@ switch ($type) {
                 $r['nom'],
                 $r['sku'] ?? '',
                 $r['categorie_nom'] ?? '',
-                number_format((float)$r['prix_achat'], 2, ',', ''),
+                number_format((float)($r['prix_achat'] ?? 0), 2, ',', ''),
                 number_format((float)$r['prix_vente'], 2, ',', ''),
                 (int)$r['quantite_stock'],
                 (int)$r['seuil_alerte'],
                 number_format($valeur, 2, ',', ''),
                 $r['emplacement'] ?? '',
-            ], ';');
+            ], ';', '"', "\\");
         }
         suivre_activite('EXPORT_CSV', 'Export du stock / articles');
         break;
 
     // ---- EXPORT FACTURES / VENTES ----
     case 'factures':
-        fputcsv($output, ['ID', 'N° Facture', 'Date Vente', 'Vendeur', 'Total HT', 'TVA %', 'Total TTC', 'Montant Payé', 'Rendu', 'Statut'], ';');
+        fputcsv($output, ['ID', 'N° Facture', 'Date Vente', 'Vendeur', 'Total HT', 'TVA %', 'Total TTC', 'Montant Payé', 'Rendu', 'Statut'], ';', '"', "\\");
         $built = db_factures_search_sql(['debut' => $_GET['debut'] ?? '', 'fin' => $_GET['fin'] ?? '']);
         $stmt  = $pdo->prepare($built['sql']);
         $stmt->execute($built['params']);
@@ -72,21 +72,21 @@ switch ($type) {
                 number_format((float)$r['montant_paye'], 2, ',', ''),
                 number_format((float)$r['monnaie_rendue'], 2, ',', ''),
                 $r['statut'],
-            ], ';');
+            ], ';', '"', "\\");
         }
         suivre_activite('EXPORT_CSV', 'Export de la liste des factures');
         break;
 
     // ---- EXPORT MOUVEMENTS DE STOCK ----
     case 'mouvements':
-        fputcsv($output, ['ID', 'Date', 'Article', 'Code-barres', 'Type', 'Quantité', 'Motif', 'Utilisateur', 'Magasin'], ';');
+        fputcsv($output, ['ID', 'Date', 'Article', 'Code-barres', 'Type', 'Quantité', 'Motif', 'Utilisateur', 'Magasin'], ';', '"', "\\");
         $stmt = $pdo->prepare("
-            SELECT m.*, a.nom AS article_nom, a.code_barre, u.nom AS user_nom, mag.nom_magasin
+            SELECT m.*, a.nom AS article_nom, a.code_barre, u.nom AS user_nom, mag.nom AS nom_magasin
             FROM mouvements_stock m
             JOIN articles a ON a.id = m.article_id
             LEFT JOIN utilisateurs u ON u.id = m.utilisateur_id
             LEFT JOIN magasins mag ON mag.id = m.magasin_id
-            ORDER BY m.created_at DESC LIMIT 5000
+            ORDER BY m.date_mouvement DESC LIMIT 5000
         ");
         $stmt->execute();
         $rows = $stmt->fetchAll();
@@ -94,15 +94,15 @@ switch ($type) {
         foreach ($rows as $r) {
             fputcsv($output, [
                 $r['id'],
-                $r['created_at'],
+                $r['date_mouvement'],
                 $r['article_nom'],
                 $r['code_barre'],
-                $r['type_mouvement'],
+                $r['type'],
                 (int)$r['quantite'],
                 $r['motif'] ?? '',
                 $r['user_nom'] ?? '',
                 $r['nom_magasin'] ?? '',
-            ], ';');
+            ], ';', '"', "\\");
         }
         suivre_activite('EXPORT_CSV', 'Export des mouvements de stock');
         break;
@@ -112,9 +112,9 @@ switch ($type) {
         $inv_id = (int)($_GET['id'] ?? 0);
         $inv    = db_inventaire_get_by_id($pdo, $inv_id);
         if ($inv) {
-            fputcsv($output, ['Réf Inventaire', $inv['reference'], 'Statut', $inv['statut'], 'Date', $inv['date_debut']], ';');
-            fputcsv($output, [], ';');
-            fputcsv($output, ['Article', 'Code-barres', 'SKU', 'Stock Théorique', 'Stock Compté', 'Écart', 'Notes'], ';');
+            fputcsv($output, ['Réf Inventaire', $inv['reference'], 'Statut', $inv['statut'], 'Date', $inv['date_debut']], ';', '"', "\\");
+            fputcsv($output, [], ';', '"', "\\");
+            fputcsv($output, ['Article', 'Code-barres', 'SKU', 'Stock Théorique', 'Stock Compté', 'Écart', 'Notes'], ';', '"', "\\");
             $lignes = db_inventaire_lignes_get($pdo, $inv_id);
             foreach ($lignes as $l) {
                 fputcsv($output, [
@@ -125,14 +125,14 @@ switch ($type) {
                     (int)$l['quantite_comptee'],
                     (int)$l['ecart'],
                     $l['notes'] ?? '',
-                ], ';');
+                ], ';', '"', "\\");
             }
             suivre_activite('EXPORT_CSV', 'Export inventaire #' . $inv['reference']);
         }
         break;
 
     default:
-        fputcsv($output, ['Type d\'export invalide.'], ';');
+        fputcsv($output, ['Type d\'export invalide.'], ';', '"', "\\");
         break;
 }
 

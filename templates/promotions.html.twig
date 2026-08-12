@@ -1,7 +1,7 @@
 {% extends "base.html.twig" %}
 {% block title %}Promotions & Remises{% endblock %}
 
-{% block content %}
+{% block body %}
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h1 class="h4 mb-0"><i class="bi bi-percent"></i> Promotions & Codes Promo</h1>
     {% if peut_gerer %}
@@ -11,8 +11,7 @@
     {% endif %}
 </div>
 
-{% for msg in app.flashes('success') %}<div class="alert alert-success">{{ msg }}</div>{% endfor %}
-{% for msg in app.flashes('error') %}<div class="alert alert-danger">{{ msg }}</div>{% endfor %}
+
 
 <div class="card shadow-sm mb-4">
     <div class="card-body">
@@ -198,9 +197,9 @@
     </div>
 </div>
 {% endif %}
-{% endblock %}
+{% endblock body %}
 
-{% block scripts %}
+{% block scripts_extra %}
 <script nonce="{{ csp_nonce_val }}">
 function resetForm() {
     document.getElementById('promoId').value = 0;
@@ -237,4 +236,4 @@ function editPromo(p) {
     modal.show();
 }
 </script>
-{% endblock %}
+{% endblock scripts_extra %}

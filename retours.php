@@ -141,8 +141,7 @@ $filters = [
     'search'     => $_GET['search'] ?? '',
 ];
 $built = db_retours_search_sql($filters);
-$page  = max(1, (int)($_GET['page'] ?? 1));
-$pagination = paginate($pdo, $built['sql'], $built['params'], $page, 15);
+$pagination = paginate($built['sql'], $built['params'], 15);
 
 echo $twig->render('retours.html.twig', [
     'view'        => 'liste',

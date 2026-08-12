@@ -464,6 +464,16 @@ function handle_caisse_sync(): void {
                 throw new RuntimeException('Stock insuffisant pour ' . $art['nom'] . ' dans ce magasin.');
             }
 
+            // Articles sans lot (non périssables / vieux stocks) : initialiser un lot permanent
+            $stmt_check_lot = $pdo->prepare("SELECT COUNT(*) FROM article_lots WHERE article_id = ? AND magasin_id = ?");
+            $stmt_check_lot->execute([$articleId, $magasinId]);
+            if ((int)$stmt_check_lot->fetchColumn() === 0) {
+                $pdo->prepare(
+                    "INSERT IGNORE INTO article_lots (article_id, magasin_id, numero_lot, quantite, date_peremption)
+                     VALUES (?, ?, 'LOT-GENERAL', ?, NULL)"
+                )->execute([$articleId, $magasinId, $stock_magasin]);
+            }
+
             $prixUnitaire = (float)$art['prix_vente'];
             $prixOriginal = (float)$art['prix_vente'];
             $remisePct = null;

@@ -44,177 +44,123 @@
         <div class="sidebar-brand">
             <span class="logo-mark"><i class="bi bi-boxes"></i></span>
             <span class="brand-text">{{ app_nom }}</span>
-        </div>
+        </div>        <nav class="sidebar-nav">
 
-        <nav class="sidebar-nav">
-            {# ── SECTION : TABLEAU DE BORD ── #}
-            <div class="nav-section-label">Tableau de bord</div>
-            <a class="nav-link {{ page_courante == 'tableau_bord' ? 'active' : '' }}"
-               href="tableau_bord.php">
-                <i class="bi bi-speedometer2"></i>
+            {# ── TABLEAU DE BORD ── #}
+            <a class="nav-link {{ page_courante == 'tableau_bord' ? 'active' : '' }}" href="tableau_bord.php">
+                <span class="nav-icon clr-indigo"><i class="bi bi-speedometer2"></i></span>
                 <span>Accueil</span>
             </a>
             {% if can_admin %}
-            <a class="nav-link {{ page_courante == 'statistiques' ? 'active' : '' }}"
-               href="statistiques.php">
-                <i class="bi bi-graph-up"></i>
+            <a class="nav-link {{ page_courante == 'statistiques' ? 'active' : '' }}" href="statistiques.php">
+                <span class="nav-icon clr-indigo"><i class="bi bi-graph-up"></i></span>
                 <span>Statistiques</span>
             </a>
             {% endif %}
 
-            {# ── SECTION : LOGISTIQUE ── #}
+            {# ── LOGISTIQUE ── #}
             {% if can_manage_stock %}
-            <div class="nav-section-label">Logistique</div>
-            <div class="nav-group {{ page_courante in ['stock','articles','categories','fournisseurs','commandes_fournisseur','inventaire','mouvements','transferts','peremptions'] ? 'active' : '' }}">
-                <button class="sidebar-dropdown-toggle"
-                        aria-expanded="{{ page_courante in ['stock','articles','categories','fournisseurs','commandes_fournisseur','inventaire','mouvements','transferts','peremptions'] ? 'true' : 'false' }}">
-                    <i class="bi bi-boxes"></i>
-                    <span>Stocks</span>
-                    <i class="bi bi-chevron-right dropdown-arrow"></i>
-                </button>
-                <div class="sidebar-submenu">
-                    <a class="nav-link {{ page_courante == 'stock' ? 'active' : '' }}"
-                       href="stock.php">
-                        <i class="bi bi-boxes"></i>
-                        <span>Stock</span>
-                    </a>
-                    <a class="nav-link {{ page_courante == 'articles' ? 'active' : '' }}"
-                       href="articles.php">
-                        <i class="bi bi-box-seam"></i>
-                        <span>Articles</span>
-                    </a>
-                    {% if peut('articles_gerer') %}
-                    <a class="nav-link {{ page_courante == 'categories' ? 'active' : '' }}"
-                       href="categories.php">
-                        <i class="bi bi-tags"></i>
-                        <span>Catégories</span>
-                    </a>
-                    {% endif %}
-                    <a class="nav-link {{ page_courante == 'fournisseurs' ? 'active' : '' }}"
-                       href="fournisseurs.php">
-                        <i class="bi bi-truck"></i>
-                        <span>Fournisseurs</span>
-                    </a>
-                    {% if peut('achats_consulter') %}
-                    <a class="nav-link {{ page_courante == 'commandes_fournisseur' ? 'active' : '' }}"
-                       href="commandes_fournisseur.php">
-                        <i class="bi bi-cart-plus"></i>
-                        <span>Commandes d'achat</span>
-                    </a>
-                    {% endif %}
-                    {% if peut('inventaire_consulter') %}
-                    <a class="nav-link {{ page_courante == 'inventaire' ? 'active' : '' }}"
-                       href="inventaire.php">
-                        <i class="bi bi-clipboard-check"></i>
-                        <span>Inventaire</span>
-                    </a>
-                    {% endif %}
-                    <a class="nav-link {{ page_courante == 'mouvements' ? 'active' : '' }}"
-                       href="mouvements.php">
-                        <i class="bi bi-arrow-left-right"></i>
-                        <span>Mouvements</span>
-                    </a>
-                    <a class="nav-link {{ page_courante == 'peremptions' ? 'active' : '' }}"
-                       href="peremptions.php">
-                        <i class="bi bi-calendar-week"></i>
-                        <span>Péremptions</span>
-                        {% if (nb_alertes_peremption|default(0)) > 0 %}
-                            <span class="badge bg-danger ms-auto">{{ nb_alertes_peremption }}</span>
-                        {% endif %}
-                    </a>
-                    {% if current_role in ['Directeur', 'Admin', 'Magasinier'] %}
-                    <a class="nav-link {{ page_courante == 'etiquettes' ? 'active' : '' }}"
-                       href="etiquettes.php">
-                        <i class="bi bi-tag"></i>
-                        <span>Étiquettes rayon</span>
-                    </a>
-                    <a class="nav-link {{ page_courante == 'transferts' ? 'active' : '' }}"
-                       href="transferts.php">
-                        <i class="bi bi-arrow-right-arrow-left"></i>
-                        <span>Transferts</span>
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
+            <a class="nav-link {{ page_courante == 'stock' ? 'active' : '' }}" href="stock.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-boxes"></i></span>
+                <span>Stock</span>
+            </a>
+            <a class="nav-link {{ page_courante == 'articles' ? 'active' : '' }}" href="articles.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-box-seam"></i></span>
+                <span>Articles</span>
+            </a>
+            {% if peut('articles_gerer') %}
+            <a class="nav-link {{ page_courante == 'categories' ? 'active' : '' }}" href="categories.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-tags"></i></span>
+                <span>Catégories</span>
+            </a>
+            {% endif %}
+            <a class="nav-link {{ page_courante == 'fournisseurs' ? 'active' : '' }}" href="fournisseurs.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-truck"></i></span>
+                <span>Fournisseurs</span>
+            </a>
+            {% if peut('achats_consulter') %}
+            <a class="nav-link {{ page_courante == 'commandes_fournisseur' ? 'active' : '' }}" href="commandes_fournisseur.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-cart-plus"></i></span>
+                <span>Commandes d'achat</span>
+            </a>
+            {% endif %}
+            {% if peut('inventaire_consulter') %}
+            <a class="nav-link {{ page_courante == 'inventaire' ? 'active' : '' }}" href="inventaire.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-clipboard-check"></i></span>
+                <span>Inventaire</span>
+            </a>
+            {% endif %}
+            <a class="nav-link {{ page_courante == 'mouvements' ? 'active' : '' }}" href="mouvements.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-arrow-left-right"></i></span>
+                <span>Mouvements</span>
+            </a>
+            <a class="nav-link {{ page_courante == 'peremptions' ? 'active' : '' }}" href="peremptions.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-calendar-week"></i></span>
+                <span>Péremptions</span>
+                {% if (nb_alertes_peremption|default(0)) > 0 %}
+                    <span class="badge bg-danger ms-auto" style="font-size:.65rem;">{{ nb_alertes_peremption }}</span>
+                {% endif %}
+            </a>
+            {% if current_role in ['Directeur', 'Admin', 'Magasinier'] %}
+            <a class="nav-link {{ page_courante == 'etiquettes' ? 'active' : '' }}" href="etiquettes.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-tag"></i></span>
+                <span>Étiquettes rayon</span>
+            </a>
+            <a class="nav-link {{ page_courante == 'transferts' ? 'active' : '' }}" href="transferts.php">
+                <span class="nav-icon clr-emerald"><i class="bi bi-arrow-right-arrow-left"></i></span>
+                <span>Transferts</span>
+            </a>
+            {% endif %}
             {% endif %}
 
-            {# ── SECTION : VENTES ── #}
+            {# ── VENTES ── #}
             {% if can_bill %}
-            <div class="nav-group {{ page_courante in ['caisse','factures','retours','cloture'] ? 'active' : '' }}">
-                <button class="sidebar-dropdown-toggle"
-                        aria-expanded="{{ page_courante in ['caisse','factures','retours','cloture'] ? 'true' : 'false' }}">
-                    <i class="bi bi-cart-check"></i>
-                    <span>Ventes</span>
-                    <i class="bi bi-chevron-right dropdown-arrow"></i>
-                </button>
-                <div class="sidebar-submenu">
-                    <a class="nav-link {{ page_courante == 'caisse' ? 'active' : '' }}"
-                       href="caisse.php">
-                        <i class="bi bi-cart-check"></i>
-                        <span>Caisse</span>
-                    </a>
-                    <a class="nav-link {{ page_courante == 'factures' ? 'active' : '' }}"
-                       href="factures.php">
-                        <i class="bi bi-receipt"></i>
-                        <span>Factures</span>
-                    </a>
-                    {% if peut('retours_consulter') %}
-                    <a class="nav-link {{ page_courante == 'retours' ? 'active' : '' }}"
-                       href="retours.php">
-                        <i class="bi bi-arrow-counterclockwise"></i>
-                        <span>Retours / SAV</span>
-                    </a>
-                    {% endif %}
-                    {% if peut('promotions_consulter') %}
-                    <a class="nav-link {{ page_courante == 'promotions' ? 'active' : '' }}"
-                       href="promotions.php">
-                        <i class="bi bi-percent"></i>
-                        <span>Promotions & Remises</span>
-                    </a>
-                    {% endif %}
-                    <a class="nav-link {{ page_courante == 'cloture' ? 'active' : '' }}"
-                       href="cloture.php">
-                        <i class="bi bi-lock-fill"></i>
-                        <span>Clôture de Caisse</span>
-                    </a>
-                </div>
-            </div>
+            <a class="nav-link {{ page_courante == 'caisse' ? 'active' : '' }}" href="caisse.php">
+                <span class="nav-icon clr-sky"><i class="bi bi-cash-register"></i></span>
+                <span>Caisse (POS)</span>
+            </a>
+            <a class="nav-link {{ page_courante == 'factures' ? 'active' : '' }}" href="factures.php">
+                <span class="nav-icon clr-sky"><i class="bi bi-receipt"></i></span>
+                <span>Factures</span>
+            </a>
+            {% if peut('retours_consulter') %}
+            <a class="nav-link {{ page_courante == 'retours' ? 'active' : '' }}" href="retours.php">
+                <span class="nav-icon clr-sky"><i class="bi bi-arrow-counterclockwise"></i></span>
+                <span>Retours / SAV</span>
+            </a>
+            {% endif %}
+            {% if peut('promotions_consulter') %}
+            <a class="nav-link {{ page_courante == 'promotions' ? 'active' : '' }}" href="promotions.php">
+                <span class="nav-icon clr-sky"><i class="bi bi-percent"></i></span>
+                <span>Promotions &amp; Remises</span>
+            </a>
+            {% endif %}
+            <a class="nav-link {{ page_courante == 'cloture' ? 'active' : '' }}" href="cloture.php">
+                <span class="nav-icon clr-sky"><i class="bi bi-lock-fill"></i></span>
+                <span>Clôture de Caisse</span>
+            </a>
             {% endif %}
 
-            {# ── SECTION : ADMINISTRATION ── #}
+            {# ── ADMINISTRATION ── #}
             {% if can_admin %}
-            <div class="nav-section-label">Administration</div>
-            <a class="nav-link {{ page_courante == 'depenses' ? 'active' : '' }}"
-               href="depenses.php">
-                <i class="bi bi-wallet2"></i>
+            <a class="nav-link {{ page_courante == 'depenses' ? 'active' : '' }}" href="depenses.php">
+                <span class="nav-icon clr-rose"><i class="bi bi-wallet2"></i></span>
                 <span>Dépenses</span>
             </a>
-            <div class="nav-group {{ page_courante in ['utilisateurs','magasins','parametres'] ? 'active' : '' }}">
-                <button class="sidebar-dropdown-toggle"
-                        aria-expanded="{{ page_courante in ['utilisateurs','magasins','parametres'] ? 'true' : 'false' }}">
-                    <i class="bi bi-gear"></i>
-                    <span>Paramètres</span>
-                    <i class="bi bi-chevron-right dropdown-arrow"></i>
-                </button>
-                <div class="sidebar-submenu">
-                    <a class="nav-link {{ page_courante == 'utilisateurs' ? 'active' : '' }}"
-                       href="utilisateurs.php">
-                        <i class="bi bi-people"></i>
-                        <span>Utilisateurs</span>
-                    </a>
-                    <a class="nav-link {{ page_courante == 'magasins' ? 'active' : '' }}"
-                       href="magasins.php">
-                        <i class="bi bi-shop"></i>
-                        <span>Magasins</span>
-                    </a>
-                    <a class="nav-link {{ page_courante == 'parametres' ? 'active' : '' }}"
-                       href="parametres.php">
-                        <i class="bi bi-gear"></i>
-                        <span>Paramètres</span>
-                    </a>
-                </div>
-            </div>
+            <a class="nav-link {{ page_courante == 'utilisateurs' ? 'active' : '' }}" href="utilisateurs.php">
+                <span class="nav-icon clr-violet"><i class="bi bi-people"></i></span>
+                <span>Utilisateurs</span>
+            </a>
+            <a class="nav-link {{ page_courante == 'magasins' ? 'active' : '' }}" href="magasins.php">
+                <span class="nav-icon clr-violet"><i class="bi bi-shop"></i></span>
+                <span>Magasins</span>
+            </a>
+            <a class="nav-link {{ page_courante == 'parametres' ? 'active' : '' }}" href="parametres.php">
+                <span class="nav-icon clr-violet"><i class="bi bi-gear"></i></span>
+                <span>Paramètres</span>
+            </a>
             {% endif %}
+
         </nav>
 
         {# ── FOOTER : MON COMPTE ── #}
@@ -242,8 +188,8 @@
                     <span class="rl">{{ role }}</span>
                 </span>
             </a>
-            <form method="POST" action="logout.php" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <form method="POST" action="auth/logout.php" class="d-inline">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="side-user btn btn-link text-decoration-none" title="Se deconnecter" style="background:none;border:none;">
                     <span class="avatar avatar-logout"><i class="bi bi-box-arrow-right"></i></span>
                     <span class="meta">

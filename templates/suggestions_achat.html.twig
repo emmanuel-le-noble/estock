@@ -54,7 +54,7 @@
                     <span class="badge text-bg-secondary">{{ nb }} article{{ nb > 1 ? 's' : '' }}</span>
                     {% if peut('achats_gerer') and g.fournisseur_id|default(0) > 0 %}
                         <form method="POST" action="commandes_fournisseur.php" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                             <input type="hidden" name="action" value="preremplir">
                             <input type="hidden" name="fournisseur_id" value="{{ g.fournisseur_id }}">
                             <button type="submit" class="btn btn-sm btn-primary">
@@ -65,7 +65,6 @@
                 </div>
             </div>
             <div class="card-body">
-                <?php if ($g['contact'] || $g['telephone']): ?>
                 {% if g.contact|default('') or g.telephone|default('') %}
                     <div class="mb-3 text-muted small">
                         {% if g.contact|default('') %}
@@ -74,7 +73,6 @@
                         {% if g.contact|default('') and g.telephone|default('') %} · {% endif %}
                         {% if g.telephone|default('') %}
                             <span><i class="bi bi-telephone"></i> {{ h(g.telephone) }}</span>
-                        <?php endif; ?>
                         {% endif %}
                     </div>
                 {% endif %}
@@ -111,7 +109,6 @@
                 </div>
             </div>
         </div>
-    <?php endforeach; ?>
     {% endfor %}
 {% endif %}
 {% endblock %}

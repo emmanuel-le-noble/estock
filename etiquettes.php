@@ -45,7 +45,7 @@ if ($action === 'imprimer') {
         }
     }
 
-    echo $twig->render('etiquettes.html.twig', [
+    echo $twig->render('etiquettes_print.html.twig', [
         'view'          => 'print',
         'articles'      => $selection,
         'format'        => $format,

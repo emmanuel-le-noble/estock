@@ -237,12 +237,23 @@ function user_role(): string {
     return $_SESSION['user']['role'] ?? '';
 }
 
+/** ID de l'utilisateur courant. */
+function user_id(): int {
+    return (int)($_SESSION['user']['id'] ?? 0);
+}
+
+/** ID du magasin de l'utilisateur courant (1 par défaut). */
+function user_magasin_id(): int {
+    $mId = (int)($_SESSION['user']['magasin_id'] ?? 1);
+    return $mId > 0 ? $mId : 1;
+}
+
 /**
  * Exige une connexion. Redirige vers login si absent.
  */
 function exiger_connexion(): void {
     if (!est_connecte()) {
-        header('Location: login.php');
+        header('Location: auth/login.php');
         exit;
     }
 }
@@ -352,11 +363,18 @@ function csrf_field(): void {
  * Valider un token CSRF.
  */
 function csrf_validate(): bool {
-    $token = $_POST['_csrf_token'] ?? '';
+    $token = $_POST['_csrf_token'] ?? $_POST['csrf_token'] ?? '';
     if (empty($token) || empty($_SESSION['csrf_token'])) {
         return false;
     }
     return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+function verify_csrf_token(string $token = ''): bool {
+    if (empty($token)) {
+        $token = $_POST['_csrf_token'] ?? $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    }
+    return !empty($token) && !empty($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
 // ============================================================
@@ -383,16 +401,26 @@ function clear_login_attempts(string $login): void {
 //  8. PAGINATION (Version compatible avec paramètres ? et :)
 // ============================================================
 
-function paginate(string $sql, array $params = [], int $par_page = 25, ?string $countSql = null): array {
+function paginate($sql, array $params = [], int $par_page = 25, $countSql = null): array {
     global $pdo;
 
-    if ($countSql === null) {
-        $countSql = preg_replace('/SELECT\s+(?!.*\bFROM\b)(?!.*\bAS\b).*?(?=\s+FROM\s)/is', 'SELECT COUNT(*) FROM ', $sql, 1);
-        if ($countSql === $sql) {
-            $countSql = preg_replace('/SELECT\s+.+?\s+FROM/is', 'SELECT COUNT(*) FROM', $sql, 1);
+    // Si le 1er paramètre est $pdo (PDO instance), décaler les arguments
+    if ($sql instanceof PDO) {
+        $sql = is_string($params) ? $params : '';
+        $params = is_array($par_page) ? $par_page : (is_array($countSql) ? $countSql : []);
+        $par_page = 25;
+        $args = func_get_args();
+        foreach ($args as $arg) {
+            if (is_int($arg) && $arg > 0) {
+                $par_page = $arg;
+            }
         }
-        $countSql = preg_replace('/\bORDER\s+BY\s+.+$/i', '', $countSql);
-        $countSql = preg_replace('/\bLIMIT\s+.+$/i', '', $countSql);
+        $countSql = null;
+    }
+
+    if ($countSql === null || !is_string($countSql)) {
+        // Compter via sous-requête : gère GROUP BY, DISTINCT et les collisions d'alias
+        $countSql = "SELECT COUNT(*) FROM (" . trim(rtrim($sql, ";\t\n ")) . ") AS __count_rows";
     }
     $stmt = $pdo->prepare($countSql);
     $stmt->execute($params);
@@ -434,7 +462,13 @@ function paginate(string $sql, array $params = [], int $par_page = 25, ?string $
     $stmt->execute();
     $items = $stmt->fetchAll();
 
-    return compact('items', 'page', 'total_pages', 'total');
+    return [
+        'items'       => $items,
+        'data'        => $items,
+        'page'        => $page,
+        'total_pages' => $total_pages,
+        'total'       => $total,
+    ];
 }
 
 function pagination_links(int $page, int $total_pages, string $base_url = '?'): void {
@@ -456,6 +490,9 @@ function pagination_links(int $page, int $total_pages, string $base_url = '?'): 
     echo '</ul></nav>';
 }
 
+require_once __DIR__ . '/../includes/db_functions.php';
+require_once __DIR__ . '/../includes/helpers.php';
+
 // ============================================================
 //  9. MOTEUR DE TEMPLATE TWIG
 // ============================================================
@@ -474,6 +511,21 @@ $twig->addFunction(new \Twig\TwigFunction('csp_nonce', 'csp_nonce'));
 $twig->addFunction(new \Twig\TwigFunction('param', 'param'));
 $twig->addFunction(new \Twig\TwigFunction('param_app_name', 'param_app_name'));
 $twig->addFunction(new \Twig\TwigFunction('peut', 'peut'));
+$twig->addFunction(new \Twig\TwigFunction('generate_signed_url', 'generate_signed_url'));
+$twig->addFunction(new \Twig\TwigFunction('url_sign', 'url_sign'));
+$twig->addFunction(new \Twig\TwigFunction('pagination_links', function($pagination, string $base_url = '?', array $extra = []) {
+    if (is_array($pagination)) {
+        $page = (int)($pagination['page'] ?? 1);
+        $total_pages = (int)($pagination['total_pages'] ?? 1);
+    } else {
+        $page = (int)$pagination;
+        $total_pages = (int)$base_url;
+        $base_url = '?';
+    }
+    ob_start();
+    pagination_links($page, $total_pages, $base_url);
+    return ob_get_clean();
+}, ['is_safe' => ['html']]));
 
 $twig->addGlobal('base_url', BASE_URL);
 $twig->addGlobal('current_user', user_courant());

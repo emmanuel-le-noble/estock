@@ -347,6 +347,10 @@ function generate_signed_url(string $base_url, int $id, array $extra = []): stri
     return $url . '&ts=' . $ts . '&token=' . $token;
 }
 
+function url_sign(string $base_url, int $id, array $extra = []): string {
+    return generate_signed_url($base_url, $id, $extra);
+}
+
 function verify_url_signature(int $id, string $token, array $extra = []): bool {
     if ($token === '' || $id <= 0) return false;
     $ts = (int)($_GET['ts'] ?? 0);

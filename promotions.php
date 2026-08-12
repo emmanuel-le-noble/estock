@@ -69,8 +69,7 @@ $filters = [
     'actif'  => $_GET['actif'] ?? '',
 ];
 $built = db_promotions_search_sql($filters);
-$page  = max(1, (int)($_GET['page'] ?? 1));
-$pagination = paginate($pdo, $built['sql'], $built['params'], $page, 15);
+$pagination = paginate($built['sql'], $built['params'], 15);
 
 $articles   = db_articles_list_active($pdo, 1000);
 $categories = function_exists('db_categories_all') ? db_categories_all($pdo) : [];

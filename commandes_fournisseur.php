@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'preremplir') {
     }
 
     try {
-        $commande_id = db_transaction($pdo, function(PDO $pdo) use ($fournisseur_id, $magasin_id, $user_id, $lignes_a_creer) {
+        $commande_id = db_transaction(function(PDO $pdo) use ($fournisseur_id, $magasin_id, $user_id, $lignes_a_creer) {
             $cmd_id = db_commande_fournisseur_insert($pdo, [
                 'fournisseur_id' => $fournisseur_id,
                 'magasin_id'     => $magasin_id,
@@ -284,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'receptionner') {
 
 // ---- AFFICHAGE : VUE DÉTAILLÉE D'UNE COMMANDE ----
 if ($action === 'voir' && $id_get > 0) {
-    if (!verify_url_signature('commandes_fournisseur.php', $id_get)) {
+    if (!verify_url_signature($id_get, $_GET['token'] ?? '', ['action' => 'voir'])) {
         flash_error('Lien expiré ou invalide.');
         redirect('commandes_fournisseur.php');
     }
@@ -313,7 +313,7 @@ if (in_array($action, ['nouveau', 'editer_form']) && $can_manage) {
     $cmd = null;
     $lignes = [];
     if ($action === 'editer_form' && $id_get > 0) {
-        if (!verify_url_signature('commandes_fournisseur.php', $id_get)) {
+        if (!verify_url_signature($id_get, $_GET['token'] ?? '', ['action' => 'editer_form'])) {
             flash_error('Lien expiré ou invalide.');
             redirect('commandes_fournisseur.php');
         }
@@ -326,8 +326,8 @@ if (in_array($action, ['nouveau', 'editer_form']) && $can_manage) {
         }
     }
 
-    $fournisseurs = db_fournisseurs_all($pdo);
-    $magasins     = db_magasins_all($pdo);
+    $fournisseurs = db_fournisseurs_list($pdo);
+    $magasins     = db_magasins_list_all($pdo);
     $articles     = db_articles_search_sql([]) ? $pdo->query("SELECT id, nom, code_barre, prix_achat, fournisseur_id FROM articles WHERE actif = 1 ORDER BY nom ASC")->fetchAll() : [];
 
     echo $twig->render('commandes_fournisseur.html.twig', [
@@ -358,8 +358,8 @@ $stmt = $pdo->prepare($search_data['sql']);
 $stmt->execute($search_data['params']);
 $commandes = $stmt->fetchAll();
 
-$fournisseurs = db_fournisseurs_all($pdo);
-$magasins     = db_magasins_all($pdo);
+$fournisseurs = db_fournisseurs_list($pdo);
+$magasins     = db_magasins_list_all($pdo);
 
 echo $twig->render('commandes_fournisseur.html.twig', [
     'titre_page'    => "Commandes Fournisseurs",

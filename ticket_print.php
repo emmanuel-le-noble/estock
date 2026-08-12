@@ -114,4 +114,5 @@ echo $twig->render('ticket_print.html.twig', [
     'tva_resume' => $tvaResume,
     'devise'     => $devise,
     'decimals'   => $decimals,
+    'csp_nonce_val' => csp_nonce(),
 ]);

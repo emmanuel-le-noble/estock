@@ -54,7 +54,7 @@
                             </button>
                             {% if c.actif %}
                                 <form method="POST" action="categories.php" class="d-inline" onsubmit="return confirm('Désactiver cette catégorie ?');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                                     <input type="hidden" name="action" value="desactiver">
                                     <input type="hidden" name="id" value="{{ c.id }}">
                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Désactiver">
@@ -82,7 +82,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" action="categories.php" id="formCat">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="action" value="ajouter" id="catAction">
                 <input type="hidden" name="id" value="" id="catId">
 

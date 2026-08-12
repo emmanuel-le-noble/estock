@@ -401,7 +401,7 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
         fetch(url)
             .then(function(r) {
                 if (r.status === 401) {
-                    window.location.href = BASE + 'login.php';
+                    window.location.href = BASE + 'auth/login.php';
                     throw new Error('Non autorisé');
                 }
                 if (!r.ok) throw new Error('Erreur HTTP ' + r.status);
