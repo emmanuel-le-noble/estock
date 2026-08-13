@@ -96,8 +96,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
 
     $retourId = 0;
     db_transaction(
-        function(PDO $pdo) use ($facture_id, $lignesRetour, $motif, $userId, $magasin_id, &$retourId) {
+        function(PDO $pdo) use ($facture_id, $lignesRetour, $motif, $userId, $magasin_id, $facture, &$retourId) {
             $retourId = db_retour_creer($pdo, $facture_id, $lignesRetour, $motif, $userId, $magasin_id);
+
+            // Fidélité : reverser les points gagnés proportionnellement au retour.
+            // (Les points utilisés comme remise ne sont restitués que sur retour total.)
+            $montant_retour_ht = 0.0;
+            foreach ($lignesRetour as $lr) {
+                $montant_retour_ht += (float)$lr['prix_unitaire'] * (int)$lr['quantite'];
+            }
+            $total_ht_facture = (float)($facture['total_ht'] ?? 0);
+            $fraction = $total_ht_facture > 0 ? min(1.0, $montant_retour_ht / $total_ht_facture) : 0.0;
+            if ($fraction > 0) {
+                db_points_reverser_facture($pdo, $facture_id, 'Retour SAV #' . $retourId, $fraction);
+            }
         },
         'Retour enregistré et stock mis à jour.',
         'Erreur lors de l\'enregistrement du retour.',
@@ -124,6 +136,7 @@ if ($action === 'detail') {
 
     echo $twig->render('retours.html.twig', [
         'view'   => 'detail',
+        'titre_page' => "Retour #{$get_id}",
         'retour' => $retour,
         'lignes' => $lignes,
         'devise' => param('devise_symbole', 'FCFA'),
@@ -146,6 +159,7 @@ if ($action === 'nouveau_facture') {
 
     echo $twig->render('retours.html.twig', [
         'view'    => 'nouveau',
+        'titre_page' => 'Nouveau retour',
         'facture' => $facture,
         'lignes'  => $lignes,
         'devise'  => param('devise_symbole', 'FCFA'),
@@ -179,6 +193,7 @@ if ($action === 'nouveau') {
 
     echo $twig->render('retours.html.twig', [
         'view'       => 'nouveau',
+        'titre_page' => 'Nouveau retour',
         'num_search' => $num_search,
         'facture'    => $facture,
         'lignes'     => $lignes,
@@ -197,6 +212,7 @@ $pagination = paginate($built['sql'], $built['params'], 15);
 
 echo $twig->render('retours.html.twig', [
     'view'        => 'liste',
+    'titre_page'  => 'Retours / SAV',
     'rows'        => $pagination['data'],
     'pagination'  => $pagination,
     'filters'     => $filters,

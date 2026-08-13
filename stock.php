@@ -19,10 +19,10 @@ $u = user_courant();
 // sinon le magasin affecté à son profil utilisateur.
 if (peut_administrer()) {
     // L'admin peut filtrer par n'importe quel magasin via GET
-    $magasin_id = isset($_GET['magasin_id']) ? (int)$_GET['magasin_id'] : (int)($u['magasin_id'] ?? 0);
+    $magasin_id = isset($_GET['magasin_id']) ? (int)$_GET['magasin_id'] : user_magasin_id();
 } else {
     // Les autres utilisateurs sont restreints à leur magasin assigné
-    $magasin_id = (int)($u['magasin_id'] ?? 0);
+    $magasin_id = user_magasin_id();
     if ($magasin_id <= 0) {
         flash_error('Aucun magasin affecté à votre compte.');
         redirect('tableau_bord.php');

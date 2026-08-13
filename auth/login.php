@@ -38,7 +38,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_regenerate_id(true);
                 unset($u['mot_de_passe']);
                 $_SESSION['user'] = $u;
+                if (!empty($u['magasin_id'])) {
+                    $_SESSION['magasin_actif'] = (int)$u['magasin_id'];
+                } else {
+                    unset($_SESSION['magasin_actif']);
+                }
                 suivre_activite('CONNEXION', 'Connexion réussie: ' . $login);
+                if (user_role() === ROLE_DIRECTEUR) {
+                    redirect('choisir_magasin.php');
+                }
                 redirect('../tableau_bord.php');
             } else {
                 db_login_attempt_insert($pdo, $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1', $login);

@@ -16,8 +16,9 @@ exiger_permission('achats_consulter');
 
 $u = user_courant();
 $user_id = (int)($u['id'] ?? 0);
-$user_magasin_id = (int)($u['magasin_id'] ?? 0);
+$user_magasin_id = user_magasin_id();
 $can_manage = peut('achats_gerer');
+$can_valider = peut('achats_valider');
 
 $action = $_POST['action'] ?? $_GET['action'] ?? 'liste';
 $id_get = (int)($_GET['id'] ?? 0);
@@ -33,26 +34,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'preremplir') {
         redirect('suggestions_achat.php');
     }
 
-    // Correction : plus de magasin par défaut codé en dur ("1"). Si l'utilisateur
-    // n'a pas de magasin associé, on refuse explicitement plutôt que de rattacher
-    // silencieusement la commande à un magasin potentiellement erroné.
-    if ($user_magasin_id <= 0) {
-        flash_error('Aucun magasin associé à votre compte. Impossible de générer la commande.');
-        redirect('suggestions_achat.php');
-    }
+    // Magasin de suivi actif (choix du Directeur, magasin d'appartenance pour les autres)
     $magasin_id = $user_magasin_id;
 
-    $articles = db_articles_low_stock_with_supplier($pdo, 200, $magasin_id);
+    // Alertes de stock enrichies : quantité recommandée calculée sur la vitesse de vente (couverture 30 jours)
+    $articles = db_articles_achat_recommandes($pdo, $magasin_id, 30, 30);
 
     $lignes_a_creer = [];
     foreach ($articles as $a) {
         if ((int)($a['fournisseur_id'] ?? 0) === $fournisseur_id) {
-            $qte_stock = (int)($a['quantite_stock'] ?? 0);
-            $seuil = (int)($a['seuil_alerte'] ?? 0);
-            $qte_cmd = max(1, $seuil - $qte_stock);
             $lignes_a_creer[] = [
                 'article_id' => (int)$a['id'],
-                'quantite_commandee' => $qte_cmd,
+                'quantite_commandee' => max(1, (int)($a['quantite_recommandee'] ?? 1)),
                 'quantite_recue' => 0,
                 'prix_achat_unitaire' => (float)($a['prix_achat'] ?? 0),
             ];
@@ -93,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'creer') {
     csrf_guard('commandes_fournisseur.php');
 
     $fournisseur_id = (int)($_POST['fournisseur_id'] ?? 0);
-    $magasin_id     = (int)($_POST['magasin_id'] ?? $user_magasin_id);
+    $magasin_id     = $user_magasin_id;
     $date_rec       = $_POST['date_reception_prevue'] ?? null;
     $notes          = trim($_POST['notes'] ?? '');
     $lignes_input   = $_POST['lignes'] ?? [];
@@ -157,13 +150,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'editer') {
     csrf_guard('commandes_fournisseur.php');
 
     $cmd = db_commande_fournisseur_get_by_id($pdo, $cmd_id);
-    if (!$cmd || $cmd['statut'] !== 'Brouillon') {
-        flash_error('Commande introuvable ou non modifiable (seuls les brouillons peuvent être édités).');
+    if (!$cmd || $cmd['statut'] !== 'Brouillon' || (int)$cmd['magasin_id'] !== $user_magasin_id) {
+        flash_error('Commande introuvable ou non modifiable (seuls les brouillons de votre magasin peuvent être édités).');
         redirect('commandes_fournisseur.php');
     }
 
     $fournisseur_id = (int)($_POST['fournisseur_id'] ?? $cmd['fournisseur_id']);
-    $magasin_id     = (int)($_POST['magasin_id'] ?? $cmd['magasin_id']);
+    $magasin_id     = $user_magasin_id;
     $date_rec       = $_POST['date_reception_prevue'] ?? null;
     $notes          = trim($_POST['notes'] ?? '');
     $lignes_input   = $_POST['lignes'] ?? [];
@@ -215,30 +208,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'editer') {
     }
 }
 
-// ---- ACTION POST : CHANGER STATUT (ENVOYER / ANNULER) ----
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['envoyer', 'annuler'], true)) {
-    exiger_permission('achats_gerer');
+// ---- ACTION POST : FLUX DE VALIDATION (SOUMETTRE / VALIDER / REJETER) ----
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['soumettre', 'valider', 'rejeter', 'envoyer'], true)) {
     $cmd_id = (int)($_POST['id'] ?? 0);
     csrf_guard('commandes_fournisseur.php');
 
     $cmd = db_commande_fournisseur_get_by_id($pdo, $cmd_id);
-    if (!$cmd) {
-        flash_error('Commande introuvable.');
+    if (!$cmd || (int)$cmd['magasin_id'] !== $user_magasin_id) {
+        flash_error('Commande introuvable ou ne concernant pas votre magasin.');
         redirect('commandes_fournisseur.php');
     }
 
-    // Correction : un statut incompatible tombait auparavant dans un trou silencieux
-    // (ni succès ni erreur affichée) -> ajout d'un cas "else" explicite.
-    if ($action === 'envoyer' && $cmd['statut'] === 'Brouillon') {
-        db_commande_fournisseur_update_statut($pdo, $cmd_id, 'Envoyee');
-        suivre_activite('COMMANDE_ENVOYEE', "Commande fournisseur #{$cmd_id} marquée comme envoyée");
-        flash_success("Commande #{$cmd_id} marquée comme envoyée au fournisseur.");
-    } elseif ($action === 'annuler' && in_array($cmd['statut'], ['Brouillon', 'Envoyee'], true)) {
-        db_commande_fournisseur_update_statut($pdo, $cmd_id, 'Annulee');
-        suivre_activite('COMMANDE_ANNULEE', "Annulation de la commande fournisseur #{$cmd_id}");
-        flash_success("Commande #{$cmd_id} annulée.");
-    } else {
-        flash_error("Action impossible : le statut actuel de la commande (« {$cmd['statut']} ») ne le permet pas.");
+    // 1. Soumettre : le magasinier demande la validation du Directeur
+    if ($action === 'soumettre') {
+        exiger_permission('achats_gerer');
+        if ($cmd['statut'] === 'Brouillon') {
+            db_commande_fournisseur_update_statut($pdo, $cmd_id, 'En_Attente');
+            suivre_activite('COMMANDE_SOUMISE', "Commande fournisseur #{$cmd_id} soumise pour validation (Directeur)");
+            flash_success("Commande #{$cmd_id} soumise pour validation du Directeur.");
+        } else {
+            flash_error("Seuls les brouillons peuvent être soumis (statut actuel : « {$cmd['statut']} »).");
+        }
+    }
+
+    // 2. Valider / Envoyer : uniquement le Directeur (permission achats_valider)
+    if (in_array($action, ['valider', 'envoyer'], true)) {
+        exiger_permission('achats_valider');
+        $statuts_acceptes = $action === 'valider' ? ['En_Attente'] : ['En_Attente', 'Brouillon'];
+        if (in_array($cmd['statut'], $statuts_acceptes, true)) {
+            db_commande_fournisseur_update_statut($pdo, $cmd_id, 'Envoyee');
+            suivre_activite('COMMANDE_VALIDEE', "Commande fournisseur #{$cmd_id} validée et envoyée au fournisseur");
+            flash_success("Commande #{$cmd_id} validée : elle est désormais effective et envoyée au fournisseur.");
+        } else {
+            flash_error("Action impossible : le statut actuel de la commande (« {$cmd['statut']} ») ne permet pas l'envoi.");
+        }
+    }
+
+    // 3. Rejeter : retour au brouillon pour révision (uniquement le Directeur)
+    if ($action === 'rejeter') {
+        exiger_permission('achats_valider');
+        if ($cmd['statut'] === 'En_Attente') {
+            db_commande_fournisseur_update_statut($pdo, $cmd_id, 'Brouillon');
+            suivre_activite('COMMANDE_REJETEE', "Commande fournisseur #{$cmd_id} renvoyée en brouillon par le Directeur");
+            flash_success("Commande #{$cmd_id} renvoyée en brouillon. Le magasinier peut la corriger.");
+        } else {
+            flash_error("Seules les commandes en attente de validation peuvent être rejetées.");
+        }
+    }
+
+    // 4. Annulation (Brouillon, En_Attente ou Envoyee)
+    if ($action === 'annuler') {
+        exiger_permission('achats_gerer');
+        if (in_array($cmd['statut'], ['Brouillon', 'En_Attente', 'Envoyee'], true)) {
+            db_commande_fournisseur_update_statut($pdo, $cmd_id, 'Annulee');
+            suivre_activite('COMMANDE_ANNULEE', "Annulation de la commande fournisseur #{$cmd_id}");
+            flash_success("Commande #{$cmd_id} annulée.");
+        } else {
+            flash_error("Action impossible : le statut actuel de la commande (« {$cmd['statut']} ») ne le permet pas.");
+        }
     }
 
     redirect(generate_signed_url('commandes_fournisseur.php', $cmd_id, ['action' => 'voir']));
@@ -251,8 +278,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'receptionner') {
     csrf_guard('commandes_fournisseur.php');
 
     $cmd = db_commande_fournisseur_get_by_id($pdo, $cmd_id);
-    if (!$cmd || in_array($cmd['statut'], ['Recue', 'Annulee'], true)) {
-        flash_error('Commande introuvable ou déjà clôturée.');
+    if (!$cmd || (int)$cmd['magasin_id'] !== $user_magasin_id || !in_array($cmd['statut'], ['Envoyee', 'Recue_Partielle'], true)) {
+        flash_error('Commande introuvable, non réceptionnable à ce stade ou ne concernant pas votre magasin (attendez la validation).');
         redirect('commandes_fournisseur.php');
     }
 
@@ -330,7 +357,7 @@ if ($action === 'voir' && $id_get > 0) {
     }
 
     $cmd = db_commande_fournisseur_get_by_id($pdo, $id_get);
-    if (!$cmd) {
+    if (!$cmd || (int)$cmd['magasin_id'] !== $user_magasin_id) {
         flash_error('Commande introuvable.');
         redirect('commandes_fournisseur.php');
     }
@@ -343,7 +370,8 @@ if ($action === 'voir' && $id_get > 0) {
         'commande'      => $cmd,
         'lignes'        => $lignes,
         'vue'           => 'detail',
-        'can_manage'    => $can_manage
+        'can_manage'    => $can_manage,
+        'can_valider'   => $can_valider
     ]);
     exit;
 }
@@ -358,7 +386,7 @@ if (in_array($action, ['nouveau', 'editer_form'], true) && $can_manage) {
             redirect('commandes_fournisseur.php');
         }
         $cmd = db_commande_fournisseur_get_by_id($pdo, $id_get);
-        if ($cmd && $cmd['statut'] === 'Brouillon') {
+        if ($cmd && $cmd['statut'] === 'Brouillon' && (int)$cmd['magasin_id'] === $user_magasin_id) {
             $lignes = db_commande_fournisseur_lignes_get($pdo, $id_get);
         } else {
             flash_error('Commande introuvable ou non modifiable.');
@@ -382,7 +410,8 @@ if (in_array($action, ['nouveau', 'editer_form'], true) && $can_manage) {
         'magasins'      => $magasins,
         'articles'      => $articles,
         'vue'           => 'formulaire',
-        'can_manage'    => $can_manage
+        'can_manage'    => $can_manage,
+        'can_valider'   => $can_valider
     ]);
     exit;
 }
@@ -391,7 +420,7 @@ if (in_array($action, ['nouveau', 'editer_form'], true) && $can_manage) {
 $filters = [
     'statut'         => $_GET['statut'] ?? '',
     'fournisseur_id' => $_GET['fournisseur_id'] ?? '',
-    'magasin_id'     => $_GET['magasin_id'] ?? '',
+    'magasin_id'     => $user_magasin_id,
     'date_debut'     => $_GET['date_debut'] ?? '',
     'date_fin'       => $_GET['date_fin'] ?? '',
 ];

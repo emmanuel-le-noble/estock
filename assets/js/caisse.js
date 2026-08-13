@@ -56,6 +56,29 @@ document.addEventListener('DOMContentLoaded', function () {
     // Le panier : { [article_id]: {article, qte} }
     let panier = {};
 
+    // ---- Fidélité : client sélectionné + configuration ----
+    let clientActuel = null;
+    let totalBrut = 0; // total TTC sans remise fidélité
+    const FIDELITE = {
+        actif: !!config.fidelite_actif,
+        valeurPoint: Number.parseFloat(config.fidelite_valeur_point || 1) || 1,
+        minPoints: Number.parseInt(config.fidelite_min_points_usage || 10, 10) || 10
+    };
+
+    // ---- Références DOM du panneau client ----
+    const clientSearch = document.getElementById('clientSearch');
+    const btnClientSearch = document.getElementById('btnClientSearch');
+    const clientResults = document.getElementById('clientResults');
+    const clientChip = document.getElementById('clientChip');
+    const clientNom = document.getElementById('clientNom');
+    const clientSolde = document.getElementById('clientSolde');
+    const btnClientClear = document.getElementById('btnClientClear');
+    const zonePoints = document.getElementById('zonePoints');
+    const pointsUtilises = document.getElementById('pointsUtilises');
+    const lblRemiseFidelite = document.getElementById('lblRemiseFidelite');
+    const inpClientId = document.getElementById('inpClientId');
+    const inpPointsUtilises = document.getElementById('inpPointsUtilises');
+
     // ============================================================
     //  MODE HORS-LIGNE : Badge de connexion
     // ============================================================
@@ -175,8 +198,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             : s;
                     });
                     syncOK++;
+                    var ptsMsg = (data.points_gagnes || 0) > 0
+                        ? ' — <strong>+' + data.points_gagnes + ' pts</strong> fidélité'
+                        : '';
                     alerter(
-                        'Vente synchronisée : ' + (data.numero || vente.client_sale_id.slice(0, 8)),
+                        'Vente synchronisée : ' + (data.numero || vente.client_sale_id.slice(0, 8)) + ptsMsg,
                         'success'
                     );
                 } else {
@@ -412,6 +438,133 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ============================================================
+    //  FIDÉLITÉ : RECHERCHE & SÉLECTION DU CLIENT
+    // ============================================================
+    function chercherClients(terme) {
+        if (!clientResults || !terme.trim()) { cacherResultats(); return; }
+        fetch(BASE + 'api/clients/search?q=' + encodeURIComponent(terme.trim()))
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var liste = (data && data.clients) || [];
+                if (liste.length === 0) {
+                    clientResults.innerHTML =
+                        '<div class="list-group-item text-muted">Aucun client trouvé.</div>';
+                } else {
+                    clientResults.innerHTML = liste.map(function (c) {
+                        var label = escapeHtml(c.nom || 'Client #' + c.id);
+                        if (c.code_fidelite) label += ' <code>' + escapeHtml(c.code_fidelite) + '</code>';
+                        return '<button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" ' +
+                            'data-client=\'' + JSON.stringify(c).replace(/'/g, '&#39;') + '\'>' +
+                            '<span>' + label +
+                            (c.telephone ? '<br><small class="text-muted">' + escapeHtml(c.telephone) + '</small>' : '') +
+                            '</span>' +
+                            '<span class="badge text-bg-primary">' + (c.points_fidelite || 0) + ' pts</span>' +
+                            '</button>';
+                    }).join('');
+                    clientResults.style.display = 'block';
+                    clientResults.querySelectorAll('button[data-client]').forEach(function (btn) {
+                        btn.addEventListener('click', function () {
+                            var c = JSON.parse(btn.dataset.client);
+                            selectionnerClient(c);
+                        });
+                    });
+                }
+                clientResults.style.display = 'block';
+            })
+            .catch(function () {
+                if (clientResults) {
+                    clientResults.innerHTML = '<div class="list-group-item text-danger">Erreur réseau.</div>';
+                    clientResults.style.display = 'block';
+                }
+            });
+    }
+
+    function cacherResultats() {
+        if (clientResults) { clientResults.style.display = 'none'; }
+    }
+
+    function selectionnerClient(c) {
+        clientActuel = c;
+        cacherResultats();
+        if (clientSearch) clientSearch.value = '';
+        if (inpClientId) inpClientId.value = c.id;
+        if (inpPointsUtilises) inpPointsUtilises.value = 0;
+        if (pointsUtilises) pointsUtilises.value = 0;
+
+        if (clientChip && clientNom && clientSolde) {
+            clientChip.classList.remove('d-none');
+            clientNom.textContent = c.nom || ('Client #' + c.id);
+            clientSolde.textContent = c.consentement_fidelite
+                ? (c.points_fidelite || 0) + ' points disponibles'
+                : 'Pas de consentement fidélité';
+        }
+        if (zonePoints) {
+            zonePoints.classList.toggle('d-none', !(c.consentement_fidelite && (c.points_fidelite || 0) >= FIDELITE.minPoints));
+        }
+        recalculerPaiement();
+        if (scanInput) scanInput.focus();
+    }
+
+    function retirerClient() {
+        clientActuel = null;
+        if (clientChip) clientChip.classList.add('d-none');
+        if (zonePoints) zonePoints.classList.add('d-none');
+        if (inpClientId) inpClientId.value = 0;
+        if (inpPointsUtilises) inpPointsUtilises.value = 0;
+        if (pointsUtilises) pointsUtilises.value = 0;
+        if (lblRemiseFidelite) lblRemiseFidelite.textContent = '';
+        recalculerPaiement();
+        if (scanInput) scanInput.focus();
+    }
+
+    if (clientSearch) {
+        clientSearch.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                chercherClients(clientSearch.value);
+            }
+        });
+    }
+    if (btnClientSearch) {
+        btnClientSearch.addEventListener('click', function () {
+            chercherClients(clientSearch ? clientSearch.value : '');
+        });
+    }
+    if (btnClientClear) {
+        btnClientClear.addEventListener('click', retirerClient);
+    }
+    if (pointsUtilises) {
+        pointsUtilises.addEventListener('input', function () {
+            if (inpPointsUtilises) inpPointsUtilises.value = Math.max(0, parseInt(pointsUtilises.value || '0', 10) || 0);
+            recalculerPaiement();
+        });
+    }
+    document.addEventListener('click', function (e) {
+        if (clientResults && !e.target.closest('#panneauClient')) cacherResultats();
+    });
+
+    // Remise fidélité : usage plafonné (solde, minimum, total de la vente)
+    function calculerRemiseFidelite() {
+        if (!FIDELITE.actif || !clientActuel || !pointsUtilises || !lblRemiseFidelite) return 0;
+        var pts = Math.max(0, parseInt(pointsUtilises.value || '0', 10) || 0);
+        var solde = Math.max(0, parseInt(clientActuel.points_fidelite || 0, 10) || 0);
+        var usage = Math.min(solde, pts);
+        if (usage > 0 && totalBrut > 0) {
+            var maxU = Math.floor(totalBrut * 100 / FIDELITE.valeurPoint);
+            usage = Math.min(usage, Math.max(0, maxU));
+        }
+        if (usage > 0 && usage < FIDELITE.minPoints) {
+            lblRemiseFidelite.innerHTML = '<span class="text-danger">Minimum ' + FIDELITE.minPoints + ' points pour une remise.</span>';
+            return 0;
+        }
+        var remise = Math.round(usage * FIDELITE.valeurPoint) / 100;
+        lblRemiseFidelite.innerHTML = usage > 0
+            ? '<strong>' + formatMoney(remise) + '</strong> de remise — ' + usage + ' points'
+            : 'Saisissez le nombre de points à utiliser.';
+        return remise;
+    }
+
+    // ============================================================
     //  RENDU DU PANIER + RECALCUL
     // ============================================================
     function rafraichirPanier() {
@@ -485,18 +638,25 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         var montantTva = totalTva;
-        var totalTtc = totalHt + montantTva;
+        totalBrut = totalHt + montantTva;
 
         totalHtEl.textContent    = formatMoney(totalHt);
-        totalTtcEl.textContent   = formatMoney(totalTtc);
-        totalTtcEl.dataset.raw   = totalTtc.toFixed(2);
         if (tvaDisplay) tvaDisplay.textContent = formatMoney(montantTva);
         nbArticlesEl.textContent = nbArticles;
 
-        var inpTotalTtc = document.getElementById('inpTotalTtc');
-        if (inpTotalTtc) inpTotalTtc.value = totalTtc.toFixed(2);
-
+        mettreAJourTotaux();
         recalculerPaiement();
+    }
+
+    // Met à jour le total TTC affiché (brut − remise fidélité) et le champ caché
+    function mettreAJourTotaux() {
+        var ttc = Math.max(0, totalBrut - calculerRemiseFidelite());
+        totalTtcEl.textContent   = formatMoney(ttc);
+        totalTtcEl.dataset.raw   = ttc.toFixed(2);
+        totalTtcEl.dataset.brut  = totalBrut.toFixed(2);
+        var inpTotalTtc = document.getElementById('inpTotalTtc');
+        if (inpTotalTtc) inpTotalTtc.value = ttc.toFixed(2);
+        return ttc;
     }
 
     // ============================================================
@@ -540,7 +700,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (montantCarte) montantCarte.addEventListener('input', recalculerPaiement);
 
     function recalculerPaiement() {
-        var ttc = parseFloat(document.getElementById('inpTotalTtc')?.value || 0);
+        var ttc = mettreAJourTotaux();
         var especes = parseFloat(inpMontantPaye?.value || 0);
         var mobile = parseFloat(montantMobile?.value || 0);
         var carte = parseFloat(montantCarte?.value || 0);
@@ -667,6 +827,10 @@ document.addEventListener('DOMContentLoaded', function () {
             timestamp:      new Date().toISOString(),
             user_id:        (config.user_id || 0),
             magasin_id:     (config.magasin_id || 0),
+            client_id:      (clientActuel ? clientActuel.id : 0),
+            points_utilises: clientActuel
+                ? Math.max(0, parseInt(pointsUtilises ? pointsUtilises.value || '0' : '0', 10) || 0)
+                : 0,
             lignes:         lignes,
             total_ht:       Math.round(totalHt * 100) / 100,
             tva_taux:       TAUX_TVA,
@@ -687,6 +851,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Réinitialiser le panier
         panier = {};
+        retirerClient();
         rafraichirPanier();
         if (inpMontantPaye) inpMontantPaye.value = '';
         if (montantMobile) montantMobile.value = '';

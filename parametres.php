@@ -54,6 +54,24 @@ $sections = [
             ['cle'=>'ticket_format', 'label'=>'Format papier', 'type'=>'select', 'defaut'=>'80mm', 'options'=>['80mm'=>'80 mm', '58mm'=>'58 mm']],
         ],
     ],
+    'fidelite' => [
+        'titre' => 'Programme de fidélité',
+        'icone' => 'bi-stars',
+        'champs' => [
+            ['cle'=>'fidelite_actif', 'label'=>'Activer le programme de fidélité', 'type'=>'checkbox', 'defaut'=>'0'],
+            ['cle'=>'fidelite_points_par_devise', 'label'=>'Devise dépensée pour gagner 1 point (ex : 100 = 1 pt / 100 FCFA)', 'type'=>'number', 'defaut'=>'100', 'min'=>1, 'step'=>'1'],
+            ['cle'=>'fidelite_valeur_point', 'label'=>'Valeur d\'un point (1 point = montant × 100)', 'type'=>'number', 'defaut'=>'1', 'min'=>1, 'step'=>'1'],
+            ['cle'=>'fidelite_min_points_usage', 'label'=>'Seuil minimal de points pour une remise', 'type'=>'number', 'defaut'=>'10', 'min'=>1, 'step'=>'1'],
+        ],
+    ],
+    'conformite' => [
+        'titre' => 'Conformité (NF525 / RGPD)',
+        'icone' => 'bi-shield-check',
+        'champs' => [
+            ['cle'=>'archives_conservation_annees', 'label'=>'Conservation des archives de caisse (années)', 'type'=>'number', 'defaut'=>'6', 'min'=>1, 'step'=>'1'],
+            ['cle'=>'rgpd_retention_clients_mois', 'label'=>'Rétention clients sans activité avant anonymisation (mois)', 'type'=>'number', 'defaut'=>'36', 'min'=>1, 'step'=>'1'],
+        ],
+    ],
     'apparence' => [
         'titre' => 'Application',
         'icone' => 'bi-window-sidebar',

@@ -1,0 +1,163 @@
+{# templates/documentation.html.twig — Guide utilisateur par rôle #}
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    {# ── En-tête de bienvenue ── #}
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-body">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon" style="width:52px;height:52px;font-size:1.6rem;">
+                    <i class="bi bi-journal-bookmark"></i>
+                </div>
+                <div>
+                    <h1 class="h4 mb-1">Documentation & guide d'utilisation</h1>
+                    <p class="text-muted mb-0">
+                        Bienvenue <strong>{{ user.nom|default('') }}</strong> ({{ role|default('') }}) —
+                        magasin actif : <strong>{{ nom_magasin|default('—') }}</strong>.
+                        Choisissez un onglet pour découvrir les fonctions de chaque rôle et la marche à suivre.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Onglets par rôle (masqués si un seul rôle visible) ── #}
+    {% if liste_roles|length > 1 %}
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        {% for r in liste_roles %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {{ r == role_courant ? 'active' : '' }}" data-bs-toggle="tab"
+                        data-bs-target="#tab-doc-{{ r|lower }}" type="button" role="tab">
+                    <i class="bi {{ guides[r].icon|default('bi-person') }} me-1"></i> {{ r }}
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="tab-content">
+        {% for r in liste_roles %}
+            {% set g = guides[r] %}
+            <div class="tab-pane fade {{ r == role_courant ? 'show active' : '' }}" id="tab-doc-{{ r|lower }}" role="tabpanel">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start gap-3">
+                            <span class="badge text-bg-{{ g.couleur|default('primary') }} px-3 py-2 fs-6">
+                                <i class="bi {{ g.icon|default('bi-person') }} me-1"></i> {{ g.role_nom }}
+                            </span>
+                            <p class="mb-0 text-muted">{{ g.intro|default('') }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    {% for mod in g.modules %}
+                        <div class="col-md-6">
+                            <div class="card shadow-sm h-100 doc-module">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="stat-icon"><i class="bi {{ mod.icon }}"></i></span>
+                                        <h2 class="h6 mb-0">{{ mod.titre }}</h2>
+                                    </div>
+                                    <p class="text-muted small mb-3">{{ mod.description }}</p>
+                                    {% if mod.etapes is defined and mod.etapes|length > 0 %}
+                                        <ol class="doc-steps mb-3">
+                                            {% for etape in mod.etapes %}
+                                                <li>{{ etape }}</li>
+                                            {% endfor %}
+                                        </ol>
+                                    {% endif %}
+                                    {% if mod.page is defined and mod.page != '' %}
+                                        <a href="{{ base_url }}{{ mod.page }}.php" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-box-arrow-up-right me-1"></i> Ouvrir {{ mod.titre }}
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {# ── Astuces générales ── #}
+    <div class="card border-0 bg-light mt-5">
+        <div class="card-body">
+            <h2 class="h6 text-uppercase text-muted mb-3"><i class="bi bi-lightbulb me-1"></i> Astuces & raccourcis</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="d-flex gap-2">
+                        <i class="bi bi-keyboard text-primary"></i>
+                        <div>
+                            <strong>Caisse</strong>
+                            <p class="small text-muted mb-0">F2 : vider le panier · F8 : valider la vente · douchette = saisie code-barres + Entrée.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex gap-2">
+                        <i class="bi bi-shop text-success"></i>
+                        <div>
+                            <strong>Multi-magasins</strong>
+                            <p class="small text-muted mb-0">Le Directeur change son magasin de suivi via le sélecteur de la topbar ; chaque utilisateur travaille sur son magasin d'affectation.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex gap-2">
+                        <i class="bi bi-cloud-arrow-down text-warning"></i>
+                        <div>
+                            <strong>Hors-ligne</strong>
+                            <p class="small text-muted mb-0">La caisse fonctionne sans réseau : les ventes sont mises en file d'attente et synchronisées automatiquement à la reconnexion.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex gap-2">
+                        <i class="bi bi-shield-check text-danger"></i>
+                        <div>
+                            <strong>Tout est tracé</strong>
+                            <p class="small text-muted mb-0">Chaque action sensible est journalisée dans le Journal d'activité (consultable par le Directeur).</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex gap-2">
+                        <i class="bi bi-tag text-info"></i>
+                        <div>
+                            <strong>FEFO (DLC)</strong>
+                            <p class="small text-muted mb-0">Les articles périssables partent en priorité "premier expiré, premier sorti" : écoulez les lots urgents avant les nouveaux.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex gap-2">
+                        <i class="bi bi-lock text-secondary"></i>
+                        <div>
+                            <strong>Windows de clôture</strong>
+                            <p class="small text-muted mb-0">Une clôture de caisse verrouille la journée : plus aucune annulation de facture ensuite.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts_extra %}
+    <script nonce="{{ csp_nonce_val }}">
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.nav-tabs button[data-bs-toggle="tab"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    localStorage.setItem('eStock_doc_tab', btn.getAttribute('data-bs-target'));
+                });
+            });
+            var saved = localStorage.getItem('eStock_doc_tab');
+            if (saved) {
+                var btn = document.querySelector('.nav-tabs button[data-bs-target="' + saved + '"]');
+                if (btn) { bootstrap.Tab.getOrCreateInstance(btn).show(); }
+            }
+        });
+    </script>
+{% endblock %}

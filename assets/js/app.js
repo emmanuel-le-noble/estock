@@ -69,6 +69,33 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.key === 'Escape') closeSidebar();
     });
 
+    // ----- Sidebar : sections pliables / dépliables -----
+    // L'état est mémorisé dans localStorage ; une section contenant la page
+    // active est toujours ouverte.
+    var navSections  = document.querySelectorAll('.nav-section');
+    var collapsedMap = {};
+    try { collapsedMap = JSON.parse(localStorage.getItem('eStock_side_collapsed') || '{}') || {}; }
+    catch (e) { collapsedMap = {}; }
+
+    navSections.forEach(function (section) {
+        var key = section.getAttribute('data-section') || '';
+        var hasActive = !!section.querySelector('.nav-link.active');
+        var open = hasActive ? true : (collapsedMap[key] !== true);
+        section.classList.toggle('open', open);
+
+        var head = section.querySelector('.nav-section-head');
+        if (!head) return;
+        head.setAttribute('aria-expanded', open ? 'true' : 'false');
+
+        head.addEventListener('click', function () {
+            var now = section.classList.toggle('open');
+            head.setAttribute('aria-expanded', now ? 'true' : 'false');
+            collapsedMap[key] = !now;
+            try { localStorage.setItem('eStock_side_collapsed', JSON.stringify(collapsedMap)); }
+            catch (e) { /* stockage indisponible : on ignore */ }
+        });
+    });
+
     // ----- Auto-focus -----
     var focusEl = document.querySelector('[data-autofocus]');
     if (focusEl) focusEl.focus();

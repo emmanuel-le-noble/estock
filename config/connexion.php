@@ -42,19 +42,56 @@ _load_dotenv(__DIR__ . '/../.env');
 // ============================================================
 //  1. PARAMÈTRES DE CONNEXION  (à adapter à votre WampServer)
 // ============================================================
-define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');
-define('DB_NAME', getenv('DB_NAME') ?: 'estock_db');
+
+// Environnement applicatif : 'development' ou 'production'
+define('APP_ENV', getenv('APP_ENV') ?: 'development');
+$__is_cli = (php_sapi_name() === 'cli');
+$__is_production = APP_ENV === 'production';
+
+/**
+ * En production, la configuration manquante est une erreur fatale (aucun
+ * fallback silencieux). En développement, un fallback est accepté mais
+ * toujours journalisé en alerte.
+ */
+function __require_env(string $key, string $default, string $label): string {
+    $val = getenv($key);
+    if ($val !== false && $val !== '') {
+        return $val;
+    }
+    if (defined('APP_ENV') && APP_ENV === 'production') {
+        error_log("[CRITIQUE] $label ($key) non définie en environnement production. Démarrage refusé.");
+        http_response_code(500);
+        die("Configuration incomplète : $label non définie en environnement production. Configurez la variable d'environnement $key.");
+    }
+    error_log("[ALERTE] $label ($key) non définie — valeur par défaut utilisée (mode développement uniquement).");
+    return $default;
+}
+
+define('DB_HOST', __require_env('DB_HOST', '127.0.0.1', 'Hôte MySQL'));
+define('DB_NAME', __require_env('DB_NAME', 'estock_db', 'Nom de la base MySQL'));
 
 $dbUser = getenv('DB_USER');
 if ($dbUser === false || $dbUser === '') {
-    error_log('[CRITIQUE] DB_USER non défini dans l\'environnement.');
+    if ($__is_production) {
+        error_log('[CRITIQUE] DB_USER non défini en environnement production.');
+        http_response_code(500);
+        die('Configuration incomplète : DB_USER non définie en environnement production.');
+    }
+    error_log('[ALERTE] DB_USER non défini — utilisateur "root" utilisé (mode développement uniquement).');
     $dbUser = 'root';
 }
 define('DB_USER', $dbUser);
 
+// DB_PASS est TOUJOURS bloquant : aucun fallback vers un mot de passe par
+// défaut, quel que soit l'environnement (le moindre défaut de secret serait
+// un trou de sécurité). La distinction dev/prod porte sur le message et le
+// comportement de démarrage (page d'erreur vs. message CLI).
 $dbPass = getenv('DB_PASS');
 if ($dbPass === false || $dbPass === '') {
     error_log('[CRITIQUE] DB_PASS non défini dans l\'environnement.');
+    if ($__is_cli) {
+        die("Erreur : DB_PASS non définie. Configurez votre fichier .env ou les variables d'environnement avant de lancer les scripts CLI.\n");
+    }
     http_response_code(500);
     die('Variable DB_PASS non définie. Configurez votre fichier .env ou les variables d\'environnement.');
 }
@@ -70,10 +107,18 @@ define('ROLE_VENDEUR', 'Vendeur');
 $secretKey = getenv('SECRET_URL_KEY');
 if ($secretKey === false || strlen($secretKey) < 32) {
     error_log('[CRITIQUE] SECRET_URL_KEY non défini ou trop court (< 32 caractères).');
+    if ($__is_cli) {
+        die("Erreur : SECRET_URL_KEY manquante ou trop courte (minimum 32 caractères). Configurez votre fichier .env.\n");
+    }
     http_response_code(500);
     die('SECRET_URL_KEY manquant ou trop court. Configurez votre fichier .env (minimum 32 caractères).');
 }
 define('SECRET_URL_KEY', $secretKey);
+
+// Version applicative centralisée (affichée en pied de page / paramètres)
+if (!defined('APP_VERSION')) {
+    define('APP_VERSION', '2.0.0');
+}
 
 // ============================================================
 //  1bis. URL RACINE DYNAMIQUE (s'adapte au sous-dossier Wamp)
@@ -95,6 +140,8 @@ $options = [
 
 try {
     $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+    // Rendu disponible pour les inclusions en portée non globale (ex : bootstrap PHPUnit)
+    $GLOBALS['pdo'] = $pdo;
 } catch (PDOException $e) {
     http_response_code(500);
     error_log('Erreur connexion BDD: ' . $e->getMessage());
@@ -104,7 +151,7 @@ try {
 // ============================================================
 //  3. SESSION
 // ============================================================
-if (session_status() === PHP_SESSION_NONE) {
+if (php_sapi_name() !== 'cli' && session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
@@ -116,6 +163,9 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Générer un nonce CSP par requête (plus de réutilisation inter-requests)
+if (php_sapi_name() === 'cli') {
+    $_SESSION = [];
+}
 $_SESSION['csp_nonce'] = bin2hex(random_bytes(16));
 
 // ============================================================
@@ -242,10 +292,27 @@ function user_id(): int {
     return (int)($_SESSION['user']['id'] ?? 0);
 }
 
-/** ID du magasin de l'utilisateur courant (1 par défaut). */
+/** ID du magasin de suivi actif (choisi par le directeur, sinon magasin d'appartenance, 1 par défaut). */
 function user_magasin_id(): int {
+    $actif = (int)($_SESSION['magasin_actif'] ?? 0);
+    if ($actif > 0) {
+        return $actif;
+    }
     $mId = (int)($_SESSION['user']['magasin_id'] ?? 1);
     return $mId > 0 ? $mId : 1;
+}
+
+/** Vrai si l'utilisateur n'est rattaché à aucun magasin (directeur global). */
+function user_magasin_global(): bool {
+    return empty($_SESSION['user']['magasin_id']);
+}
+
+/** Nom du magasin de suivi actif (pour la topbar). */
+function user_magasin_nom(PDO $pdo): string {
+    $nom = $pdo->prepare("SELECT nom FROM magasins WHERE id = ?");
+    $nom->execute([user_magasin_id()]);
+    $res = $nom->fetchColumn();
+    return $res !== false ? (string)$res : '—';
 }
 
 /**
@@ -513,6 +580,8 @@ $twig->addFunction(new \Twig\TwigFunction('param_app_name', 'param_app_name'));
 $twig->addFunction(new \Twig\TwigFunction('peut', 'peut'));
 $twig->addFunction(new \Twig\TwigFunction('generate_signed_url', 'generate_signed_url'));
 $twig->addFunction(new \Twig\TwigFunction('url_sign', 'url_sign'));
+$twig->addFunction(new \Twig\TwigFunction('user_magasin_id', 'user_magasin_id'));
+$twig->addFunction(new \Twig\TwigFunction('user_magasin_nom', function() use ($pdo) { return user_magasin_nom($pdo); }));
 $twig->addFunction(new \Twig\TwigFunction('pagination_links', function($pagination, string $base_url = '?', array $extra = []) {
     if (is_array($pagination)) {
         $page = (int)($pagination['page'] ?? 1);
@@ -539,5 +608,5 @@ $twig->addGlobal('flash_messages', $_SESSION['flash'] ?? []);
 $twig->addGlobal('csrf_token', csrf_token());
 $twig->addGlobal('page_courante', $_GET['_page'] ?? str_replace('.php', '', basename($_SERVER['PHP_SELF'])));
 
-$twig->addGlobal('nb_alertes_topbar', (est_connecte() && peut_gerer_stock()) ? db_articles_low_stock_count($pdo) : 0);
-$twig->addGlobal('nb_alertes_peremption', (est_connecte() && peut('stock_consulter')) ? db_peremption_alert_count($pdo, 30) : 0);
+$twig->addGlobal('nb_alertes_topbar', (est_connecte() && peut_gerer_stock()) ? db_articles_low_stock_count($pdo, user_magasin_id()) : 0);
+$twig->addGlobal('nb_alertes_peremption', (est_connecte() && peut('stock_consulter')) ? db_peremption_alert_count($pdo, 30, user_magasin_id()) : 0);

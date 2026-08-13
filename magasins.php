@@ -80,5 +80,7 @@ $titre_page = 'Gestion des magasins';
 $sous_titre = 'Administration';
 
 echo $twig->render('magasins.html.twig', [
+    'titre_page' => $titre_page,
+    'sous_titre' => $sous_titre,
     'magasins' => $magasins,
 ]);

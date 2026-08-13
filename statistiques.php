@@ -31,21 +31,22 @@ if ($debut > $fin) {
 }
 
 // ---- Récupération des données ----
-$stats      = db_stats_period($pdo, $debut, $fin);
-$top        = db_stats_top_articles($pdo, $debut, $fin, 5);
-$daily      = db_stats_daily_sales($pdo, $debut, $fin);
+$mid = user_magasin_id();
+$stats      = db_stats_period($pdo, $debut, $fin, $mid);
+$top        = db_stats_top_articles($pdo, $debut, $fin, 5, $mid);
+$daily      = db_stats_daily_sales($pdo, $debut, $fin, $mid);
 $nb_ventes  = (int)($stats['nb_ventes'] ?? 0);
 $ca_total   = (float)($stats['ca_total'] ?? 0);
 $panier_moyen = $nb_ventes > 0 ? $ca_total / $nb_ventes : 0;
 
 // ---- Données comptables : Dépenses & Bénéfice Net ----
-$benefice   = db_stats_benefice_net($pdo, $debut, $fin);
+$benefice   = db_stats_benefice_net($pdo, $debut, $fin, $mid);
 $camv       = $benefice['camv'];
 $total_dep  = $benefice['depenses'];
 $benefice_n = $benefice['benefice'];
 $marge_brute = $benefice['marge_brute'];
-$dep_daily  = db_depenses_daily($pdo, $debut, $fin);
-$dep_cats   = db_depenses_by_categorie($pdo, $debut, $fin);
+$dep_daily  = db_depenses_daily($pdo, $debut, $fin, $mid);
+$dep_cats   = db_depenses_by_categorie($pdo, $debut, $fin, $mid);
 
 $titre_page = 'Statistiques';
 include __DIR__ . '/includes/header.php';

@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'nom'           => ['type' => 'string', 'trim' => true, 'required' => true, 'max' => 150, 'redirect' => ''],
         'login'         => ['type' => 'string', 'trim' => true, 'required' => true, 'max' => 60, 'redirect' => ''],
         'role'          => ['type' => 'string', 'default' => ROLE_VENDEUR, 'whitelist' => [ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER, ROLE_VENDEUR]],
+        'magasin_id'    => ['type' => 'int', 'min' => 0],
         'mot_de_passe'  => ['type' => 'string'],
         'actif'         => ['type' => 'bool'],
     ], 'utilisateurs.php');
@@ -62,11 +63,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         redirect('utilisateurs.php');
     }
 
+    // Magasin d'appartenance : obligatoire pour tous les rôles sauf DIRECTEUR (global)
+    $magasin_utilisateur = (int)($data['magasin_id'] ?? 0);
+    if ($data['role'] !== ROLE_DIRECTEUR) {
+        if ($magasin_utilisateur <= 0) {
+            flash_error('Le magasin d\'appartenance est obligatoire pour ce rôle.');
+            redirect($form_url);
+        }
+        $stmt_m = $pdo->prepare("SELECT id FROM magasins WHERE id = ? AND actif = 1");
+        $stmt_m->execute([$magasin_utilisateur]);
+        if (!$stmt_m->fetch()) {
+            flash_error('Magasin sélectionné invalide ou inactif.');
+            redirect($form_url);
+        }
+    }
+
     db_transaction(
-        function(PDO $pdo) use ($data, $mdp) {
+        function(PDO $pdo) use ($data, $mdp, $magasin_utilisateur) {
             if ($data['id'] > 0) {
                 // Modification sans toucher au mot de passe
-                db_user_update_without_password($pdo, $data['id'], $data['nom'], $data['login'], $data['role'], $data['actif'] ? 1 : 0);
+                db_user_update_without_password($pdo, $data['id'], $data['nom'], $data['login'], $data['role'], $data['actif'] ? 1 : 0, $magasin_utilisateur);
             } else {
                 // Création : Mot de passe requis
                 if (trim($mdp) === '') { 
@@ -76,13 +92,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
                     throw new RuntimeException('Le mot de passe doit contenir au moins 8 caractères.'); 
                 }
                 $mdp_hash = password_hash($mdp, PASSWORD_BCRYPT);
-                db_user_insert($pdo, $data['nom'], $data['login'], $mdp_hash, $data['role'], $data['actif'] ? 1 : 0);
+                db_user_insert($pdo, $data['nom'], $data['login'], $mdp_hash, $data['role'], $data['actif'] ? 1 : 0, $magasin_utilisateur);
             }
         },
         'Utilisateur enregistré avec succès.',
         'Une erreur est survenue lors de l\'enregistrement.',
         'utilisateurs.php'
     );
+
+    // Mise à jour de la session si l'utilisateur s'est modifié lui-même (changement de magasin)
+    if ($data['id'] > 0 && $data['id'] === user_id()) {
+        $_SESSION['user']['magasin_id'] = $magasin_utilisateur;
+    }
 
     suivre_activite('MODIFICATION_UTILISATEUR', ($data['id'] > 0 ? 'Modification' : 'Création') . ' utilisateur "' . $data['login'] . '" (' . $data['role'] . ')');
 }
@@ -109,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'toggle') {
 
 // ---- Formulaire ----
 if ($action === 'nouveau' || $action === 'editer') {
-    $u = ['id' => '', 'nom' => '', 'login' => '', 'role' => ROLE_VENDEUR, 'actif' => 1];
+    $u = ['id' => '', 'nom' => '', 'login' => '', 'role' => ROLE_VENDEUR, 'magasin_id' => user_magasin_id(), 'actif' => 1];
     if ($action === 'editer') {
         $get_id = (int)($_GET['id'] ?? 0);
         if (!verify_url_signature($get_id, $_GET['token'] ?? '', ['action' => 'editer'])) {
@@ -147,6 +168,17 @@ if ($action === 'nouveau' || $action === 'editer') {
                                     <option value="<?= $r ?>" <?= $u['role'] === $r ? 'selected' : '' ?>><?= $r ?></option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+                        <?php $magasins_form = db_magasins_list($pdo); ?>
+                        <div class="mb-3">
+                            <label class="form-label">Magasin *</label>
+                            <select name="magasin_id" class="form-select">
+                                <option value="0">— Global (tous les magasins) —</option>
+                                <?php foreach ($magasins_form as $m): ?>
+                                    <option value="<?= (int)$m['id'] ?>" <?= (int)($u['magasin_id'] ?? 0) === (int)$m['id'] ? 'selected' : '' ?>><?= h($m['nom']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">Le stock, la caisse et les ventes de cet utilisateur seront rattachés à ce magasin.</div>
                         </div>
                         <?php if ($action === 'nouveau'): ?>
                         <div class="mb-3">
@@ -186,7 +218,7 @@ include __DIR__ . '/includes/header.php';
             <table class="table table-hover mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th>Nom</th><th>Login</th><th>Rôle</th>
+                        <th>Nom</th><th>Login</th><th>Rôle</th><th>Magasin</th>
                         <th class="text-center">Statut</th><th>Créé le</th><th class="text-center">Actions</th>
                     </tr>
                 </thead>
@@ -198,6 +230,7 @@ include __DIR__ . '/includes/header.php';
                         <td class="fw-semibold"><?= h($u['nom']) ?></td>
                         <td><code><?= h($u['login']) ?></code></td>
                         <td><span class="badge text-bg-<?= $couleur ?>"><?= h($u['role']) ?></span></td>
+                        <td><?= !empty($u['magasin_nom']) ? h($u['magasin_nom']) : '<span class="text-muted">Global</span>' ?></td>
                         <td class="text-center">
                             <?php if ($u['actif']): ?>
                                 <span class="badge text-bg-success">Actif</span>

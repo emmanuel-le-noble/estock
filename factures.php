@@ -25,7 +25,7 @@ $filters = [
 if (user_role() === ROLE_VENDEUR) {
     $filters['utilisateur_id'] = user_courant()['id'] ?? 0;
 }
-$search_sql = db_factures_search_sql($filters);
+$search_sql = db_factures_search_sql($filters, user_magasin_id());
 $result = paginate($search_sql['sql'], $search_sql['params'], 25);
 $factures = $result['items'];
 

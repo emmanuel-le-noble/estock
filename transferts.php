@@ -14,7 +14,7 @@ require_once __DIR__ . '/includes/helpers.php';
 exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER);
 
 $u = user_courant();
-$magasin_id = (int)($u['magasin_id'] ?? 0);
+$magasin_id = user_magasin_id();
 
 // ---- Traitement formulaire : nouveau transfert ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'transferer') {
@@ -72,6 +72,7 @@ $articles = db_articles_list_active($pdo);
 
 $titre_page = 'Transferts inter-magasins';
 echo $twig->render('transferts.html.twig', [
+    'titre_page'    => $titre_page,
     'transferts'    => $transferts,
     'magasins'      => $magasins,
     'articles'      => $articles,

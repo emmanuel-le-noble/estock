@@ -1,19 +1,30 @@
 <?php
 /**
  * apply_migrations.php — Application des migrations BDD eStock (version robuste).
- * Gère les instructions multi-lignes et les PREPARE/EXECUTE via PHP natif.
+ *
+ * Gère les instructions multi-lignes, les triggers BEGIN…END (via
+ * database/sql_splitter.php) et les PREPARE/EXECUTE via PHP natif.
+ *
+ * Usage :
+ *   php database/apply_migrations.php
+ *
+ * Toutes les migrations sont IDEMPOTENTES : elles peuvent être relancées
+ * sans risque sur une base déjà à jour.
  */
-$pdo = new PDO(
-    'mysql:host=127.0.0.1;dbname=estock_db;charset=utf8mb4',
-    'root', 'admin',
-    [
-        PDO::ATTR_ERRMODE                  => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE       => PDO::FETCH_ASSOC,
-        PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
-    ]
-);
 
-echo "=== Application des migrations BDD eStock ===\n\n";
+if (php_sapi_name() !== 'cli') {
+    http_response_code(403);
+    exit("Ce script doit être exécuté en ligne de commande (CLI).\n");
+}
+
+require_once __DIR__ . '/../config/connexion.php';
+require_once __DIR__ . '/sql_splitter.php';
+
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    exit("Erreur : connexion PDO indisponible.\n");
+}
+
+echo "=== Application des migrations BDD eStock (" . DB_NAME . ") ===\n\n";
 
 // ----------------------------------------------------------------
 // Helpers
@@ -22,21 +33,55 @@ function run_sql(PDO $pdo, string $sql, string $label): void {
     $sql = trim($sql);
     if ($sql === '') return;
     try {
-        $pdo->exec($sql . ';');
-        echo "  ✅ $label\n";
+        $pdo->exec($sql);
+        echo "  OK $label\n";
     } catch (\PDOException $e) {
         $msg = $e->getMessage();
         if (
             str_contains($msg, 'Duplicate column name') ||
             str_contains($msg, 'already exists')        ||
             str_contains($msg, 'Duplicate entry')       ||
-            str_contains($msg, 'Duplicate key name')
+            str_contains($msg, 'Duplicate key name')    ||
+            str_contains($msg, 'check that column/key exists')
         ) {
             echo "  [SKIP déjà appliqué] $label\n";
         } else {
-            echo "  ❌ ERREUR ($label): $msg\n";
+            echo "  ERREUR ($label): $msg\n";
         }
     }
+}
+
+/** Applique un fichier .sql idempotent (découpage correct des triggers). */
+function apply_sql_file(PDO $pdo, string $file, string $label): int {
+    if (!is_file($file)) {
+        echo "  [ABSENT] $label ($file)\n";
+        return 0;
+    }
+    $sql = file_get_contents($file);
+    $stmts = split_sql_statements($sql);
+    $ok = 0;
+    foreach ($stmts as $stmt) {
+        try {
+            $pdo->exec($stmt);
+            $ok++;
+        } catch (\PDOException $e) {
+            $msg = $e->getMessage();
+            if (
+                str_contains($msg, 'Duplicate column name') ||
+                str_contains($msg, 'already exists')        ||
+                str_contains($msg, 'Duplicate entry')       ||
+                str_contains($msg, 'Duplicate key name')    ||
+                str_contains($msg, 'check that column/key exists') ||
+                str_contains($msg, 'error in your SQL syntax')
+            ) {
+                echo "  [SKIP ou INSTRUCTION NON APPLICABLE] $label : " . substr($msg, 0, 120) . "\n";
+            } else {
+                echo "  ERREUR ($label) : " . $msg . "\n";
+            }
+        }
+    }
+    echo "  -> $label : $ok instruction(s) OK\n";
+    return $ok;
 }
 
 function column_exists(PDO $pdo, string $table, string $column): bool {
@@ -55,6 +100,34 @@ function table_exists(PDO $pdo, string $table): bool {
     ");
     $stmt->execute([$table]);
     return (int)$stmt->fetchColumn() > 0;
+}
+
+function trigger_exists(PDO $pdo, string $trigger): bool {
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) FROM INFORMATION_SCHEMA.TRIGGERS
+        WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME = ?
+    ");
+    $stmt->execute([$trigger]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function seed_params(PDO $pdo, array $params): void {
+    $stmt = $pdo->prepare(
+        "INSERT INTO parametres (cle, valeur, categorie, ordre, description)
+         VALUES (:cle, :val, :cat, :ordre, :desc)
+         ON DUPLICATE KEY UPDATE categorie = VALUES(categorie), description = VALUES(description)"
+    );
+    $ordre = 1000;
+    foreach ($params as $cle => $spec) {
+        $stmt->execute([
+            ':cle'   => $cle,
+            ':val'   => $spec['valeur'],
+            ':cat'   => $spec['categorie'],
+            ':ordre' => $spec['ordre'] ?? $ordre++,
+            ':desc'  => $spec['description'] ?? '',
+        ]);
+    }
+    echo "  OK parametres seedés\n";
 }
 
 // ================================================================
@@ -168,7 +241,7 @@ $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
     CROSS JOIN permissions p
     WHERE p.cle_permission IN ('inventaire_gerer','inventaire_consulter')");
 
-echo "  ✅ Permissions inventaire\n\n";
+echo "  OK Permissions inventaire\n\n";
 
 // ================================================================
 // MIGRATION : retours.sql (Module 5)
@@ -230,7 +303,7 @@ $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
     CROSS JOIN permissions p
     WHERE p.cle_permission IN ('retours_gerer','retours_consulter')");
 
-echo "  ✅ Permissions retours\n\n";
+echo "  OK Permissions retours\n\n";
 
 // ================================================================
 // MIGRATION : promotions.sql (Module 6)
@@ -276,7 +349,7 @@ $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
     CROSS JOIN permissions p
     WHERE p.cle_permission IN ('promotions_gerer','promotions_consulter')");
 
-echo "  ✅ Permissions promotions\n\n";
+echo "  OK Permissions promotions\n\n";
 
 // ================================================================
 // MIGRATION : securite_comp.sql (Module 10) — 2FA TOTP columns
@@ -303,9 +376,146 @@ if (!column_exists($pdo, 'utilisateurs', 'totp_actif')) {
 echo "\n";
 
 // ================================================================
+// MIGRATION : workflow_validation_achats — Statut En_Attente + approbation Directeur
+// ================================================================
+echo "[MIGRATION] workflow_validation_achats\n";
+
+if (table_exists($pdo, 'commandes_fournisseur')) {
+    $stmt = $pdo->query("SHOW COLUMNS FROM commandes_fournisseur LIKE 'statut'");
+    $col = $stmt->fetch();
+    if ($col && !str_contains((string)$col['Type'], 'En_Attente')) {
+        run_sql($pdo,
+            "ALTER TABLE `commandes_fournisseur` MODIFY `statut` ENUM('Brouillon','En_Attente','Envoyee','Recue_Partielle','Recue','Annulee') NOT NULL DEFAULT 'Brouillon'",
+            "ALTER commandes_fournisseur.statut + En_Attente"
+        );
+    } else {
+        echo "  [SKIP] commandes_fournisseur.statut contient déjà En_Attente\n";
+    }
+} else {
+    echo "  [SKIP] table commandes_fournisseur absente (fichier commandes_fournisseur.sql requis)\n";
+}
+
+$pdo->exec("INSERT IGNORE INTO permissions (cle_permission, description, categorie) VALUES
+    ('achats_valider', 'Valider ou rejeter les commandes fournisseurs soumises (approbation)', 'Logistique')");
+
+$pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
+    SELECT 'Directeur', id FROM permissions WHERE cle_permission = 'achats_valider'");
+
+echo "  OK Permission achats_valider (Directeur)\n\n";
+
+// ================================================================
+// MIGRATION : compteurs_sequences.sql — numérotation atomique NF525
+// ================================================================
+echo "[MIGRATION] compteurs_sequences.sql\n";
+apply_sql_file($pdo, __DIR__ . '/compteurs_sequences.sql', 'compteurs_sequences');
+echo "\n";
+
+// ================================================================
+// MIGRATION : nf525.sql — certification anti-fraude TVA
+// ================================================================
+echo "[MIGRATION] nf525.sql\n";
+apply_sql_file($pdo, __DIR__ . '/nf525.sql', 'nf525');
+
+// Paramètres liés à la conformité
+seed_params($pdo, [
+    'facture_prefixe'             => ['valeur' => 'FAC', 'categorie' => 'financier', 'ordre' => 90,  'description' => 'Préfixe des numéros de facture'],
+    'facture_mentions_penalites'  => ['valeur' => '1',  'categorie' => 'boutique',  'ordre' => 90,  'description' => 'Afficher les mentions de pénalités de retard sur la facture PDF'],
+    'tva_intracom_boutique'       => ['valeur' => '',   'categorie' => 'boutique',  'ordre' => 95,  'description' => 'Numéro de TVA intracommunautaire de la boutique'],
+    'siret_boutique'              => ['valeur' => '',   'categorie' => 'boutique',  'ordre' => 100, 'description' => 'SIRET de la boutique (facturation B2B)'],
+    'archives_conservation_annees'=> ['valeur' => '6',  'categorie' => 'financier', 'ordre' => 100, 'description' => 'Durée de conservation des archives de caisse (années)'],
+]);
+echo "\n";
+
+// ================================================================
+// MIGRATION : rgpd.sql — conformité RGPD (clients, consentements)
+// ================================================================
+echo "[MIGRATION] rgpd.sql\n";
+apply_sql_file($pdo, __DIR__ . '/rgpd.sql', 'rgpd');
+
+seed_params($pdo, [
+    'rgpd_retention_clients_mois' => ['valeur' => '36', 'categorie' => 'financier', 'ordre' => 110, 'description' => 'Durée de rétention des données clients sans activité (mois, puis anonymisation)'],
+    'rgpd_contact_email'          => ['valeur' => '',   'categorie' => 'financier', 'ordre' => 111, 'description' => 'Contact RGPD / délégué à la protection des données'],
+]);
+echo "\n";
+
+// ================================================================
+// MIGRATION : fidelite.sql — programme de fidélité
+// ================================================================
+echo "[MIGRATION] fidelite.sql\n";
+apply_sql_file($pdo, __DIR__ . '/fidelite.sql', 'fidelite');
+
+seed_params($pdo, [
+    'fidelite_actif'             => ['valeur' => '0', 'categorie' => 'financier', 'ordre' => 120, 'description' => 'Activer le programme de fidélité'],
+    'fidelite_points_par_devise' => ['valeur' => '100', 'categorie' => 'financier', 'ordre' => 121, 'description' => 'Unités de devise dépensées pour gagner 1 point (ex : 100 = 1 pt / 100 FCFA)'],
+    'fidelite_valeur_point'      => ['valeur' => '1', 'categorie' => 'financier', 'ordre' => 122, 'description' => 'Valeur en devise d\'un point (1 point = montant × 100)'],
+    'fidelite_min_points_usage'  => ['valeur' => '10', 'categorie' => 'financier', 'ordre' => 123, 'description' => 'Seuil minimal de points pour utiliser une réduction fidélité'],
+]);
+echo "\n";
+
+// ================================================================
+// MIGRATION : points_reversals.sql — cycle de vie des points fidélité
+// ================================================================
+echo "[MIGRATION] points_reversals.sql\n";
+apply_sql_file($pdo, __DIR__ . '/points_reversals.sql', 'points_reversals');
+echo "\n";
+
+// ================================================================
+// MIGRATION : unite_mesure.sql — vente au poids
+// ================================================================
+echo "[MIGRATION] unite_mesure.sql\n";
+apply_sql_file($pdo, __DIR__ . '/unite_mesure.sql', 'unite_mesure');
+echo "\n";
+
+// ================================================================
+// MIGRATION : valorisation_stock.sql — CUMP / FIFO
+// ================================================================
+echo "[MIGRATION] valorisation_stock.sql\n";
+apply_sql_file($pdo, __DIR__ . '/valorisation_stock.sql', 'valorisation_stock');
+
+seed_params($pdo, [
+    'valorisation_methode' => ['valeur' => 'CUMP', 'categorie' => 'financier', 'ordre' => 130, 'description' => 'Méthode de valorisation du stock : CUMP ou FIFO'],
+]);
+echo "\n";
+
+// ================================================================
+// MIGRATION : multi_devises.sql — devises fournisseurs
+// ================================================================
+echo "[MIGRATION] multi_devises.sql\n";
+apply_sql_file($pdo, __DIR__ . '/multi_devises.sql', 'multi_devises');
+echo "\n";
+
+// ================================================================
+// MIGRATION : emails_queue.sql — file d'attente des e-mails
+// ================================================================
+echo "[MIGRATION] emails_queue.sql\n";
+apply_sql_file($pdo, __DIR__ . '/emails_queue.sql', 'emails_queue');
+
+// ================================================================
+// MIGRATION : permissions conformité (archives, clients, export FEC)
+// ================================================================
+echo "[MIGRATION] permissions_conformite\n";
+
+$pdo->exec("INSERT IGNORE INTO permissions (cle_permission, description, categorie) VALUES
+    ('conformite_archives',  'Générer et consulter les archives de caisse (NF525)', 'config'),
+    ('conformite_export_fec', 'Exporter les écritures comptables (FEC)',            'config'),
+    ('clients_consulter',    'Consulter les clients (fidélité, RGPD)',              'ventes'),
+    ('clients_gerer',        'Créer / modifier les clients et consentements',       'ventes')");
+
+$pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
+    SELECT r.role_nom, p.id FROM
+    (SELECT 'Directeur' AS role_nom UNION SELECT 'Admin') r
+    CROSS JOIN permissions p
+    WHERE p.cle_permission IN ('conformite_archives','conformite_export_fec','clients_consulter','clients_gerer')");
+
+$pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
+    SELECT 'Vendeur', id FROM permissions WHERE cle_permission IN ('clients_consulter','clients_gerer')");
+
+echo "  OK Permissions conformité & clients\n\n";
+
+// ================================================================
 // VÉRIFICATION FINALE
 // ================================================================
 $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
-echo "=== Tables dans estock_db ===\n";
+echo "=== Tables dans " . DB_NAME . " ===\n";
 echo implode(", ", $tables) . "\n\n";
 echo "=== Migration terminée ===\n";

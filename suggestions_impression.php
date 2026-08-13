@@ -8,7 +8,7 @@ require_once __DIR__ . '/includes/helpers.php';
 exiger_role(ROLE_DIRECTEUR, ROLE_MAGASINIER);
 
 $u = user_courant();
-$magasin_id = (int)($u['magasin_id'] ?? 0);
+$magasin_id = user_magasin_id();
 $articles = db_articles_low_stock_with_supplier($pdo, 100, $magasin_id);
 $groupes  = generate_restock_list_by_supplier(is_array($articles) ? $articles : []);
 $nb_total = is_array($articles) ? count($articles) : 0;

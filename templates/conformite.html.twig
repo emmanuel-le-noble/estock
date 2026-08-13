@@ -1,0 +1,168 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+<div class="alert alert-secondary d-flex align-items-start gap-2">
+    <i class="bi bi-shield-check fs-5"></i>
+    <div>
+        <strong>Certification anti-fraude TVA (NF 525)</strong> — loi 2016-1918 art. 88,
+        arrêté du 20/10/2016. Chaînage cryptographique des factures et des clôtures,
+        immuabilité au niveau base de données (triggers), archives périodiques signées.
+        Voir <code>docs/conformite/nf525.md</code> pour la démarche de certification.
+    </div>
+</div>
+
+{# ---- 1. Intégrité de la chaîne ---- #}
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white fw-bold">
+        <i class="bi bi-link-45deg"></i> Intégrité de la chaîne cryptographique
+    </div>
+    <div class="card-body">
+        {% if not chainage_actif %}
+            <div class="alert alert-warning mb-0">
+                Les colonnes de chaînage ne sont pas installées. Exécutez
+                <code>php database/apply_migrations.php</code> (migration nf525.sql).
+            </div>
+        {% else %}
+            <div class="row text-center g-3 mb-3">
+                <div class="col-md-3">
+                    <div class="border rounded p-3">
+                        <div class="fs-3 fw-bold">{{ verification.total }}</div>
+                        <div class="small text-muted">Factures au total</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3">
+                        <div class="fs-3 fw-bold text-success">{{ verification.verifiees }}</div>
+                        <div class="small text-muted">Hashes vérifiés</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3">
+                        <div class="fs-3 fw-bold {{ verification.manquantes > 0 ? 'text-warning' : 'text-muted' }}">{{ verification.manquantes }}</div>
+                        <div class="small text-muted">Non chaînées (avant activation)</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 {{ verification.ok ? 'border-success' : 'border-danger' }}">
+                        <div class="fs-3 fw-bold {{ verification.ok ? 'text-success' : 'text-danger' }}">{{ verification.ok ? 'CONFORME' : 'ALTÉRÉE' }}</div>
+                        <div class="small text-muted">{{ verification.erreurs|length }} erreur(s)</div>
+                    </div>
+                </div>
+            </div>
+
+            {% if verification.erreurs|length > 0 %}
+                <div class="alert alert-danger">
+                    <strong>Factures dont le hash ne correspond pas :</strong>
+                    {% for id in verification.erreurs %}<code>{{ id }}</code> {% endfor %}
+                    — une altération de la chaîne est détectée.
+                </div>
+            {% endif %}
+
+            <form method="post" action="conformite.php" class="d-flex align-items-center gap-3">
+                {{ csrf_field() }}
+                <input type="hidden" name="action" value="backfill">
+                <button type="submit" class="btn btn-warning"
+                        {{ nb_non_chainees == 0 ? 'disabled' : '' }}
+                        data-confirm="Chaîner rétroactivement {{ nb_non_chainees }} facture(s) antérieure(s) ?">
+                    <i class="bi bi-hammer"></i> Rattraper le chaînage ({{ nb_non_chainees }})
+                </button>
+                <span class="small text-muted">Idempotent — à exécuter une fois après l'activation du chaînage.</span>
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+{# ---- 2. Création d'une archive ---- #}
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white fw-bold">
+        <i class="bi bi-archive"></i> Archivage périodique (conservation {{ annees_conservation }} ans)    </div>
+    <div class="card-body">
+        <form method="post" action="conformite.php" class="row g-2 align-items-end">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="creer_archive">
+            <div class="col-md-3">
+                <label class="form-label small">Période du</label>
+                <input type="date" name="debut" class="form-control" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">au</label>
+                <input type="date" name="fin" class="form-control" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Magasin</label>
+                <select name="magasin_id" class="form-select">
+                    <option value="0">Tous</option>
+                    {% for m in magasins_dispo|default([]) %}
+                        <option value="{{ m.id }}" {{ magasin_id_defaut == m.id ? 'selected' : '' }}>{{ m.nom }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-archive-fill"></i> Créer l'archive signée
+                </button>
+                <span class="small text-muted d-block mt-1">Sommet de chaîne signé HMAC, fichier JSON conservé dans <code>archives/</code>.</span>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ---- 3. Liste des archives ---- #}
+<div class="card shadow-sm">
+    <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-collection"></i> Archives enregistrées ({{ total|default(0) }})</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Période</th>
+                        <th>Magasin</th>
+                        <th class="text-end">Factures</th>
+                        <th class="text-end">Total TTC</th>
+                        <th>Signature</th>
+                        <th>Conservé jusqu'au</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% if (archives|default([]))|length == 0 %}
+                    <tr><td colspan="7" class="text-center text-muted py-4">Aucune archive créée.</td></tr>
+                {% endif %}
+                {% for a in archives|default([]) %}
+                    <tr>
+                        <td>{{ date_fr(a.periode_debut, false) }} → {{ date_fr(a.periode_fin, false) }}</td>
+                        <td>{{ a.magasin_nom|default('Tous') }}</td>
+                        <td class="text-end">{{ a.nb_factures }}</td>
+                        <td class="text-end">{{ money(a.total_ttc) }}</td>
+                        <td>
+                            <code class="small" title="Vérifier : signature HMAC du hash_sommet">{{ a.signature|slice(0, 12) }}…</code>
+                        </td>
+                        <td class="small">{{ date_fr(a.conserve_jusqua, false) }}</td>
+                        <td class="text-end">
+                            <a href="{{ a.lien_download }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-download"></i></a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if (total_pages|default(1)) > 1 %}
+        <div class="card-footer bg-white">
+            <ul class="pagination pagination-sm justify-content-center mb-0">
+                {% if (page|default(1)) > 1 %}
+                    <li class="page-item"><a class="page-link" href="conformite.php?page={{ (page|default(1)) - 1 }}">«</a></li>
+                {% endif %}
+                {% for i in 1..(total_pages|default(1)) %}
+                    <li class="page-item {{ i == (page|default(1)) ? 'active' : '' }}"><a class="page-link" href="conformite.php?page={{ i }}">{{ i }}</a></li>
+                {% endfor %}
+                {% if (page|default(1)) < (total_pages|default(1)) %}
+                    <li class="page-item"><a class="page-link" href="conformite.php?page={{ (page|default(1)) + 1 }}">»</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

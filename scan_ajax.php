@@ -22,7 +22,7 @@ if ($code === '') {
 
 // Filtrer par magasin si l'utilisateur en a un
 $u = user_courant();
-$magasin_id = (int)($u['magasin_id'] ?? 0);
+$magasin_id = user_magasin_id();
 $article = db_article_get_by_barcode($pdo, $code, $magasin_id);
 
 if (!$article) {

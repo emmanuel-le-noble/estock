@@ -75,6 +75,7 @@ $articles   = db_articles_list_active($pdo, 1000);
 $categories = function_exists('db_categories_all') ? db_categories_all($pdo) : [];
 
 echo $twig->render('promotions.html.twig', [
+    'titre_page'  => 'Promotions & Remises',
     'rows'        => $pagination['data'],
     'pagination'  => $pagination,
     'filters'     => $filters,

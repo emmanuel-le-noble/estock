@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
     try {
         $pdo->beginTransaction();
         $u = user_courant();
-        $magasin_id = (int)($u['magasin_id'] ?? 0);
+        $magasin_id = user_magasin_id();
         $numero_lot = !empty($_POST['numero_lot']) ? trim($_POST['numero_lot']) : null;
         if ($numero_lot !== null && mb_strlen($numero_lot) > 100) {
             $numero_lot = mb_substr($numero_lot, 0, 100);
@@ -63,7 +63,7 @@ $f_type    = $_GET['type'] ?? '';
 $f_debut   = $_GET['debut'] ?? '';
 $f_fin     = $_GET['fin'] ?? '';
 $u = user_courant();
-$f_magasin = (int)($u['magasin_id'] ?? 0);
+$f_magasin = user_magasin_id();
 
 $search_sql = db_mouvements_search_sql([
     'article' => $f_article,

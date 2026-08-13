@@ -20,7 +20,7 @@ $search_sql = db_logs_activite_search_sql([
     'action' => $f_action,
     'debut'  => $debut,
     'fin'    => $fin,
-]);
+], user_magasin_id());
 $result = paginate($search_sql['sql'], $search_sql['params'], 30);
 $logs = $result['items'];
 

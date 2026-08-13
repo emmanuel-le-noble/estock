@@ -12,7 +12,7 @@ require_once __DIR__ . '/includes/helpers.php';
 exiger_connexion();
 
 $u = user_courant();
-$magasin_id = (int)($u['magasin_id'] ?? 0);
+$magasin_id = user_magasin_id();
 
 // ---- Statistiques rapides (filtrées par magasin pour les non-admins) ----
 $nb_articles   = db_articles_count_active($pdo, $magasin_id);
@@ -24,7 +24,7 @@ $ca_jour       = db_factures_revenue_today($pdo, $magasin_id);
 $alertes = db_articles_low_stock($pdo, 50, $magasin_id);
 
 // ---- Derniers mouvements ----
-$derniers_mouvements = db_mouvements_recent($pdo, 8);
+$derniers_mouvements = db_mouvements_recent($pdo, 8, $magasin_id);
 
 $titre_page = 'Tableau de bord';
 include __DIR__ . '/includes/header.php';

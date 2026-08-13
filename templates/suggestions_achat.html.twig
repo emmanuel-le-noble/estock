@@ -11,15 +11,23 @@
     {% if peut('stock_consulter') %}
     <li class="nav-item">
         <a class="nav-link active" href="suggestions_achat.php">
-            <i class="bi bi-exclamation-triangle"></i> Alertes Stock
+            <i class="bi bi-bag-check"></i> Suggestions d'achat
+        </a>
+    </li>
+    {% endif %}
+    {% if peut('achats_consulter') %}
+    <li class="nav-item">
+        <a class="nav-link" href="commandes_fournisseur.php">
+            <i class="bi bi-cart-plus"></i> Commandes fournisseurs
         </a>
     </li>
     {% endif %}
 </ul>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-    <div>
-        <span class="badge text-bg-danger fs-6">{{ nb_total|default(0) }} article{{ (nb_total|default(0)) > 1 ? 's' : '' }} en alerte</span>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="badge text-bg-danger fs-6">{{ nb_total|default(0) }} article{{ (nb_total|default(0)) > 1 ? 's' : '' }} à réapprovisionner</span>
+        <span class="badge text-bg-light border"><i class="bi bi-shop me-1"></i>Magasin : {{ user_magasin_nom() }}</span>
     </div>
     <div class="d-flex gap-2">
         {% if (nb_total|default(0)) > 0 %}
@@ -33,6 +41,77 @@
     </div>
 </div>
 
+{# ════════════ 1. MEILLEURS VENDEURS (30 jours) ════════════ #}
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-fire text-danger"></i> Meilleurs vendeurs (30 derniers jours)</h5>
+        {% set nb_vr = ventes_rapides|default([])|length %}
+        <span class="badge text-bg-secondary">{{ nb_vr }} produit{{ nb_vr > 1 ? 's' : '' }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Article</th>
+                        <th class="text-center">Vendus (30 j)</th>
+                        <th class="text-center">Vitesse / jour</th>
+                        <th class="text-center">Stock actuel</th>
+                        <th class="text-center">Couverture rest.</th>
+                        <th class="text-center">Recommandation</th>
+                        <th class="text-end">Prix vente</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in ventes_rapides|default([]) %}
+                        {% set cov = a.quantite_vendue|default(0) > 0 ? (a.quantite_stock|default(0) / (a.quantite_vendue|default(1) / 30)) : null %}
+                        {% set risque = (a.quantite_stock|default(0) <= a.seuil_alerte|default(0)) or (cov is not null and cov < 14) %}
+                        <tr class="{{ risque ? 'table-warning' : '' }}">
+                            <td class="fw-semibold">{{ h(a.nom|default('')) }}
+                                {% if a.quantite_stock|default(0) <= a.seuil_alerte|default(0) %}
+                                    <span class="badge text-bg-danger ms-1">En alerte</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ a.quantite_vendue|default(0) }}</td>
+                            <td class="text-center">{{ a.vitesse_jour|default(0) }}</td>
+                            <td class="text-center">
+                                <span class="badge text-bg-{{ risque ? 'danger' : 'secondary' }}">{{ a.quantite_stock|default(0) }}</span>
+                            </td>
+                            <td class="text-center">
+                                {% if cov is null or cov == 0 %}
+                                    <span class="text-muted">—</span>
+                                {% elseif cov < 14 %}
+                                    <span class="badge text-bg-danger">{{ cov|number_format(0) }} j</span>
+                                {% elseif cov < 30 %}
+                                    <span class="badge text-bg-warning text-dark">{{ cov|number_format(0) }} j</span>
+                                {% else %}
+                                    <span class="badge text-bg-success">{{ cov|number_format(0) }} j</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if risque %}
+                                    <span class="badge text-bg-danger"><i class="bi bi-cart-plus"></i> À commander</span>
+                                {% else %}
+                                    <span class="badge text-bg-success">OK</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ money(a.prix_vente|default(0)) }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                                Aucune vente enregistrée sur les 30 derniers jours.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{# ════════════ 2. ARTICLES À RÉAPPROVISIONNER PAR FOURNISSEUR ════════════ #}
 {% if (nb_total|default(0)) == 0 %}
     <div class="card shadow-sm">
         <div class="card-body text-center py-5">
@@ -83,10 +162,13 @@
                             <tr>
                                 <th>Article</th>
                                 <th>Code-barres</th>
-                                <th class="text-center">Emplacement</th>
                                 <th class="text-center">Stock actuel</th>
                                 <th class="text-center">Seuil alerte</th>
-                                <th class="text-end">Prix vente</th>
+                                <th class="text-center">Vendus (30 j)</th>
+                                <th class="text-center">Vitesse / jour</th>
+                                <th class="text-center">Couverture rest.</th>
+                                <th class="text-center">À commander</th>
+                                <th class="text-end">Prix achat</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -94,14 +176,36 @@
                                 <tr class="{{ a.quantite_stock|default(0) == 0 ? 'table-danger' : 'table-warning' }}">
                                     <td class="fw-semibold">{{ h(a.nom|default('')) }}</td>
                                     <td><code>{{ h(a.code_barre|default('')) }}</code></td>
-                                    <td class="text-center">{{ h(a.emplacement|default('')) ?: '—' }}</td>
                                     <td class="text-center">
                                         <span class="badge text-bg-{{ a.quantite_stock|default(0) == 0 ? 'danger' : 'warning' }}">
                                             {{ a.quantite_stock|default(0) }}
                                         </span>
                                     </td>
                                     <td class="text-center">{{ a.seuil_alerte|default(0) }}</td>
-                                    <td class="text-end">{{ money(a.prix_vente|default(0)) }}</td>
+                                    <td class="text-center">
+                                        {% if a.quantite_vendue_30j|default(0) > 0 %}
+                                            <strong>{{ a.quantite_vendue_30j }}</strong>
+                                            <span class="text-muted small">({{ a.nb_ventes_30j|default(0) }} vente{{ a.nb_ventes_30j|default(0) > 1 ? 's' : '' }})</span>
+                                        {% else %}
+                                            <span class="text-muted">Aucune</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">{{ a.vitesse_jour|default(0) }}</td>
+                                    <td class="text-center">
+                                        {% if a.jours_couverture is null %}
+                                            <span class="text-muted">—</span>
+                                        {% elseif a.jours_couverture == 0 %}
+                                            <span class="badge text-bg-danger">Rupture</span>
+                                        {% else %}
+                                            <span class="badge text-bg-{{ a.jours_couverture < 7 ? 'danger' : (a.jours_couverture < 14 ? 'warning' : 'secondary') }}">
+                                                {{ a.jours_couverture }} j
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge text-bg-primary">{{ a.quantite_recommandee|default(1) }}</span>
+                                    </td>
+                                    <td class="text-end">{{ money(a.prix_achat|default(0)) }}</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -111,4 +215,13 @@
         </div>
     {% endfor %}
 {% endif %}
+
+{# ════════════ 3. WORKFLOW EXPLICATION ════════════ #}
+<div class="alert alert-light border small mb-0">
+    <i class="bi bi-info-circle me-1"></i>
+    <strong>Comment ça marche :</strong> les quantités recommandées couvrent
+    <strong>30 jours de vente</strong> estimés (moyenne des 30 derniers jours), taxes comprises,
+    sans descendre sous le seuil d'alerte. Le bouton «&nbsp;Créer bon de commande&nbsp;» crée un
+    <strong>brouillon</strong> soumis ensuite à la validation du <strong>Directeur</strong> avant envoi au fournisseur.
+</div>
 {% endblock %}

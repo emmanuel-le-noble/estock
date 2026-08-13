@@ -55,7 +55,7 @@ switch ($type) {
     // ---- EXPORT FACTURES / VENTES ----
     case 'factures':
         fputcsv($output, ['ID', 'N° Facture', 'Date Vente', 'Vendeur', 'Total HT', 'TVA %', 'Total TTC', 'Montant Payé', 'Rendu', 'Statut'], ';', '"', "\\");
-        $built = db_factures_search_sql(['debut' => $_GET['debut'] ?? '', 'fin' => $_GET['fin'] ?? '']);
+        $built = db_factures_search_sql(['debut' => $_GET['debut'] ?? '', 'fin' => $_GET['fin'] ?? ''], $magasin_id);
         $stmt  = $pdo->prepare($built['sql']);
         $stmt->execute($built['params']);
         $rows  = $stmt->fetchAll();
@@ -86,9 +86,10 @@ switch ($type) {
             JOIN articles a ON a.id = m.article_id
             LEFT JOIN utilisateurs u ON u.id = m.utilisateur_id
             LEFT JOIN magasins mag ON mag.id = m.magasin_id
+            WHERE m.magasin_id = ?
             ORDER BY m.date_mouvement DESC LIMIT 5000
         ");
-        $stmt->execute();
+        $stmt->execute([$magasin_id]);
         $rows = $stmt->fetchAll();
 
         foreach ($rows as $r) {

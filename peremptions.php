@@ -25,7 +25,7 @@ if (!peut('stock_consulter')) {
 }
 
 $u = user_courant();
-$magasin_id = (int)($u['magasin_id'] ?? 0);
+$magasin_id = user_magasin_id();
 
 // ---- Traitement formulaire : ajout de lot ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajouter_lot') {

@@ -93,7 +93,16 @@ function extract_post_data(array $schema, string $global_redirect = ''): array {
     foreach ($schema as $cle => $def) {
         if (!empty($def['required'])) {
             $val = $data[$cle] ?? null;
-            if ($val === null || $val === '') {
+            $champ_vide = ($val === null || $val === '');
+            // Pour les champs numériques requis : un champ absent ou non numérique
+            // (qui donnerait 0 silencieusement) doit être considéré comme vide.
+            if (!$champ_vide && in_array($def['type'] ?? 'string', ['int', 'float'], true)) {
+                $raw = $_POST[$cle] ?? null;
+                if ($raw === null || $raw === '' || !is_scalar($raw) || !is_numeric($raw)) {
+                    $champ_vide = true;
+                }
+            }
+            if ($champ_vide) {
                 $redirect = $def['redirect'] ?? $global_redirect;
                 if ($redirect) {
                     flash_error("Le champ « {$cle} » est obligatoire.");
@@ -256,6 +265,38 @@ function calc_line_subtotal(float $prix_unitaire, int $quantite): float {
 }
 
 /**
+ * Fidélité : valider une demande d'utilisation de points et verrouiller le
+ * solde du client (FOR UPDATE, à appeler DANS une transaction).
+ *
+ * Retourne ['points' => points réellement consommés, 'remise' => remise TTC].
+ * Lève RuntimeException si la demande est inférieure au seuil minimal.
+ */
+function db_loyalite_verrouiller(PDO $pdo, int $client_id, int $points_demandes, float $total_ttc): array {
+    $points_demandes = max(0, (int)$points_demandes);
+    $min  = max(1, (int)param('fidelite_min_points_usage', '10'));
+    $val  = (float)param('fidelite_valeur_point', '1');
+
+    $st = $pdo->prepare("SELECT points_fidelite FROM clients WHERE id = ? FOR UPDATE");
+    $st->execute([$client_id]);
+    $solde = (int)$st->fetchColumn();
+
+    $usage = min($solde, $points_demandes);
+    if ($usage > 0) {
+        // Ne jamais laisser la remise dépasser le montant total de la vente
+        $max_usage = $val > 0 ? (int)floor($total_ttc * 100 / $val) : 0;
+        $usage = min($usage, max(0, $max_usage));
+    }
+    if ($points_demandes > 0 && $usage < $min) {
+        throw new RuntimeException('Points fidélité insuffisants (minimum ' . $min . ' points, solde : ' . $solde . ').');
+    }
+
+    return [
+        'points' => $usage,
+        'remise' => round($usage * $val / 100, 2),
+    ];
+}
+
+/**
  * Détecter si un article est en alerte de stock (quantité <= seuil).
  */
 function is_stock_low(int $quantite_stock, int $seuil_alerte): bool {
@@ -369,6 +410,23 @@ function verify_url_signature(int $id, string $token, array $extra = []): bool {
 
 function generate_invoice_number(PDO $pdo): string {
     $prefixe = 'FAC-' . date('Ymd') . '-';
+    $cle     = 'numero_facture:' . date('Ymd');
+
+    // Numérotation atomique (NF525 / multi-caisses) : la table sequences
+    // garantit qu'aucun numéro n'est délivré deux fois, même en concurrence.
+    if (db_sequences_exists($pdo)) {
+        // Aligner sur les factures créées avant l'installation de la table
+        $rang = db_sequence_next($pdo, $cle, db_facture_count_by_prefix($pdo, $prefixe) + 1);
+        $numero = $prefixe . str_pad((string)$rang, 4, '0', STR_PAD_LEFT);
+        while (db_facture_number_exists($pdo, $numero)) {
+            $rang = db_sequence_next($pdo, $cle);
+            $numero = $prefixe . str_pad((string)$rang, 4, '0', STR_PAD_LEFT);
+        }
+        return $numero;
+    }
+
+    // Fallback (table sequences absente) : déterministe mais sensible aux
+    // courses dans le cas de ventes simultanées.
     $rang = db_facture_count_by_prefix($pdo, $prefixe) + 1;
     $numero = $prefixe . str_pad((string)$rang, 4, '0', STR_PAD_LEFT);
     while (db_facture_number_exists($pdo, $numero)) {

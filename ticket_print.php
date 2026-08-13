@@ -61,6 +61,12 @@ if (est_connecte() && user_role() === ROLE_VENDEUR
     exit('Accès non autorisé.');
 }
 
+// La facture doit appartenir au magasin actif de l'utilisateur connecté
+if (est_connecte() && (int)($facture['magasin_id'] ?? 0) !== user_magasin_id()) {
+    http_response_code(403);
+    exit('Accès non autorisé.');
+}
+
 // CORRECTION : Appel de la fonction appropriée
 $lignes = db_facture_get_lignes($pdo, $factureId);
 
@@ -108,6 +114,14 @@ foreach ($lignes as $l) {
 }
 $tvaResume = array_values($tvaResume);
 
+// Fidélité : points gagnés (GAIN) + remise / points utilisés tracés sur la facture
+$pointsGagnes = 0;
+if ((int)($facture['client_id'] ?? 0) > 0) {
+    $st_pts = $pdo->prepare("SELECT points FROM historique_points WHERE facture_id = ? AND type_operation = 'GAIN'");
+    $st_pts->execute([$factureId]);
+    $pointsGagnes = (int)($st_pts->fetchColumn() ?: 0);
+}
+
 // Rendu Twig
 $loader = new \Twig\Loader\FilesystemLoader(__DIR__ . '/templates');
 $twig = new \Twig\Environment($loader, ['autoescape' => 'html']);
@@ -122,4 +136,6 @@ echo $twig->render('ticket_print.html.twig', [
     'devise'     => $devise,
     'decimals'   => $decimals,
     'csp_nonce_val' => csp_nonce(),
+    'points_gagnes' => $pointsGagnes,
+    'fidelite_actif' => (int)$pointsGagnes > 0 || (float)($facture['remise_fidelite'] ?? 0) > 0 || (int)($facture['points_utilises'] ?? 0) > 0,
 ]);

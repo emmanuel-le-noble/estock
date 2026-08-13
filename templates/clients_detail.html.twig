@@ -1,0 +1,313 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="clients.php">Clients</a></li>
+        <li class="breadcrumb-item active">{{ (client.nom ?: client.raison_sociale)|e }}</li>
+    </ol>
+</nav>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h5 class="mb-3">
+                    <i class="bi bi-person-vcard"></i>
+                    {{ (client.nom ?: client.raison_sociale)|e }}
+                </h5>
+                <table class="table table-sm small mb-0">
+                    <tbody>
+                        <tr><th class="text-muted">Type</th>
+                            <td>{{ client.raison_sociale ? 'B2B' : 'B2C' }}</td></tr>
+                        {% if client.raison_sociale %}
+                        <tr><th class="text-muted">SIRET</th><td>{{ client.siret|e ?: '—' }}</td></tr>
+                        {% endif %}
+                        <tr><th class="text-muted">Adresse</th><td>{{ client.adresse|e ?: '—' }}</td></tr>
+                        <tr><th class="text-muted">Téléphone</th><td>{{ client.telephone|e ?: '—' }}</td></tr>
+                        <tr><th class="text-muted">Email</th><td>{{ client.email|e ?: '—' }}</td></tr>
+                        {% if client.date_naissance %}
+                        <tr><th class="text-muted">Naissance</th><td>{{ date_fr(client.date_naissance) }}</td></tr>
+                        {% endif %}
+                        <tr><th class="text-muted">Code fidélité</th>
+                            <td>{{ client.code_fidelite ? '<span class="badge text-bg-light border">' ~ client.code_fidelite|e ~ '</span>' : '—' }}</td></tr>
+                        <tr><th class="text-muted">Dernier achat</th><td>{{ client.date_dernier_achat ? date_fr(client.date_dernier_achat) : '—' }}</td></tr>
+                    </tbody>
+                </table>
+                {% if peut_gerer %}
+                <button class="btn btn-outline-primary btn-sm mt-3 w-100" data-bs-toggle="modal" data-bs-target="#modalModifier">
+                    <i class="bi bi-pencil"></i> Modifier la fiche
+                </button>
+                <button class="btn btn-outline-danger btn-sm mt-2 w-100" data-bs-toggle="modal" data-bs-target="#modalAnonymiser">
+                    <i class="bi bi-shield-x"></i> Anonymiser (RGPD)
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h6 class="mb-3"><i class="bi bi-stars text-warning"></i> Fidélité
+                    {% if fidelite_actif %}
+                        <span class="badge text-bg-success float-end">{{ client.points_fidelite|default(0) }} points</span>
+                    {% else %}
+                        <span class="badge text-bg-warning float-end">Programme inactif</span>
+                    {% endif %}
+                </h6>
+                {% if peut_gerer and fidelite_actif %}
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAjuster">
+                        <i class="bi bi-sliders"></i> Ajuster les points
+                    </button>
+                    <a href="{{ carte_lien|default('#') }}" target="_blank"
+                       class="btn btn-outline-dark btn-sm" id="btnCarteFidelite">
+                        <i class="bi bi-qr-code"></i> Carte de fidélité
+                    </a>
+                </div>
+                {% endif %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Opération</th>
+                                <th>Facture</th>
+                                <th class="text-end">Points</th>
+                                <th>Commentaire</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hp in historique %}
+                                <tr>
+                                    <td class="small">{{ date_fr(hp.date_operation) }}</td>
+                                    <td>
+                                        {% if hp.type_operation == 'GAIN' %}
+                                            <span class="badge text-bg-success">Gain</span>
+                                        {% elseif hp.type_operation == 'UTILISATION' %}
+                                            <span class="badge text-bg-danger">Utilisation</span>
+                                        {% elseif hp.type_operation == 'ANNULE' %}
+                                            <span class="badge text-bg-warning">Annulation / retour</span>
+                                        {% elseif hp.type_operation == 'AJUSTEMENT' %}
+                                            <span class="badge text-bg-info">Ajustement</span>
+                                        {% elseif hp.type_operation == 'EXPIRATION' %}
+                                            <span class="badge text-bg-secondary">Expiration</span>
+                                        {% else %}
+                                            <span class="badge text-bg-secondary">{{ hp.type_operation|e }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small">{{ hp.numero_facture|e ?: '—' }}</td>
+                                    <td class="text-end fw-semibold">{{ hp.points > 0 ? '+' : '' }}{{ hp.points }}</td>
+                                    <td class="small text-muted">{{ hp.commentaire|e }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="5" class="text-center text-muted py-3">Aucun mouvement de points.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white"><h6 class="mb-0"><i class="bi bi-receipt"></i> Achats (50 derniers)</h6></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr><th>N°</th><th>Date</th><th>Magasin</th><th class="text-end">Total TTC</th><th class="text-end">Remise pts</th><th class="text-end">Pts gagnés</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for f in achats %}
+                                <tr>
+                                    <td>{{ f.numero_facture|e }}</td>
+                                    <td class="small">{{ date_fr(f.date_facture) }}</td>
+                                    <td class="small">{{ f.magasin_nom|e ?: '—' }}</td>
+                                    <td class="text-end fw-semibold">{{ money(f.total_ttc) }}</td>
+                                    <td class="text-end small">
+                                        {% if f.remise_fidelite > 0 %}
+                                            <span class="text-danger fw-semibold">− {{ money(f.remise_fidelite) }}</span>
+                                            {% if f.points_utilises > 0 %}<br><span class="text-muted">({{ f.points_utilises }} pts)</span>{% endif %}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end small fw-semibold">
+                                        {{ points_par_facture[f.id]|default(0) > 0 ? '+' ~ points_par_facture[f.id] ~ ' pts' : '—' }}
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="6" class="text-center text-muted py-3">Aucun achat enregistré.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white"><h6 class="mb-0"><i class="bi bi-shield-lock"></i> Consentements (RGPD)</h6></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Date</th><th>Type</th><th>Décision</th><th>IP / Utilisateur</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for ct in consentements %}
+                                <tr>
+                                    <td class="small">{{ date_fr(ct.date_action) }}</td>
+                                    <td class="small">{{ ct.type_consentement|e }}</td>
+                                    <td>
+                                        {% if ct.consenti %}
+                                            <span class="badge text-bg-success">Consenti</span>
+                                        {% else %}
+                                            <span class="badge text-bg-danger">Retiré</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small text-muted">{{ ct.ip_source|e ?: '—' }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="4" class="text-center text-muted py-3">Aucun consentement tracé.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ---- Modal modification ---- #}
+{% if peut_gerer %}
+<div class="modal fade" id="modalModifier" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="post" class="modal-content">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="modifier">
+            <input type="hidden" name="client_id" value="{{ client.id }}">
+            <div class="modal-header">
+                <h5 class="modal-title">Modifier la fiche client</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Nom / Prénom</label>
+                    <input type="text" name="nom" class="form-control" maxlength="150" value="{{ client.nom|e }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Code fidélité</label>
+                    <input type="text" name="code_fidelite" class="form-control" maxlength="40" value="{{ client.code_fidelite|e }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Raison sociale</label>
+                    <input type="text" name="raison_sociale" class="form-control" maxlength="200" value="{{ client.raison_sociale|e }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">SIRET</label>
+                    <input type="text" name="siret" class="form-control" maxlength="20" value="{{ client.siret|e }}">
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Adresse</label>
+                    <input type="text" name="adresse" class="form-control" maxlength="255" value="{{ client.adresse|e }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Date de naissance</label>
+                    <input type="date" name="date_naissance" class="form-control" value="{{ client.date_naissance|e }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Téléphone</label>
+                    <input type="text" name="telephone" class="form-control" maxlength="30" value="{{ client.telephone|e }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" maxlength="150" value="{{ client.email|e }}">
+                </div>
+                <div class="col-12 form-check form-switch d-flex align-items-center gap-2 ps-5">
+                    <input type="checkbox" name="consentement_fidelite" value="1" id="consentModif"
+                           class="form-check-input ms-0" role="switch"
+                           {% if client.consentement_fidelite %}checked{% endif %}>
+                    <label for="consentModif" class="form-check-label small text-muted">
+                        Consentement au programme de fidélité (traçabilité RGPD)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ---- Modal ajustement des points ---- #}
+{% if peut_gerer %}
+<div class="modal fade" id="modalAjuster" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" class="modal-content">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="ajuster_points">
+            <input type="hidden" name="client_id" value="{{ client.id }}">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-sliders text-warning"></i> Ajuster les points</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">Solde actuel :
+                    <strong>{{ client.points_fidelite|default(0) }} points</strong></p>
+                <div class="mb-3">
+                    <label class="form-label">Variation (positif = bonus, négatif = retrait)</label>
+                    <input type="number" name="delta_points" class="form-control" step="1" required
+                           placeholder="ex : +50 ou -20">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Motif</label>
+                    <input type="text" name="motif_points" class="form-control" maxlength="250"
+                           placeholder="ex : geste commercial, correction d'erreur…">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Appliquer</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{# ---- Modal anonymisation ---- #}
+<div class="modal fade" id="modalAnonymiser" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" class="modal-content" data-confirm="Confirmer l'anonymisation ? Les données personnelles seront irréversiblement remplacées.">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="anonymiser">
+            <input type="hidden" name="client_id" value="{{ client.id }}">
+            <div class="modal-header bg-danger-subtle">
+                <h5 class="modal-title"><i class="bi bi-shield-x"></i> Anonymiser ce client</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">
+                    Droit à l'effacement (RGPD, art. 17) : les données personnelles seront remplacées de
+                    façon irréversible. Les factures et écritures comptables restent intactes (obligation légale).
+                </p>
+                <label class="form-label">Motif</label>
+                <textarea name="motif" class="form-control" rows="2" maxlength="200"
+                          placeholder="ex : Demande du client…"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="submit" class="btn btn-danger"><i class="bi bi-shield-x"></i> Anonymiser</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

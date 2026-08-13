@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS `commandes_fournisseur` (
   `fournisseur_id` int NOT NULL,
   `magasin_id` int NOT NULL,
   `utilisateur_id` int NOT NULL,
-  `statut` enum('Brouillon','Envoyee','Recue_Partielle','Recue','Annulee') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Brouillon',
+  `statut` enum('Brouillon','En_Attente','Envoyee','Recue_Partielle','Recue','Annulee') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Brouillon',
   `date_commande` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `date_reception_prevue` date DEFAULT NULL,
   `notes` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -34,11 +34,12 @@ CREATE TABLE IF NOT EXISTS `lignes_commande_fournisseur` (
 -- Permissions RBAC pour les achats
 INSERT IGNORE INTO `permissions` (`cle_permission`, `description`, `categorie`) VALUES
 ('achats_gerer', 'Gérer les commandes fournisseurs (création, édition, réception)', 'Logistique'),
-('achats_consulter', 'Consulter les commandes fournisseurs', 'Logistique');
+('achats_consulter', 'Consulter les commandes fournisseurs', 'Logistique'),
+('achats_valider', 'Valider ou rejeter les commandes fournisseurs soumises (approbation)', 'Logistique');
 
 -- Attribution aux rôles par défaut
 INSERT IGNORE INTO `role_permissions` (`role_nom`, `permission_id`)
-SELECT 'Directeur', id FROM `permissions` WHERE `cle_permission` IN ('achats_gerer', 'achats_consulter')
+SELECT 'Directeur', id FROM `permissions` WHERE `cle_permission` IN ('achats_gerer', 'achats_consulter', 'achats_valider')
 UNION ALL
 SELECT 'Admin', id FROM `permissions` WHERE `cle_permission` IN ('achats_gerer', 'achats_consulter')
 UNION ALL

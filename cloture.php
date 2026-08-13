@@ -11,7 +11,7 @@ require_once __DIR__ . '/includes/helpers.php';
 exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_VENDEUR);
 
 $u = user_courant();
-$magasin_id = (int)($u['magasin_id'] ?? 0);
+$magasin_id = user_magasin_id();
 $user_id = (int)($u['id'] ?? 0);
 
 // Vérifier si une clôture existe déjà pour aujourd'hui

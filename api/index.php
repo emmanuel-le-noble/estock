@@ -71,6 +71,11 @@ match (true) {
     $resource === 'promo' && $method === 'GET'
         => handle_promo_check(),
 
+    // --- Clients fidélité (caisse) ---
+    $resource === 'clients' && $method === 'GET'
+        && isset($segments[1]) && $segments[1] === 'search'
+        => handle_clients_search(),
+
     // --- 404 ---
     default
         => json_out(['error' => 'Route introuvable.'], 404),
@@ -171,7 +176,7 @@ function handle_articles_list(): void {
 
     global $pdo;
     $search    = trim($_GET['q'] ?? '');
-    $search_sql = db_articles_search_sql($search);
+    $search_sql = db_articles_search_sql($search, user_magasin_id());
     $stmt = $pdo->prepare($search_sql['sql']);
     $stmt->execute($search_sql['params']);
     $articles = $stmt->fetchAll();
@@ -337,7 +342,7 @@ function handle_scan(): void {
 
     global $pdo;
     $u           = user_courant();
-    $magasin_id  = (int)($u['magasin_id'] ?? 0);
+    $magasin_id  = user_magasin_id();
     $article     = db_article_get_by_barcode($pdo, $code, $magasin_id);
 
     if (!$article) {
@@ -372,6 +377,27 @@ function handle_scan(): void {
                     'message'        => $date_peremption < $aujourd_hui 
                         ? '⚠ LOT PÉRIMÉ depuis ' . $jours . ' jours !'
                         : '⚠ Lot expire dans ' . $jours . ' jour(s) !',
+                ];
+            }
+        } else {
+            // db_lot_get_fefo() exclut les lots périmés : on vérifie leur présence séparément
+            $stmt_expire = $pdo->prepare(
+                "SELECT numero_lot, date_peremption FROM article_lots
+                 WHERE article_id = ? AND magasin_id = ? AND quantite > 0
+                   AND date_peremption IS NOT NULL AND date_peremption < CURDATE()
+                 ORDER BY date_peremption ASC LIMIT 1"
+            );
+            $stmt_expire->execute([(int)$article['id'], $magasin_id]);
+            $lot_expire = $stmt_expire->fetch();
+            if ($lot_expire) {
+                $date_expire = new DateTime((string)$lot_expire['date_peremption']);
+                $jours_expire = (int)(new DateTime('today'))->diff($date_expire)->days;
+                $response['alerte_peremption'] = [
+                    'numero_lot'     => $lot_expire['numero_lot'],
+                    'date_peremption'=> $lot_expire['date_peremption'],
+                    'jours_restants' => -$jours_expire,
+                    'statut'         => 'expire',
+                    'message'        => '⚠ LOT PÉRIMÉ depuis ' . $jours_expire . ' jours !',
                 ];
             }
         }
@@ -431,9 +457,11 @@ function handle_caisse_sync(): void {
     $montantPaye  = (float)($input['montant_paye'] ?? 0);
     $magasinId    = (int)($input['magasin_id'] ?? 0);
     $userId       = (int)($input['user_id'] ?? 0);
+    $clientId     = (int)($input['client_id'] ?? 0);
+    $pointsUtilises = (int)($input['points_utilises'] ?? 0);
 
     // Valider que le magasin soumis correspond au magasin de l'utilisateur authentifié
-    $userMagasinId = (int)(user_courant()['magasin_id'] ?? 0);
+    $userMagasinId = user_magasin_id();
     if ($userMagasinId > 0 && $magasinId !== $userMagasinId) {
         json_out(['success' => false, 'error' => 'Magasin non autorisé.'], 403);
     }
@@ -466,6 +494,19 @@ function handle_caisse_sync(): void {
 
     try {
         $pdo->beginTransaction();
+
+        // Fidélité : valider le client et verrouiller son solde (FOR UPDATE)
+        $loyautes = null;
+        if ($clientId > 0) {
+            $client = db_client_get_by_id($pdo, $clientId);
+            if (!$client) {
+                throw new RuntimeException('Client fidélité introuvable.');
+            }
+            if ((int)$client['consentement_fidelite'] !== 1) {
+                throw new RuntimeException('Le client n\'a pas consenti au programme de fidélité.');
+            }
+            $loyautes = db_loyalite_verrouiller($pdo, $clientId, $pointsUtilises, $totalTtc);
+        }
 
         $numero = generate_invoice_number($pdo);
         $tauxTva = param_tva_taux();
@@ -535,11 +576,17 @@ function handle_caisse_sync(): void {
         if (count($lignesValides) === 1) {
             $tauxTvaDominant = $lignesValides[0]['tauxTvaLigne'];
         }
+
+        // Remise fidélité (points) : à déduire du total TTC
+        if ($loyautes !== null) {
+            $totalTtcCalc = round($totalTtcCalc - $loyautes['remise'], 2);
+        }
+
         $monnaieRendue = max(0.0, $montantPaye - $totalTtcCalc);
 
         // NOU-5 : Vérifier que le total_ttc envoyé correspond au calculé (tolérance 0.02)
         if (abs($totalTtc - $totalTtcCalc) > 0.02) {
-            throw new RuntimeException('Le total TTC ne correspond pas au calculé.');
+            throw new RuntimeException('Le total TTC ne correspond pas au calculé (remise fidélité incluse).');
         }
 
         if ($montantPaye < round($totalTtcCalc, 2)) {
@@ -555,7 +602,14 @@ function handle_caisse_sync(): void {
             'montant_paye'   => round($montantPaye, 2),
             'monnaie_rendue' => round($monnaieRendue, 2),
             'magasin_id'     => $magasinId,
+            'remise_fidelite'=> $loyautes !== null ? $loyautes['remise'] : 0.0,
+            'points_utilises'=> $loyautes !== null ? $loyautes['points'] : 0,
         ]);
+
+        if ($loyautes !== null) {
+            $pdo->prepare("UPDATE factures SET client_id = ? WHERE id = ?")
+                ->execute([$clientId, $factureId]);
+        }
 
         $pdo->prepare("UPDATE factures SET client_sale_id = ? WHERE id = ?")
             ->execute([$clientSaleId, $factureId]);
@@ -589,17 +643,46 @@ function handle_caisse_sync(): void {
             }
         }
 
+        // Chaînage cryptographique NF525 (après lignes + paiements)
+        db_facture_chainer($pdo, $factureId);
+
+        // Consommation des points fidélité (solde verrouillé FOR UPDATE)
+        if ($loyautes !== null && $loyautes['points'] > 0) {
+            $pdo->prepare("UPDATE clients SET points_fidelite = points_fidelite - ? WHERE id = ?")
+                ->execute([$loyautes['points'], $clientId]);
+            // facture_id NULL : 1 ligne GAIN par facture (clé unique), l'utilisation
+            // est tracée sur la facture via factures.points_utilises.
+            $pdo->prepare(
+                "INSERT INTO historique_points (client_id, facture_id, points, type_operation, commentaire, utilisateur_id)
+                 VALUES (?, NULL, ?, 'UTILISATION', 'Utilisation points en caisse (synchro)', ?)"
+            )->execute([$clientId, -$loyautes['points'], user_id()]);
+        }
+
         $pdo->commit();
+
+        // Attribution des points gagnés (transaction dédiée, idempotente par facture)
+        $pointsGagnes = 0;
+        if ($loyautes !== null) {
+            $pointsGagnes = db_client_attribuer_points($pdo, $clientId, $factureId, $totalTtcCalc);
+        }
+
         json_out([
             'success'        => true,
             'facture_id'     => $factureId,
             'numero'         => $numero,
             'client_sale_id' => $clientSaleId,
+            'client_id'      => $clientId > 0 ? $clientId : null,
+            'remise_fidelite'=> $loyautes !== null ? $loyautes['remise'] : 0.0,
+            'points_utilises'=> $loyautes !== null ? $loyautes['points'] : 0,
+            'points_gagnes'  => $pointsGagnes,
         ]);
 
     } catch (Throwable $e) {
         $pdo->rollBack();
         error_log('API caisse sync error: ' . $e->getMessage());
+        if ($e instanceof RuntimeException) {
+            json_out(['success' => false, 'error' => $e->getMessage()], 409);
+        }
         json_out(['success' => false, 'error' => 'Erreur lors de la synchronisation de la vente.'], 409);
     }
 }
@@ -618,7 +701,7 @@ function handle_caisse_status(): void {
 
     global $pdo;
     $u = user_courant();
-    $magasin_id = (int)($u['magasin_id'] ?? 0);
+    $magasin_id = user_magasin_id();
     $user_id = (int)($u['id'] ?? 0);
 
     $ferme = db_cloture_deja_ferme($pdo, $magasin_id, $user_id);
@@ -681,4 +764,49 @@ function handle_promo_check(): void {
         'valeur'         => (float)$promo['valeur'],
         'article_id'     => $promo['article_id'] ? (int)$promo['article_id'] : null,
     ]);
+}
+
+// ============================================================
+//  CLIENTS FIDÉLITÉ — RECHERCHE POUR LA CAISSE
+// ============================================================
+
+function handle_clients_search(): void {
+    global $pdo;
+    if (!est_connecte()) {
+        json_out(['error' => 'Non autorisé.'], 401);
+    }
+    if (!peut('clients_consulter')) {
+        json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
+    }
+
+    $q = trim($_GET['q'] ?? '');
+    $trie = trim($_GET['tri'] ?? ''); // 'code' = scan d'une carte de fidélité
+
+    $clients = [];
+    if ($trie === 'code' && $q !== '') {
+        $client = db_client_get_by_code($pdo, $q);
+        if ($client) $clients = [$client];
+    } elseif ($q !== '') {
+        $sql = db_clients_search_sql(['search' => $q]);
+        $sql['sql'] .= ' LIMIT 10';
+        $st = $pdo->prepare($sql['sql']);
+        $st->execute($sql['params']);
+        $clients = $st->fetchAll();
+    }
+
+    $resultat = [];
+    foreach ($clients as $c) {
+        $resultat[] = [
+            'id'                  => (int)$c['id'],
+            'nom'                 => $c['nom'] ?: $c['raison_sociale'],
+            'raison_sociale'      => $c['raison_sociale'],
+            'telephone'           => $c['telephone'],
+            'email'               => $c['email'],
+            'code_fidelite'       => $c['code_fidelite'],
+            'points_fidelite'     => (int)$c['points_fidelite'],
+            'consentement_fidelite' => (int)$c['consentement_fidelite'] === 1,
+        ];
+    }
+
+    json_out(['clients' => $resultat]);
 }

@@ -24,6 +24,11 @@ if ($id <= 0 || !verify_url_signature($id, $token, $verify_extra)) {
 $f = db_facture_get_by_id($pdo, $id);
 if (!$f) { flash_error('Facture introuvable.'); redirect('factures.php'); }
 
+if ((int)($f['magasin_id'] ?? 0) !== user_magasin_id()) {
+    flash_error('Vous n\'avez pas accès à cette facture.');
+    redirect('factures.php');
+}
+
 if (user_role() === ROLE_VENDEUR && (int)($f['utilisateur_id'] ?? 0) !== (int)(user_courant()['id'] ?? 0)) {
     flash_error('Vous n\'avez pas accès à cette facture.');
     redirect('factures.php');

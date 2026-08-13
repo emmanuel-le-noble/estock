@@ -69,6 +69,7 @@ $categories   = function_exists('db_categories_all') ? db_categories_all($pdo) :
 
 echo $twig->render('etiquettes.html.twig', [
     'view'       => 'form',
+    'titre_page' => 'Étiquettes rayon',
     'articles'   => $articles,
     'categories' => $categories,
     'search'     => $search,

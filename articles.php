@@ -290,7 +290,7 @@ if ($action === 'nouveau' || $action === 'editer') {
 
 // ---- LISTE des articles (vue par défaut) ----
 $search = trim($_GET['q'] ?? '');
-$search_sql = db_articles_search_sql($search);
+$search_sql = db_articles_search_sql($search, user_magasin_id());
 $result = paginate($search_sql['sql'], $search_sql['params'], 25);
 $articles = $result['items'];
 $titre_page = 'Articles';

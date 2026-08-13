@@ -11,11 +11,11 @@ require_once __DIR__ . '/includes/helpers.php';
 exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER);
 
 $u = user_courant();
-$magasin_id = (int)($u['magasin_id'] ?? 0);
+$magasin_id = user_magasin_id();
 $is_directeur = in_array($u['role'] ?? '', [ROLE_DIRECTEUR, ROLE_ADMIN], true);
 
-// Directeur/Admin voient TOUTES les dépenses ; Magasinier voit son magasin (+globales NULL)
-$filtre_magasin = $is_directeur ? 0 : $magasin_id;
+// Tout le monde travaille sur le magasin actif (de suivi pour le Directeur)
+$filtre_magasin = $magasin_id;
 
 // ---- Filtres de date (défaut : mois en cours) ----
 $debut = $_GET['date_debut'] ?? '';
@@ -52,11 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
         redirect('depenses.php');
     }
 
-    // Directeur/Admin : valeur du dropdown (0 = "Tous" → NULL en BDD)
-    // Magasinier : pas de dropdown → magasin_id de la session (0 → NULL)
-    $mid = $data['magasin_id'] > 0
-        ? $data['magasin_id']
-        : ($is_directeur ? null : ($magasin_id > 0 ? $magasin_id : null));
+    // La dépense est toujours rattachée au magasin actif de l'utilisateur
+    $mid = $magasin_id > 0 ? $magasin_id : null;
 
     try {
         db_depense_insert(
@@ -87,13 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suppr
     $supp_id = (int)($_POST['depense_id'] ?? 0);
     if ($supp_id > 0) {
         try {
-            if ($is_directeur) {
-                $stmt = $pdo->prepare("DELETE FROM depenses WHERE id = ?");
-                $stmt->execute([$supp_id]);
-            } else {
-                $stmt = $pdo->prepare("DELETE FROM depenses WHERE id = ? AND magasin_id = ?");
-                $stmt->execute([$supp_id, $magasin_id]);
-            }
+            $stmt = $pdo->prepare("DELETE FROM depenses WHERE id = ? AND magasin_id = ?");
+            $stmt->execute([$supp_id, $magasin_id]);
             suivre_activite('DEPENSE_SUPPRIMEE', 'Dépense #' . $supp_id . ' supprimée');
             flash_success('Dépense supprimée.');
         } catch (Throwable $e) {
@@ -112,6 +104,7 @@ $magasins       = db_magasins_list($pdo);
 
 $titre_page = 'Dépenses';
 echo $twig->render('depenses.html.twig', [
+    'titre_page'       => $titre_page,
     'depenses'       => $depenses,
     'total_depenses' => $total_depenses,
     'by_categorie'   => $by_categorie,

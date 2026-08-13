@@ -4,7 +4,7 @@
  * Incluée depuis config/connexion.php.
  */
 
-if (!headers_sent()) {
+if (php_sapi_name() !== 'cli' && !headers_sent()) {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: strict-origin-when-cross-origin');

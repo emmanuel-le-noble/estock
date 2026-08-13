@@ -134,7 +134,23 @@
             <td class="fw-bold fs-lg">TOTAL TTC</td>
             <td class="text-right fw-bold fs-lg">{{ facture.total_ttc|number_format(decimals, '.', ' ') }} {{ devise }}</td>
         </tr>
+        {% if facture.points_utilises is defined and facture.points_utilises > 0 %}
+        <tr>
+            <td>Dont remise fidélité (−{{ facture.points_utilises }} pts)</td>
+            <td class="text-right">{{ facture.remise_fidelite|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+        </tr>
+        {% endif %}
     </table>
+
+    {% if points_gagnes is defined and points_gagnes > 0 %}
+    <div class="ticket-hr"></div>
+    <table>
+        <tr>
+            <td class="fw-bold">POINTS FIDÉLITÉ</td>
+            <td class="text-right fw-bold">+{{ points_gagnes }} pts</td>
+        </tr>
+    </table>
+    {% endif %}
 
     <div class="ticket-hr"></div>
 

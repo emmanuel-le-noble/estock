@@ -1,0 +1,3 @@
+# eStock — interdit l'accès direct aux archives signées NF525
+# Les fichiers sont servis uniquement via conformite.php (HMAC + session).
+Require all denied

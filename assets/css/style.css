@@ -192,6 +192,25 @@ h1, h2, h3, h4, h5, h6 { color: var(--ink); font-weight: 700; letter-spacing: -0
     background: rgba(99, 102, 241, .25); color: #a5b4fc;
 }
 
+/* --- Sections pliables (groupes de navigation) --- */
+.nav-section { margin-bottom: 2px; }
+.nav-section-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; padding: 8px 10px 7px; margin-top: 4px;
+    background: none; border: 0; border-radius: 8px;
+    color: var(--side-ink-2);
+    font-size: .70rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    font-family: inherit; text-align: left; cursor: pointer; user-select: none;
+    transition: background .18s ease, color .18s ease;
+}
+.nav-section-head:hover { color: #e2e8f0; background: rgba(255, 255, 255, .05); }
+.nav-section-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.nav-section-title i { font-size: .80rem; }
+.nav-section-chevron { font-size: .70rem; transition: transform .20s ease; }
+.nav-section.open .nav-section-chevron { transform: rotate(180deg); }
+.nav-section-body { display: none; padding-bottom: 4px; }
+.nav-section.open .nav-section-body { display: block; }
+
 /* Couleurs d'icônes par catégorie */
 .nav-icon.clr-indigo { background: rgba(99, 102, 241, .18) !important; color: #a5b4fc !important; }
 .nav-icon.clr-emerald { background: rgba(16, 185, 129, .16) !important; color: #6ee7b7 !important; }

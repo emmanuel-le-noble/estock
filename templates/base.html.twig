@@ -47,126 +47,113 @@
             <span class="brand-text">{{ app_nom }}</span>
         </div>        <nav class="sidebar-nav">
 
-            {# ── TABLEAU DE BORD ── #}
-            <a class="nav-link {{ page_courante == 'tableau_bord' ? 'active' : '' }}" href="tableau_bord.php">
-                <span class="nav-icon clr-indigo"><i class="bi bi-speedometer2"></i></span>
-                <span>Accueil</span>
-            </a>
-            {% if can_admin %}
-            <a class="nav-link {{ page_courante == 'statistiques' ? 'active' : '' }}" href="statistiques.php">
-                <span class="nav-icon clr-indigo"><i class="bi bi-graph-up"></i></span>
-                <span>Statistiques</span>
-            </a>
-            {% endif %}
+            {# ── Construction des sections ── #}
+            {% set sections = [] %}
 
-            {# ── LOGISTIQUE ── #}
+            {# PILOTAGE #}
+            {% set items_pilotage = [{'slug': 'tableau_bord', 'label': 'Accueil', 'icon': 'bi-speedometer2', 'color': 'clr-indigo'}] %}
+            {% if can_admin %}
+                {% set items_pilotage = items_pilotage|merge([{'slug': 'statistiques', 'label': 'Statistiques', 'icon': 'bi-graph-up', 'color': 'clr-indigo'}]) %}
+            {% endif %}
+            {% set items_pilotage = items_pilotage|merge([{'slug': 'documentation', 'label': 'Documentation', 'icon': 'bi-journal-bookmark', 'color': 'clr-indigo'}]) %}
+            {% set sections = sections|merge([{'key': 'pilotage', 'titre': 'Pilotage', 'icon': 'bi-speedometer2', 'items': items_pilotage}]) %}
+
+            {# STOCK & ACHATS #}
+            {% set items_stock = [] %}
             {% if can_manage_stock %}
-            <a class="nav-link {{ page_courante == 'stock' ? 'active' : '' }}" href="stock.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-boxes"></i></span>
-                <span>Stock</span>
-            </a>
-            <a class="nav-link {{ page_courante == 'articles' ? 'active' : '' }}" href="articles.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-box-seam"></i></span>
-                <span>Articles</span>
-            </a>
-            {% if peut('articles_gerer') %}
-            <a class="nav-link {{ page_courante == 'categories' ? 'active' : '' }}" href="categories.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-tags"></i></span>
-                <span>Catégories</span>
-            </a>
-            {% endif %}
-            <a class="nav-link {{ page_courante == 'fournisseurs' ? 'active' : '' }}" href="fournisseurs.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-truck"></i></span>
-                <span>Fournisseurs</span>
-            </a>
-            {% if peut('achats_consulter') %}
-            <a class="nav-link {{ page_courante == 'commandes_fournisseur' ? 'active' : '' }}" href="commandes_fournisseur.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-cart-plus"></i></span>
-                <span>Commandes d'achat</span>
-            </a>
-            {% endif %}
-            {% if peut('inventaire_consulter') %}
-            <a class="nav-link {{ page_courante == 'inventaire' ? 'active' : '' }}" href="inventaire.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-clipboard-check"></i></span>
-                <span>Inventaire</span>
-            </a>
-            {% endif %}
-            <a class="nav-link {{ page_courante == 'mouvements' ? 'active' : '' }}" href="mouvements.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-arrow-left-right"></i></span>
-                <span>Mouvements</span>
-            </a>
-            <a class="nav-link {{ page_courante == 'peremptions' ? 'active' : '' }}" href="peremptions.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-calendar-week"></i></span>
-                <span>Péremptions</span>
-                {% if (nb_alertes_peremption|default(0)) > 0 %}
-                    <span class="badge bg-danger ms-auto" style="font-size:.65rem;">{{ nb_alertes_peremption }}</span>
+                {% set items_stock = items_stock|merge([
+                    {'slug': 'stock', 'label': 'Stock', 'icon': 'bi-boxes', 'color': 'clr-emerald'},
+                    {'slug': 'articles', 'label': 'Articles', 'icon': 'bi-box-seam', 'color': 'clr-emerald'}
+                ]) %}
+                {% if peut('articles_gerer') %}
+                    {% set items_stock = items_stock|merge([{'slug': 'categories', 'label': 'Catégories', 'icon': 'bi-tags', 'color': 'clr-emerald'}]) %}
                 {% endif %}
-            </a>
-            {% if current_role in ['Directeur', 'Admin', 'Magasinier'] %}
-            <a class="nav-link {{ page_courante == 'etiquettes' ? 'active' : '' }}" href="etiquettes.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-tag"></i></span>
-                <span>Étiquettes rayon</span>
-            </a>
-            <a class="nav-link {{ page_courante == 'transferts' ? 'active' : '' }}" href="transferts.php">
-                <span class="nav-icon clr-emerald"><i class="bi bi-arrow-repeat"></i></span>
-                <span>Transferts</span>
-            </a>
+                {% set items_stock = items_stock|merge([{'slug': 'fournisseurs', 'label': 'Fournisseurs', 'icon': 'bi-truck', 'color': 'clr-emerald'}]) %}
+                {% if peut('achats_consulter') %}
+                    {% set items_stock = items_stock|merge([{'slug': 'commandes_fournisseur', 'label': "Commandes d'achat", 'icon': 'bi-cart-plus', 'color': 'clr-emerald'}]) %}
+                {% endif %}
+                {% if peut('inventaire_consulter') %}
+                    {% set items_stock = items_stock|merge([{'slug': 'inventaire', 'label': 'Inventaire', 'icon': 'bi-clipboard-check', 'color': 'clr-emerald'}]) %}
+                {% endif %}
+                {% set items_stock = items_stock|merge([
+                    {'slug': 'mouvements', 'label': 'Mouvements', 'icon': 'bi-arrow-left-right', 'color': 'clr-emerald'},
+                    {'slug': 'peremptions', 'label': 'Péremptions', 'icon': 'bi-calendar-week', 'color': 'clr-emerald', 'badge': nb_alertes_peremption|default(0)},
+                    {'slug': 'suggestions_achat', 'label': "Suggestions d'achat", 'icon': 'bi-bag-check', 'color': 'clr-emerald', 'badge': nb_alertes_topbar|default(0)}
+                ]) %}
+                {% if current_role in ['Directeur', 'Admin', 'Magasinier'] %}
+                    {% set items_stock = items_stock|merge([
+                        {'slug': 'etiquettes', 'label': 'Étiquettes rayon', 'icon': 'bi-tag', 'color': 'clr-emerald'},
+                        {'slug': 'transferts', 'label': 'Transferts', 'icon': 'bi-arrow-repeat', 'color': 'clr-emerald'}
+                    ]) %}
+                {% endif %}
             {% endif %}
+            {% if items_stock|length > 0 %}
+                {% set sections = sections|merge([{'key': 'stock', 'titre': 'Stock & Achats', 'icon': 'bi-boxes', 'items': items_stock}]) %}
             {% endif %}
 
-            {# ── VENTES ── #}
+            {# VENTES & CAISSE #}
+            {% set items_ventes = [] %}
             {% if can_bill %}
-            <a class="nav-link {{ page_courante == 'caisse' ? 'active' : '' }}" href="caisse.php">
-                <span class="nav-icon clr-sky"><i class="bi bi-cash-coin"></i></span>
-                <span>Caisse (POS)</span>
-            </a>
-            <a class="nav-link {{ page_courante == 'factures' ? 'active' : '' }}" href="factures.php">
-                <span class="nav-icon clr-sky"><i class="bi bi-receipt"></i></span>
-                <span>Factures</span>
-            </a>
-            {% if peut('retours_consulter') %}
-            <a class="nav-link {{ page_courante == 'retours' ? 'active' : '' }}" href="retours.php">
-                <span class="nav-icon clr-sky"><i class="bi bi-arrow-counterclockwise"></i></span>
-                <span>Retours / SAV</span>
-            </a>
+                {% set items_ventes = items_ventes|merge([
+                    {'slug': 'caisse', 'label': 'Caisse (POS)', 'icon': 'bi-cash-coin', 'color': 'clr-sky'},
+                    {'slug': 'factures', 'label': 'Factures', 'icon': 'bi-receipt', 'color': 'clr-sky'}
+                ]) %}
+                {% if peut('retours_consulter') %}
+                    {% set items_ventes = items_ventes|merge([{'slug': 'retours', 'label': 'Retours / SAV', 'icon': 'bi-arrow-counterclockwise', 'color': 'clr-sky'}]) %}
+                {% endif %}
+                {% if peut('promotions_consulter') %}
+                    {% set items_ventes = items_ventes|merge([{'slug': 'promotions', 'label': 'Promotions & Remises', 'icon': 'bi-percent', 'color': 'clr-sky'}]) %}
+                {% endif %}
+                {% set items_ventes = items_ventes|merge([{'slug': 'cloture', 'label': 'Clôture de Caisse', 'icon': 'bi-lock-fill', 'color': 'clr-sky'}]) %}
+                {% if peut('clients_consulter') %}
+                    {% set items_ventes = items_ventes|merge([{'slug': 'clients', 'label': 'Clients & fidélité', 'icon': 'bi-people', 'color': 'clr-sky'}]) %}
+                {% endif %}
             {% endif %}
-            {% if peut('promotions_consulter') %}
-            <a class="nav-link {{ page_courante == 'promotions' ? 'active' : '' }}" href="promotions.php">
-                <span class="nav-icon clr-sky"><i class="bi bi-percent"></i></span>
-                <span>Promotions &amp; Remises</span>
-            </a>
-            {% endif %}
-            <a class="nav-link {{ page_courante == 'cloture' ? 'active' : '' }}" href="cloture.php">
-                <span class="nav-icon clr-sky"><i class="bi bi-lock-fill"></i></span>
-                <span>Clôture de Caisse</span>
-            </a>
+            {% if items_ventes|length > 0 %}
+                {% set sections = sections|merge([{'key': 'ventes', 'titre': 'Ventes & Caisse', 'icon': 'bi-cash-coin', 'items': items_ventes}]) %}
             {% endif %}
 
-            {# ── ADMINISTRATION ── #}
+            {# ADMINISTRATION #}
+            {% set items_admin = [] %}
             {% if can_admin %}
-            <a class="nav-link {{ page_courante == 'depenses' ? 'active' : '' }}" href="depenses.php">
-                <span class="nav-icon clr-rose"><i class="bi bi-wallet2"></i></span>
-                <span>Dépenses</span>
-            </a>
-            <a class="nav-link {{ page_courante == 'utilisateurs' ? 'active' : '' }}" href="utilisateurs.php">
-                <span class="nav-icon clr-violet"><i class="bi bi-people"></i></span>
-                <span>Utilisateurs</span>
-            </a>
-            <a class="nav-link {{ page_courante == 'magasins' ? 'active' : '' }}" href="magasins.php">
-                <span class="nav-icon clr-violet"><i class="bi bi-shop"></i></span>
-                <span>Magasins</span>
-            </a>
-            <a class="nav-link {{ page_courante == 'parametres' ? 'active' : '' }}" href="parametres.php">
-                <span class="nav-icon clr-violet"><i class="bi bi-gear"></i></span>
-                <span>Paramètres</span>
-            </a>
+                {% set items_admin = items_admin|merge([
+                    {'slug': 'depenses', 'label': 'Dépenses', 'icon': 'bi-wallet2', 'color': 'clr-rose'},
+                    {'slug': 'utilisateurs', 'label': 'Utilisateurs', 'icon': 'bi-people', 'color': 'clr-violet'},
+                    {'slug': 'magasins', 'label': 'Magasins', 'icon': 'bi-shop', 'color': 'clr-violet'},
+                    {'slug': 'parametres', 'label': 'Paramètres', 'icon': 'bi-gear', 'color': 'clr-violet'}
+                ]) %}
             {% endif %}
             {% if peut('audit_consulter') %}
-            <a class="nav-link {{ page_courante == 'audit' ? 'active' : '' }}" href="audit.php">
-                <span class="nav-icon clr-slate"><i class="bi bi-clock-history"></i></span>
-                <span>Journal d'activité</span>
-            </a>
+                {% set items_admin = items_admin|merge([{'slug': 'audit', 'label': "Journal d'activité", 'icon': 'bi-clock-history', 'color': 'clr-slate'}]) %}
             {% endif %}
+            {% if peut('audit_consulter') %}
+                {% set items_admin = items_admin|merge([{'slug': 'conformite', 'label': 'Conformité NF525 / RGPD', 'icon': 'bi-shield-check', 'color': 'clr-slate'}]) %}
+            {% endif %}
+            {% if items_admin|length > 0 %}
+                {% set sections = sections|merge([{'key': 'admin', 'titre': 'Administration', 'icon': 'bi-gear', 'items': items_admin}]) %}
+            {% endif %}
+
+            {# ── Rendu des sections pliables ── #}
+            {% for sec in sections %}
+                {% set active_dans = sec.items|filter(item => item.slug == page_courante)|length > 0 %}
+                <div class="nav-section {{ active_dans ? 'open' : '' }}" data-section="{{ sec.key }}">
+                    <button type="button" class="nav-section-head" aria-expanded="{{ active_dans ? 'true' : 'false' }}">
+                        <span class="nav-section-title"><i class="bi {{ sec.icon }}"></i> {{ sec.titre }}</span>
+                        <i class="bi bi-chevron-down nav-section-chevron"></i>
+                    </button>
+                    <div class="nav-section-body">
+                        {% for item in sec.items %}
+                            <a class="nav-link {{ page_courante == item.slug ? 'active' : '' }}" href="{{ item.slug }}.php">
+                                <span class="nav-icon {{ item.color }}"><i class="bi {{ item.icon }}"></i></span>
+                                <span>{{ item.label }}</span>
+                                {% if item.badge|default(0) > 0 %}
+                                    <span class="badge bg-danger ms-auto" style="font-size:.65rem;">{{ item.badge }}</span>
+                                {% endif %}
+                            </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
 
         </nav>
 

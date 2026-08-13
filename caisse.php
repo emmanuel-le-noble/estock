@@ -24,8 +24,12 @@ $montants_rapides = array_values(array_filter([
 ], static fn($montant) => $montant > 0));
 
 $u = user_courant();
-$magasin_id = (int)($u['magasin_id'] ?? 0);
+$magasin_id = user_magasin_id();
 $user_id = (int)($u['id'] ?? 0);
+
+// Programme de fidélité (affiché uniquement si actif et droits suffisants)
+$fidelite_actif = param_bool('fidelite_actif', false);
+$peut_clients   = peut('clients_consulter');
 
 // Vérifier si la caisse est clôturée pour aujourd'hui
 $caisse_fermee = db_cloture_deja_ferme($pdo, $magasin_id, $user_id);
@@ -41,6 +45,9 @@ window.POS_CONFIG = <?= json_encode(array_merge(param_pos_config(), [
     'user_id'    => $user_id,
     'magasin_id' => $magasin_id,
     'csrf_token' => csrf_token(),
+    'fidelite_actif'   => $fidelite_actif,
+    'fidelite_valeur_point' => (float)param('fidelite_valeur_point', '1'),
+    'fidelite_min_points_usage' => (int)param('fidelite_min_points_usage', '10'),
 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 window.BASE_URL = <?= json_encode(BASE_URL, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;
@@ -139,6 +146,8 @@ window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;
                     <?= csrf_field() ?>
                     <div id="conteneurPanier"></div>
                     <input type="hidden" id="inpTotalTtc" name="total_ttc" value="0">
+                    <input type="hidden" id="inpClientId" name="client_id" value="0">
+                    <input type="hidden" id="inpPointsUtilises" name="points_utilises" value="0">
 
                     <table class="table table-borderless mb-3">
                         <tr>
@@ -158,6 +167,37 @@ window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;
                     </table>
 
                     <!-- Panneau Multi-Paiements -->
+                    <?php if ($fidelite_actif && $peut_clients): ?>
+                    <div class="mb-3 border rounded-3 p-2 bg-light-subtle" id="panneauClient">
+                        <label class="form-label fw-semibold mb-1">
+                            <i class="bi bi-person-vcard text-primary"></i> Client fidélité
+                        </label>
+                        <div class="input-group input-group-sm mb-1">
+                            <input type="text" id="clientSearch" class="form-control" autocomplete="off"
+                                   placeholder="Nom, téléphone ou code carte…">
+                            <button type="button" class="btn btn-outline-primary" id="btnClientSearch" title="Rechercher">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                        <div id="clientResults" class="list-group list-group-flush small" style="display:none"></div>
+                        <div id="clientChip" class="d-none">
+                            <div class="d-flex justify-content-between align-items-center bg-white border rounded-2 p-2 gap-2">
+                                <div class="min-w-0">
+                                    <strong class="d-block text-truncate" id="clientNom"></strong>
+                                    <small class="text-muted" id="clientSolde"></small>
+                                </div>
+                                <button type="button" class="btn-close btn-sm" id="btnClientClear" title="Retirer le client"></button>
+                            </div>
+                        </div>
+                        <div id="zonePoints" class="mt-2 d-none">
+                            <label class="form-label small mb-1" for="pointsUtilises">Points à utiliser</label>
+                            <input type="number" id="pointsUtilises" min="0" step="1" value="0"
+                                   class="form-control form-control-sm">
+                            <div class="form-text small" id="lblRemiseFidelite"></div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Mode de paiement</label>
                         <div class="d-flex gap-1 mb-2" id="modePaiementTabs">

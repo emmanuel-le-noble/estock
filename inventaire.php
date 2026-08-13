@@ -21,8 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'nouveau') {
 
     $data = extract_post_data([
         'notes'      => ['type' => 'string', 'nullable' => true, 'max' => 500],
-        'magasin_id' => ['type' => 'int', 'default' => $magasin_id ?: 1],
+        'magasin_id' => ['type' => 'int', 'default' => $magasin_id],
     ], 'inventaire.php');
+
+    $data['magasin_id'] = $magasin_id;
 
     db_transaction(
         function(PDO $pdo) use ($data, $userId, &$newId) {
@@ -61,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'saisie') {
         echo json_encode(['ok' => false, 'msg' => 'Paramètres invalides']); exit;
     }
     $inv = db_inventaire_get_by_id($pdo, $inv_id);
-    if (!$inv || $inv['statut'] !== 'En cours') {
+    if (!$inv || $inv['statut'] !== 'En cours' || (int)$inv['magasin_id'] !== $magasin_id) {
         echo json_encode(['ok' => false, 'msg' => 'Session non active']); exit;
     }
 
@@ -87,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'valider') {
 
     $inv_id = (int)($_POST['id'] ?? 0);
     $inv    = db_inventaire_get_by_id($pdo, $inv_id);
-    if (!$inv || $inv['statut'] !== 'En cours') {
+    if (!$inv || $inv['statut'] !== 'En cours' || (int)$inv['magasin_id'] !== $magasin_id) {
         flash_error('Inventaire introuvable ou déjà clôturé.');
         redirect('inventaire.php');
     }
@@ -110,6 +112,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'annuler') {
     csrf_guard('inventaire.php');
     exiger_permission('inventaire_gerer');
     $inv_id = (int)($_POST['id'] ?? 0);
+    $inv    = db_inventaire_get_by_id($pdo, $inv_id);
+    if (!$inv || (int)$inv['magasin_id'] !== $magasin_id) {
+        flash_error('Session introuvable ou ne concernant pas votre magasin.');
+        redirect('inventaire.php');
+    }
     db_inventaire_update_statut($pdo, $inv_id, 'Annulé');
     suivre_activite('INVENTAIRE_ANNULATION', 'Annulation inventaire #' . $inv_id);
     flash_success('Inventaire annulé.');
@@ -124,7 +131,7 @@ if ($action === 'detail') {
         flash_error('Lien invalide ou expiré.'); redirect('inventaire.php');
     }
     $inv    = db_inventaire_get_by_id($pdo, $get_id);
-    if (!$inv) { flash_error('Inventaire introuvable.'); redirect('inventaire.php'); }
+    if (!$inv || (int)$inv['magasin_id'] !== $magasin_id) { flash_error('Inventaire introuvable.'); redirect('inventaire.php'); }
 
     $lignes    = db_inventaire_lignes_get($pdo, $get_id);
     $articles  = db_articles_list_active($pdo, 1000);
@@ -132,6 +139,7 @@ if ($action === 'detail') {
 
     echo $twig->render('inventaire.html.twig', [
         'view'     => 'detail',
+        'titre_page' => "Inventaire {$inv['reference']}",
         'inv'      => $inv,
         'lignes'   => $lignes,
         'articles' => $articles,
@@ -152,6 +160,7 @@ $pagination = paginate($built['sql'], $built['params'], 15);
 
 echo $twig->render('inventaire.html.twig', [
     'view'         => 'liste',
+    'titre_page'   => 'Inventaire',
     'rows'         => $pagination['data'],
     'pagination'   => $pagination,
     'filters'      => $filters,

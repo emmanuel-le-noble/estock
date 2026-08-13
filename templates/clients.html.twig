@@ -1,0 +1,234 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <span class="badge text-bg-secondary fs-6">{{ total }} client{{ total > 1 ? 's' : '' }}</span>
+        {% if fidelite_actif %}
+            <span class="badge text-bg-success fs-6"><i class="bi bi-stars"></i> Fidélité active</span>
+        {% else %}
+            <span class="badge text-bg-warning fs-6"><i class="bi bi-stars"></i> Fidélité inactive</span>
+        {% endif %}
+    </div>
+    <form method="get" class="d-flex gap-2" role="search">
+        <input type="text" name="search" value="{{ search|e }}" class="form-control"
+               placeholder="Nom, tel, email, code…" style="width: 260px">
+        <button type="submit" class="btn btn-outline-primary"><i class="bi bi-search"></i></button>
+        {% if search %}<a href="clients.php" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>{% endif %}
+    </form>
+    {% if peut_gerer %}
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAjout">
+        <i class="bi bi-person-plus"></i> Nouveau client
+    </button>
+    {% endif %}
+</div>
+
+{% if peut_gerer %}
+{# ---- Formulaire d'ajout ---- #}
+<div class="modal fade" id="modalAjout" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="post" class="modal-content">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="ajouter">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-person-plus"></i> Nouveau client</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Nom / Prénom (B2C)</label>
+                    <input type="text" name="nom" class="form-control" maxlength="150" placeholder="ex : Marie Dupont">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Code fidélité</label>
+                    <input type="text" name="code_fidelite" class="form-control" maxlength="40" placeholder="laissez vide = auto">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Raison sociale (B2B)</label>
+                    <input type="text" name="raison_sociale" class="form-control" maxlength="200" placeholder="ex : SARL Exemple">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">SIRET</label>
+                    <input type="text" name="siret" class="form-control" maxlength="20" placeholder="14 chiffres">
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Adresse</label>
+                    <input type="text" name="adresse" class="form-control" maxlength="255">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Date de naissance</label>
+                    <input type="date" name="date_naissance" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Téléphone</label>
+                    <input type="text" name="telephone" class="form-control" maxlength="30">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" maxlength="150">
+                </div>
+                <div class="col-12 form-check form-switch d-flex align-items-center gap-2 ps-5">
+                    <input type="checkbox" name="consentement_fidelite" value="1" id="consentAjout" class="form-check-input ms-0" role="switch">
+                    <label for="consentAjout" class="form-check-label small text-muted">
+                        Consentement au programme de fidélité (traçabilité RGPD)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Créer</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{# ---- Liste ---- #}
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Client</th>
+                        <th>Contact</th>
+                        <th class="text-center">Fidélité</th>
+                        <th class="text-end">Points</th>
+                        <th>Dernier achat</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in clients %}
+                        <tr>
+                            <td class="text-muted">{{ c.id }}</td>
+                            <td>
+                                <a href="clients.php?action=voir&id={{ c.id }}" class="fw-semibold text-decoration-none">
+                                    {{ (c.nom ?: c.raison_sociale)|e }}
+                                </a>
+                                {% if c.raison_sociale %}<br><small class="text-muted">B2B — {{ c.raison_sociale|e }}</small>{% endif %}
+                                {% if c.code_fidelite %}
+                                    <br><span class="badge text-bg-light border">{{ c.code_fidelite|e }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="small">
+                                {% if c.telephone %}<div><i class="bi bi-telephone me-1"></i>{{ c.telephone|e }}</div>{% endif %}
+                                {% if c.email %}<div><i class="bi bi-envelope me-1"></i>{{ c.email|e }}</div>{% endif %}
+                                {% if not c.telephone and not c.email %}—{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if c.consentement_fidelite %}
+                                    <span class="badge text-bg-success" title="Consentement {{ date_fr(c.date_consentement) }}">
+                                        <i class="bi bi-check-lg"></i> Consenti
+                                    </span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">Non consenti</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-semibold">{{ c.points_fidelite|default(0) }} pts</td>
+                            <td class="small">{{ c.date_dernier_achat ? date_fr(c.date_dernier_achat) : '—' }}</td>
+                            <td class="text-end">
+                                {% if peut_gerer %}
+                                <a href="clients.php?action=voir&id={{ c.id }}" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal"
+                                        data-bs-target="#modalAnonymiser"
+                                        data-client-id="{{ c.id }}"
+                                        data-client-nom="{{ (c.nom ?: c.raison_sociale)|e }}">
+                                    <i class="bi bi-shield-x"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="bi bi-people fs-1 d-block mb-2"></i>
+                                {{ search ? 'Aucun résultat pour « ' ~ search ~ ' ».' : 'Aucun client enregistré.' }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if total_pages > 1 %}
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <small class="text-muted">Page {{ page }} / {{ total_pages }}</small>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% for p in 1..total_pages %}
+                    <li class="page-item {{ p == page ? 'active' : '' }}">
+                        <a class="page-link" href="clients.php?page={{ p }}&search={{ search|url_encode }}">{{ p }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+{# ---- Modal anonymisation (droit à l'effacement) ---- #}
+{% if peut_gerer %}
+<div class="modal fade" id="modalAnonymiser" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" class="modal-content" data-confirm="Confirmer l'anonymisation ? Les données personnelles seront irréversiblement remplacées.">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="anonymiser">
+            <input type="hidden" name="client_id" id="anonClientId" value="">
+            <div class="modal-header bg-danger-subtle">
+                <h5 class="modal-title"><i class="bi bi-shield-x"></i> Anonymiser le client</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">
+                    Droit à l'effacement (RGPD, art. 17) : les données personnelles de
+                    <strong id="anonClientNom">ce client</strong> seront remplacées de façon irréversible.
+                    Les factures et écritures comptables restent intactes (obligation légale).
+                </p>
+                <label class="form-label">Motif</label>
+                <textarea name="motif" class="form-control" rows="2" maxlength="200"
+                          placeholder="ex : Demande du client…"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="submit" class="btn btn-danger"><i class="bi bi-shield-x"></i> Anonymiser</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{# ---- Purge automatique ---- #}
+{% if peut_gerer %}
+<div class="card shadow-sm mt-3 border-danger-subtle">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <h6 class="mb-1"><i class="bi bi-trash3 text-danger"></i> Purge de conservation (RGPD)</h6>
+            <p class="text-muted small mb-0">
+                Anonymise les clients sans achat depuis {{ retention_mois }} mois et sans consentement actif,
+                puis supprime définitivement les clients déjà anonymisés depuis plus de 12 mois qui n'ont aucune facture.
+            </p>
+        </div>
+        <form method="post" data-confirm="Lancer la purge RGPD maintenant ? (irréversible)">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="purger">
+            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash3"></i> Lancer la purge</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+document.querySelectorAll('[data-bs-target="#modalAnonymiser"]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('anonClientId').value = btn.dataset.clientId;
+        document.getElementById('anonClientNom').textContent = btn.dataset.clientNom;
+    });
+});
+</script>
+{% endblock %}

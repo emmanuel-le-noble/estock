@@ -34,6 +34,8 @@ if (!is_array($lignes)) {
 }
 $totalTtcPost= (float)($_POST['total_ttc'] ?? 0);
 $montantPaye = (float)($_POST['montant_paye'] ?? 0);
+$clientId    = (int)($_POST['client_id'] ?? 0);
+$pointsUtilises = (int)($_POST['points_utilises'] ?? 0);
 
 // Multi-paiements : parser le JSON envoyé par caisse.js
 $paiementsJsonRaw = $_POST['paiements_json'] ?? '[]';
@@ -54,7 +56,7 @@ $montantPaye = $montantPayeCalc;
 
 // Magasin courant
 $u = user_courant();
-$magasin_id = (int)($u['magasin_id'] ?? 0);
+$magasin_id = user_magasin_id();
 $user_id    = (int)($u['id'] ?? 0);
 
 if ($magasin_id <= 0) {
@@ -75,6 +77,19 @@ if (db_cloture_deja_ferme($pdo, $magasin_id, $user_id)) {
 
 try {
     $pdo->beginTransaction();
+
+    // ---- Fidélité : validation + verrouillage du solde client ----
+    $loyautes = null;
+    if ($clientId > 0) {
+        $client = db_client_get_by_id($pdo, $clientId);
+        if (!$client) {
+            throw new RuntimeException('Client fidélité introuvable.');
+        }
+        if ((int)$client['consentement_fidelite'] !== 1) {
+            throw new RuntimeException('Le client n\'a pas consenti au programme de fidélité.');
+        }
+        $loyautes = db_loyalite_verrouiller($pdo, $clientId, $pointsUtilises, $totalTtcPost);
+    }
 
     // ---- 1) Numéro de facture unique ----
     $numero = generate_invoice_number($pdo);
@@ -164,6 +179,17 @@ try {
         $tauxTvaDominant = $lignesAFacturer[0]['taux_tva'];
     }
 
+    // Remise fidélité (points) : à déduire du total TTC
+    if ($loyautes !== null) {
+        $totalTtcCalc = round($totalTtcCalc - $loyautes['remise'], 2);
+    }
+
+    // Anti-fraude : le total TTC envoyé par la caisse doit correspondre
+    // au calcul serveur (remise fidélité incluse), tolérance 0.02
+    if (abs($totalTtcPost - $totalTtcCalc) > 0.02) {
+        throw new RuntimeException('Le total TTC transmis par la caisse ne correspond pas au calculé (remise fidélité incluse).');
+    }
+
     if ($montantPaye < round($totalTtcCalc, 2)) {
         throw new RuntimeException('Le montant payé est insuffisant.');
     }
@@ -179,7 +205,14 @@ try {
         'montant_paye'   => round($montantPaye, 2),
         'monnaie_rendue' => round($monnaieRendue, 2),
         'magasin_id'     => $magasin_id,
+        'remise_fidelite'=> $loyautes !== null ? $loyautes['remise'] : 0.0,
+        'points_utilises'=> $loyautes !== null ? $loyautes['points'] : 0,
     ]);
+
+    if ($loyautes !== null) {
+        $pdo->prepare("UPDATE factures SET client_id = ? WHERE id = ?")
+            ->execute([$clientId, $factureId]);
+    }
 
     // ---- 4 & 5) Lignes + déduction atomique stock lot + mouvements ----
     foreach ($lignesAFacturer as $l) {
@@ -223,7 +256,26 @@ try {
         db_paiements_insert($pdo, $factureId, $paiementsList);
     }
 
+    // ---- 7) Chaînage cryptographique NF525 (après lignes + paiements) ----
+    db_facture_chainer($pdo, $factureId);
+
+    // ---- 8) Consommation des points fidélité (solde verrouillé FOR UPDATE) ----
+    if ($loyautes !== null && $loyautes['points'] > 0) {
+        $pdo->prepare("UPDATE clients SET points_fidelite = points_fidelite - ? WHERE id = ?")
+            ->execute([$loyautes['points'], $clientId]);
+        // facture_id NULL : 1 ligne GAIN par facture (clé unique), l'utilisation
+        // est tracée sur la facture via factures.points_utilises.
+        $pdo->prepare(
+            "INSERT INTO historique_points (client_id, facture_id, points, type_operation, commentaire, utilisateur_id)
+             VALUES (?, NULL, ?, 'UTILISATION', 'Utilisation points en caisse', ?)"
+        )->execute([$clientId, -$loyautes['points'], user_id()]);
+    }
+
     $pdo->commit();
+
+    if ($loyautes !== null) {
+        db_client_attribuer_points($pdo, $clientId, $factureId, $totalTtcCalc);
+    }
     suivre_activite('VENTE', 'Facture ' . $numero . ' validée — ' . count($lignesAFacturer) . ' ligne(s), TTC=' . number_format($totalTtcCalc, 2, ',', ' '));
 
     flash_success('Facture ' . $numero . ' enregistrée avec succès.');
