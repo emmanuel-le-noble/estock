@@ -62,6 +62,11 @@ function test_db_schema(): void {
     $pdo = test_db();
     $root = dirname(__DIR__);
 
+    // Désactivation temporaire des FK : le dump DROP/CREATE peut être rejoué
+    // plusieurs fois dans un même process (plusieurs classes de tests
+    // d'intégration) sans erreur d'ordre de suppression.
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+
     // Dump de référence (DROP + CREATE + données de démo).
     // Les instructions session/transaction (SET…) peuvent échouer sur un
     // environnement distant : elles sont ignorées, les CREATE/DATA sont stricts.
@@ -76,15 +81,20 @@ function test_db_schema(): void {
         $pdo->exec($stmt);
     }
 
-    // Migrations clés (séquences, NF525, RGPD, fidélité, valorisation)
+    // Migrations clés (séquences, intégrité, données clients, fidélité, valorisation)
     foreach ([
         'compteurs_sequences.sql',
-        'nf525.sql',
-        'rgpd.sql',
+        'categories.sql',
+        'tva_multiple.sql',
+        'integrite_ventes.sql',
+        'donnees_clients.sql',
+        'conformite_togo.sql',
         'fidelite.sql',
         'points_reversals.sql',
         'valorisation_stock.sql',
         'unite_mesure.sql',
+        'emails_queue.sql',
+        'emails_consentements.sql',
     ] as $file) {
         $m = file_get_contents($root . '/database/' . $file);
         if ($m === false) continue;
@@ -98,6 +108,8 @@ function test_db_schema(): void {
             }
         }
     }
+
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 }
 
 /**

@@ -311,8 +311,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'receptionner') {
                 db_commande_fournisseur_lignes_update_reception($pdo, $lid, $qte_rec_ajout);
 
                 // Entrée en stock via process_stock_movement
+                // Coût réel : le prix d'achat unitaire saisi sur la ligne de commande
+                // alimente le CUMP (voir valorisation_stock.sql).
                 $motif = "Réception commande fournisseur #{$cmd_id}";
-                process_stock_movement($pdo, $art_id, 'Entree', $qte_rec_ajout, $motif, $user_id, (int)$cmd['magasin_id']);
+                $cout_unitaire = (float)($l['prix_achat_unitaire'] ?? 0);
+                process_stock_movement($pdo, $art_id, 'Entree', $qte_rec_ajout, $motif, $user_id, (int)$cmd['magasin_id'], null, null, $cout_unitaire);
 
                 $nb_recus += $qte_rec_ajout;
             }

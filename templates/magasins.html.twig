@@ -7,6 +7,48 @@
     </div>
 </div>
 
+{% if magasin_edit is defined and magasin_edit %}
+{# ---- Formulaire de modification ---- #}
+<div class="card shadow-sm mb-4 border-primary">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Modifier « {{ magasin_edit.nom|e }} »</h5>
+        <a href="magasins.php" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-lg"></i> Annuler</a>
+    </div>
+    <div class="card-body">
+        <form method="post" class="row g-3">
+            {{ csrf_field() }}
+            <input type="hidden" name="action" value="modifier">
+            <input type="hidden" name="id" value="{{ magasin_edit.id }}">
+            <div class="col-md-4">
+                <label class="form-label">Nom du magasin *</label>
+                <input type="text" name="nom" class="form-control" required maxlength="150" value="{{ magasin_edit.nom|e }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Adresse</label>
+                <input type="text" name="adresse" class="form-control" maxlength="255" value="{{ magasin_edit.adresse|e ?: '' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Code postal / ville</label>
+                <input type="text" name="code_postal" class="form-control" maxlength="10" value="{{ magasin_edit.code_postal|e ?: '' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">NIF (Numéro d'Identification Fiscale)</label>
+                <input type="text" name="nif" class="form-control" maxlength="30" value="{{ magasin_edit.nif|e ?: '' }}"
+                       placeholder="ex : 1001234567">
+                <small class="text-muted">Attribué par l'OTR — requis pour la facturation conforme.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">RCCM (registre du commerce)</label>
+                <input type="text" name="rccm" class="form-control" maxlength="30" value="{{ magasin_edit.rccm|e ?: '' }}"
+                       placeholder="ex : TG-LOM-2024-B2-1234">
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% else %}
 {# ---- Formulaire d'ajout ---- #}
 <div class="card shadow-sm mb-4">
     <div class="card-header bg-white">
@@ -19,19 +61,19 @@
             <div class="col-md-3">
                 <label class="form-label">Nom du magasin *</label>
                 <input type="text" name="nom" class="form-control" required maxlength="150"
-                       placeholder="ex : Entrepôt Nord">
+                       placeholder="ex : Boutique Adidogomé">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Adresse</label>
                 <input type="text" name="adresse" class="form-control" maxlength="255"
-                       placeholder="ex : 45 Rue du Commerce">
+                       placeholder="ex : Rue du Commerce">
             </div>
             <div class="col-md-2">
-                <label class="form-label">Code postal</label>
+                <label class="form-label">Code postal / ville</label>
                 <input type="text" name="code_postal" class="form-control" maxlength="10"
-                       placeholder="ex : 75001">
+                       placeholder="ex : Lomé">
             </div>
-            <div class="col-md-3 d-flex gap-2">
+            <div class="col-md-1 d-flex gap-2">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-plus-lg"></i> Ajouter
                 </button>
@@ -39,6 +81,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 {# ---- Liste des magasins ---- #}
 <div class="card shadow-sm">
@@ -50,9 +93,9 @@
                         <th>#</th>
                         <th>Nom</th>
                         <th>Adresse</th>
-                        <th>Code postal</th>
+                        <th>NIF</th>
+                        <th>RCCM</th>
                         <th class="text-center">Statut</th>
-                        <th class="text-center">Créé le</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -61,8 +104,12 @@
                         <tr>
                             <td class="text-muted">{{ m.id }}</td>
                             <td class="fw-semibold">{{ m.nom|e }}</td>
-                            <td>{{ m.adresse|e ?: '—' }}</td>
-                            <td>{{ m.code_postal|e ?: '—' }}</td>
+                            <td>{{ m.adresse|e ?: '—' }}{% if m.code_postal %}, {{ m.code_postal|e }}{% endif %}</td>
+                            <td>
+                                {{ m.nif|e ?: '—' }}
+                                {% if not m.nif %}<i class="bi bi-exclamation-circle text-warning" title="NIF manquant — factures non conformes"></i>{% endif %}
+                            </td>
+                            <td>{{ m.rccm|e ?: '—' }}</td>
                             <td class="text-center">
                                 {% if m.actif %}
                                     <span class="badge text-bg-success">Actif</span>
@@ -70,8 +117,10 @@
                                     <span class="badge text-bg-danger">Inactif</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center text-muted small">{{ date_fr(m.date_creation) }}</td>
                             <td class="text-end">
+                                <a href="magasins.php?modif={{ m.id }}" class="btn btn-outline-primary btn-sm" title="Modifier">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
                                 <form method="post" class="d-inline" data-confirm="Désactiver ce magasin ?">
                                     {{ csrf_field() }}
                                     <input type="hidden" name="action" value="toggle">

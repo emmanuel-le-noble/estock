@@ -1,11 +1,12 @@
 <?php
 /**
- * clients.php - Fichier clients : programme de fidélité + RGPD.
+ * clients.php - Fichier clients : programme de fidélité + protection
+ * des données personnelles.
  *
- *  - CRUD des fiches clients (B2C / B2B : raison sociale, SIRET, adresse)
- *  - Consentement explicite du programme de fidélité (traçabilité RGPD)
+ *  - CRUD des fiches clients (B2C / B2B : raison sociale, NIF, RCCM, adresse)
+ *  - Consentement explicite du programme de fidélité (traçabilité)
  *  - Consultation solde et historique de points
- *  - Droit à l'effacement : ANONYMISATION (ne casse pas la comptabilité)
+ *  - Anonymisation des données personnelles (ne casse pas la comptabilité)
  *  - Purge automatique manuelle (politique de conservation)
  */
 if (!function_exists('est_connecte')) { require_once __DIR__ . '/config/connexion.php'; }
@@ -32,7 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data = extract_post_data([
             'nom'              => ['type' => 'string', 'nullable' => true, 'max' => 150, 'redirect' => 'clients.php'],
             'raison_sociale'   => ['type' => 'string', 'nullable' => true, 'max' => 200, 'redirect' => 'clients.php'],
-            'siret'            => ['type' => 'string', 'nullable' => true, 'max' => 20, 'redirect' => 'clients.php'],
+            'nif'              => ['type' => 'string', 'nullable' => true, 'max' => 30, 'redirect' => 'clients.php'],
+            'rccm'             => ['type' => 'string', 'nullable' => true, 'max' => 30, 'redirect' => 'clients.php'],
             'adresse'          => ['type' => 'string', 'nullable' => true, 'max' => 255, 'redirect' => 'clients.php'],
             'telephone'        => ['type' => 'string', 'nullable' => true, 'max' => 30, 'redirect' => 'clients.php'],
             'email'            => ['type' => 'string', 'nullable' => true, 'max' => 150, 'redirect' => 'clients.php'],
@@ -84,13 +86,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'anonymiser') {
         if ($id <= 0) { flash_error('Client invalide.'); redirect('clients.php'); }
-        $motif = mb_substr(trim((string)($_POST['motif'] ?? 'Demande du client (droit à l\'effacement)')), 0, 200);
+        $motif = mb_substr(trim((string)($_POST['motif'] ?? 'Demande du client (anonymisation)')), 0, 200);
         if (db_client_anonymiser($pdo, $id, $motif)) {
             flash_success('Client anonymisé : les données personnelles sont remplacées, la comptabilité est conservée.');
         } else {
             flash_error('Client introuvable.');
         }
-        suivre_activite('RGPD_EFFACEMENT', 'Droit à l\'effacement exercé pour le client #' . $id);
+        suivre_activite('EFFACEMENT_CLIENT', 'Anonymisation demandée pour le client #' . $id);
         redirect('clients.php');
     }
 
@@ -111,12 +113,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'purger') {
-        $result = db_clients_purge_rgpd($pdo,
-            (int)param('rgpd_retention_clients_mois', '36'),
+        $result = db_clients_purger($pdo,
+            (int)param('retention_clients_mois', '36'),
             12
         );
-        suivre_activite('RGPD_PURGE', 'Purge conservation : ' . $result['anonymises'] . ' anonymisé(s), ' . $result['supprimes'] . ' supprimé(s)');
-        flash_success('Purge RGPD : ' . $result['anonymises'] . ' client(s) anonymisé(s), ' . $result['supprimes'] . ' supprimé(s) physiquement.');
+        suivre_activite('PURGE_CLIENTS', 'Purge conservation : ' . $result['anonymises'] . ' anonymisé(s), ' . $result['supprimes'] . ' supprimé(s)');
+        flash_success('Purge : ' . $result['anonymises'] . ' client(s) anonymisé(s), ' . $result['supprimes'] . ' supprimé(s) physiquement.');
         redirect('clients.php');
     }
 
@@ -188,5 +190,5 @@ echo $twig->render('clients.html.twig', [
     'search'     => $search,
     'peut_gerer' => $peut_gerer,
     'fidelite_actif' => param_bool('fidelite_actif', false),
-    'retention_mois' => param_int('rgpd_retention_clients_mois', 36),
+    'retention_mois' => param_int('retention_clients_mois', 36),
 ]);

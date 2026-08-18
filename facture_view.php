@@ -79,14 +79,49 @@ $pays = trim(param('pays', ''));
 $telephone_boutique = trim(param('telephone_boutique', ''));
 $email_boutique = trim(param('email_boutique', ''));
 $site_boutique = trim(param('site_boutique', ''));
+$nif_boutique = trim(param('nif_boutique', ''));
+$rccm_boutique = trim(param('rccm_boutique', ''));
+$regime_tpu = param_regime_tpu();
 $ticket_entete = trim(param('ticket_entete', 'Merci de votre visite !'));
 $ticket_remarque = trim(param('ticket_remarque', ''));
 $ticket_format = param('ticket_format', '80mm') === '58mm' ? '58mm' : '80mm';
 $localisation = trim(implode(' ', array_filter([$code_postal, $pays])));
 
+// Conformité fiscale : le NIF boutique est requis sur toute facture (OTR)
+$facture_conforme = $nif_boutique !== '';
+// Facture B2B : client professionnel (raison sociale / RCCM) sans NIF
+$clientFactNif = trim((string)($f['client_nif'] ?? ''));
+$facture_b2b_sans_nif = ($f['client_raison_sociale'] ?? '') !== '' && $clientFactNif === '';
 $titre_page = 'Facture ' . $f['numero_facture'];
 include __DIR__ . '/includes/header.php';
 ?>
+
+<div class="no-print mb-3">
+    <?php if ($f['statut'] === 'Annulee'): ?>
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i> Cette facture a été annulée.
+    </div>
+    <?php endif; ?>
+    <?php if (!$facture_conforme): ?>
+    <div class="alert alert-danger d-flex align-items-center gap-2">
+        <i class="bi bi-shield-exclamation fs-5"></i>
+        <div>
+            <strong>Facture non conforme (OTR) :</strong> le NIF de la boutique n'est pas renseigné
+            dans <a href="parametres.php" class="alert-link">Paramètres → Boutique</a>.
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php if ($facture_b2b_sans_nif): ?>
+    <div class="alert alert-warning d-flex align-items-center gap-2">
+        <i class="bi bi-shield-exclamation fs-5"></i>
+        <div>
+            <strong>Facture B2B non conforme (OTR) :</strong> le client professionnel
+            <?= h($f['client_raison_sociale']) ?> ne dispose pas d'un NIF renseigné sur
+            sa fiche client.
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
 
 <div class="no-print mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
     <a href="<?= h('factures.php') ?>" class="btn btn-outline-secondary">
@@ -105,12 +140,6 @@ include __DIR__ . '/includes/header.php';
     </div>
 </div>
 
-<?php if ($f['statut'] === 'Annulee'): ?>
-<div class="no-print alert alert-warning">
-    <i class="bi bi-exclamation-triangle"></i> Cette facture a été annulée.
-</div>
-<?php endif; ?>
-
 <!-- ============ TICKET DE CAISSE ============ -->
 <div class="ticket ticket-<?= h($ticket_format) ?>" id="ticket">
     <div class="text-center">
@@ -118,6 +147,8 @@ include __DIR__ . '/includes/header.php';
         <?php if ($adresse_boutique): ?><div><?= h($adresse_boutique) ?></div><?php endif; ?>
         <?php if ($localisation): ?><div><?= h($localisation) ?></div><?php endif; ?>
         <?php if ($telephone_boutique): ?><div>Tél : <?= h($telephone_boutique) ?></div><?php endif; ?>
+        <?php if ($nif_boutique): ?><div>NIF : <?= h($nif_boutique) ?></div><?php endif; ?>
+        <?php if ($rccm_boutique): ?><div>RCCM : <?= h($rccm_boutique) ?></div><?php endif; ?>
         <?php if ($email_boutique): ?><div><?= h($email_boutique) ?></div><?php endif; ?>
         <div class="hr-dashed"></div>
     </div>
@@ -126,6 +157,12 @@ include __DIR__ . '/includes/header.php';
         <div><strong>Ticket N° :</strong> <?= h($f['numero_facture']) ?></div>
         <div><strong>Date :</strong> <?= h(date_fr($f['date_facture'])) ?></div>
         <div><strong>Vendeur :</strong> <?= h($f['vendeur_nom'] ?: '—') ?></div>
+        <?php $clientFactNom = trim((string)($f['client_nom'] ?? ''));
+        if ($clientFactNom !== '' && (int)($f['client_id'] ?? 0) > 0): ?>
+        <div class="hr-dashed"></div>
+        <div><strong>Client :</strong> <?= h($clientFactNom) ?></div>
+        <?php if ($clientFactNif !== ''): ?><div>NIF : <?= h($clientFactNif) ?></div><?php endif; ?>
+        <?php endif; ?>
     </div>
 
     <div class="hr-dashed"></div>
@@ -181,6 +218,10 @@ include __DIR__ . '/includes/header.php';
         <tr>
             <td>TVA (<?= h(number_format((float)$f['tva_taux'], 2, ',', ' ')) ?>%)</td>
             <td align="right"><?= h(money((float)$f['total_ttc'] - (float)$f['total_ht'])) ?></td>
+        </tr>
+        <?php elseif ($regime_tpu): ?>
+        <tr>
+            <td colspan="2" align="center" style="font-weight:bold;">TVA non applicable (TPU)</td>
         </tr>
         <?php endif; ?>
         <?php if ($totalRemises > 0): ?>

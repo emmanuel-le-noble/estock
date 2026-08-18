@@ -185,10 +185,14 @@ function db_transaction(callable $callback, string $success_msg, string $error_m
 
 /**
  * Processus de mouvement de stock AVEC support des lots.
+ * @param float|null $cout_unitaire Coût unitaire réel d'entrée (réceptions
+ *        fournisseur). NULL → prix_achat de l'article (mouvements manuels,
+ *        inventaires positifs, transferts, retours). Alimente le CUMP.
  */
 function process_stock_movement(PDO $pdo, int $article_id, string $type, int $quantite, 
                                  ?string $motif, int $user_id, int $magasin_id,
-                                 ?string $numero_lot = null, ?string $date_peremption = null): array {
+                                 ?string $numero_lot = null, ?string $date_peremption = null,
+                                 ?float $cout_unitaire = null): array {
     // 1. Récupération de l'article avant mouvement
     $art = db_article_get_for_mouvement($pdo, $article_id, $magasin_id);
     if (!$art) {
@@ -222,7 +226,22 @@ function process_stock_movement(PDO $pdo, int $article_id, string $type, int $qu
         // le système passera directement à l'étape 5 pour déduire le stock classique.
     }
     
-    // 5. Mise à jour du stock par magasin (liaison classique du projet)
+    // 5. Valorisation CUMP : toute entrée en stock actualise le coût moyen
+    // pondéré AVANT la mise à jour des quantités (la formule utilise le stock
+    // d'avant-entrée). Les sorties/ventes consomment les couches FIFO
+    // (valorisées au CUMP dans les statistiques).
+    if ($type === 'Entree' && $quantite > 0) {
+        $cout = ($cout_unitaire !== null && $cout_unitaire >= 0)
+            ? $cout_unitaire
+            : (float)($art['prix_achat'] ?? 0);
+        if ($cout >= 0) {
+            db_article_cump_entree($pdo, $article_id, $quantite, $cout, $motif, $magasin_id);
+        }
+    } elseif ($type === 'Sortie' || $type === 'Vente') {
+        db_article_couts_consommer($pdo, $article_id, $quantite);
+    }
+
+    // 5bis. Mise à jour du stock par magasin (liaison classique du projet)
     $delta = ($type === 'Entree') ? $quantite : -$quantite;
     db_article_update_stock($pdo, $article_id, $delta, $magasin_id);
 
@@ -307,14 +326,14 @@ function is_stock_low(int $quantite_stock, int $seuil_alerte): bool {
  * Retourner la couleur Bootstrap pour un type de mouvement.
  */
 function movement_type_color(string $type): string {
-    return ['Entree' => 'success', 'Sortie' => 'warning', 'Vente' => 'info'][$type] ?? 'secondary';
+    return ['Entree' => 'success', 'Sortie' => 'warning', 'Vente' => 'info', 'Transfert' => 'info', 'Ajustement' => 'warning', 'Retour_stock' => 'success'][$type] ?? 'secondary';
 }
 
 /**
  * Retourner le signe (+ ou -) pour un type de mouvement.
  */
 function movement_type_sign(string $type): string {
-    return ['Entree' => '+', 'Sortie' => '-', 'Vente' => '-'][$type] ?? '';
+    return ['Entree' => '+', 'Sortie' => '-', 'Vente' => '-', 'Transfert' => '-', 'Ajustement' => '±', 'Retour_stock' => '+'][$type] ?? '';
 }
 
 /**
@@ -409,11 +428,14 @@ function verify_url_signature(int $id, string $token, array $extra = []): bool {
 // ============================================================
 
 function generate_invoice_number(PDO $pdo): string {
-    $prefixe = 'FAC-' . date('Ymd') . '-';
+    // Préfixe paramétrable (Paramètres → Conformité) : format <PREFIXE>-AAAAMMJJ-NNNN
+    $prefixe = param('facture_prefixe', 'FAC');
+    $prefixe = trim(preg_replace('/[^A-Z0-9_-]/i', '', $prefixe)) ?: 'FAC';
+    $prefixe .= '-' . date('Ymd') . '-';
     $cle     = 'numero_facture:' . date('Ymd');
 
-    // Numérotation atomique (NF525 / multi-caisses) : la table sequences
-    // garantit qu'aucun numéro n'est délivré deux fois, même en concurrence.
+    // Numérotation atomique (multi-caisses) : la table sequences garantit
+    // qu'aucun numéro n'est délivré deux fois, même en concurrence.
     if (db_sequences_exists($pdo)) {
         // Aligner sur les factures créées avant l'installation de la table
         $rang = db_sequence_next($pdo, $cle, db_facture_count_by_prefix($pdo, $prefixe) + 1);
@@ -501,7 +523,41 @@ function suivre_activite(string $action, ?string $details = null): void {
         ]);
     } catch (\Throwable $e) {
         error_log('Audit log error: ' . $e->getMessage());
+        log_json('erreur', 'Échec d\'écriture du journal d\'audit en base', ['exception' => $e->getMessage()]);
     }
+}
+
+/**
+ * Journalisation technique structurée JSON (dossier logs/app.log).
+ *
+ * Chaque entrée est une ligne JSON autonome : date ISO, niveau, message,
+ * contexte (jamais de secret), requête et utilisateur. Conçue pour être
+ * agrégée (cron/fail2ban/outils d'ingestion) sans script de parsing.
+ *
+ * Niveaux gérés : debug | info | warning | erreur.
+ */
+function log_json(string $niveau, string $message, array $contexte = []): void {
+    $niveau = in_array($niveau, ['debug', 'info', 'warning', 'erreur'], true) ? $niveau : 'info';
+    $contexte['utilisateur'] = (int)($_SESSION['user']['id'] ?? 0);
+    $contexte['ip']          = obtenir_adresse_ip_client();
+
+    $entree = array_filter([
+        'timestamp' => date('c'),
+        'niveau'    => $niveau,
+        'message'   => mb_substr($message, 0, 500),
+        'contexte'  => $contexte ?: null,
+        'requete'   => ($_SERVER['REQUEST_METHOD'] ?? '') . ' ' . ($_SERVER['REQUEST_URI'] ?? ''),
+    ], static fn($v) => $v !== null);
+
+    $dossier = dirname(__DIR__) . '/logs';
+    if (!is_dir($dossier)) {
+        @mkdir($dossier, 0755, true);
+    }
+    @file_put_contents(
+        $dossier . '/app.log',
+        json_encode($entree, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+        FILE_APPEND | LOCK_EX
+    );
 }
 
 // ============================================================
@@ -556,10 +612,237 @@ function api_generer_code_barre(PDO $pdo): string {
 //  MODULE 9 — NOTIFICATIONS (EMAIL BASIQUE)
 // ============================================================
 
+// ============================================================
+//  MODULE E-MAIL — FILE D'ATTENTE ASYNCHRONE
+// ============================================================
+// Bonnes pratiques de prospection par e-mail :
+//   * La prospection directe par e-mail exige un opt-in préalable prouvé.
+//   * Lien de désinscription fonctionnel dans chaque e-mail de
+//     prospection (droit d'opposition simple et gratuit).
+//   * Conservation limitée — purge des messages traités.
+//   * Suppression des données d'un destinataire sur demande (file +
+//     consentements).
+//   * Token de désinscription aléatoire (64 hex), aucune donnée sensible
+//     en base (le champ erreur ne contient JAMAIS le corps).
+
+const EMAILS_TYPE_TRANSACTIONNEL = 'transactionnel';
+const EMAILS_TYPE_ALERTE         = 'alerte';
+const EMAILS_TYPE_MARKETING      = 'marketing';
+
+/**
+ * URL publique du site pour les liens intégrés dans les e-mails (CLI worker).
+ * Priorité : paramètre base_url_ext → BASE_URL (web) → fallback localhost.
+ */
+function email_base_url(): string {
+    $ext = trim(param('base_url_ext', ''));
+    if ($ext !== '') {
+        return rtrim($ext, '/') . '/';
+    }
+    if (defined('BASE_URL') && str_contains(BASE_URL ?? '', '://')) {
+        return BASE_URL;
+    }
+    return 'http://localhost/';
+}
+
+/**
+ * Obtenir ou créer le token de désinscription (64 hex) pour un destinataire.
+ * Token aléatoire non devinable, avec traçabilité du consentement.
+ */
+function email_obtenir_token(PDO $pdo, string $email): string {
+    $stmt = $pdo->prepare("SELECT token_desinscription FROM emails_consentements WHERE email = ?");
+    $stmt->execute([$email]);
+    $token = $stmt->fetchColumn();
+    if (is_string($token) && $token !== '') {
+        return $token;
+    }
+    $token = bin2hex(random_bytes(32));
+    $pdo->prepare(
+        "INSERT INTO emails_consentements (email, token_desinscription)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE token_desinscription = VALUES(token_desinscription)"
+    )->execute([$email, $token]);
+    return $token;
+}
+
+/**
+ * Enregistrer un consentement opt-in POUR LA PROSPECTION.
+ * Retourne false si une opposition globale existe (l'opposition prime).
+ */
+function email_consentement_optin_enregistrer(PDO $pdo, string $email, string $source): bool {
+    $token = email_obtenir_token($pdo, $email);
+    $stmt = $pdo->prepare(
+        "INSERT INTO emails_consentements (email, opt_in_marketing, date_consentement, source_consentement, token_desinscription)
+         VALUES (?, 1, NOW(), ?, ?)
+         ON DUPLICATE KEY UPDATE
+            opt_in_marketing    = IF(opposition_globale = 1, opt_in_marketing, 1),
+            date_consentement   = IF(opposition_globale = 1, date_consentement, NOW()),
+            source_consentement = IF(opposition_globale = 1, source_consentement, VALUES(source_consentement))"
+    );
+    $stmt->execute([$email, $source, $token]);
+    $row = $pdo->prepare("SELECT opposition_globale FROM emails_consentements WHERE email = ?");
+    $row->execute([$email]);
+    return (int)$row->fetchColumn() === 0;
+}
+
+/**
+ * Vérifier si un e-mail peut être envoyé pour un type donné.
+ *   * opposition_globale bloque TOUS les types ;
+ *   * le marketing bloque sans opt-in préalable.
+ */
+function email_verifier_consentement(PDO $pdo, string $email, string $type): bool {
+    $stmt = $pdo->prepare(
+        "SELECT opt_in_marketing, opposition_globale FROM emails_consentements WHERE email = ?"
+    );
+    $stmt->execute([$email]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        // Jamais vu : seul le marketing requiert un opt-in.
+        return $type !== EMAILS_TYPE_MARKETING;
+    }
+    if ((int)$row['opposition_globale'] === 1) {
+        return false;
+    }
+    if ($type === EMAILS_TYPE_MARKETING && (int)$row['opt_in_marketing'] !== 1) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Enregistrer l'opposition — désinscription depuis le lien.
+ * Met à jour le token pour invalider les anciens liens.
+ */
+function email_opposition_enregistrer(PDO $pdo, string $email): bool {
+    $token = bin2hex(random_bytes(32));
+    try {
+        $stmt = $pdo->prepare(
+            "INSERT INTO emails_consentements (email, opposition_globale, date_opposition, token_desinscription)
+             VALUES (?, 1, NOW(), ?)
+             ON DUPLICATE KEY UPDATE
+                opposition_globale = 1,
+                date_opposition    = NOW(),
+                opt_in_marketing   = 0,
+                token_desinscription = VALUES(token_desinscription)"
+        );
+        $stmt->execute([$email, $token]);
+        return true;
+    } catch (Throwable $e) {
+        error_log('Erreur enregistrement opposition: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Traiter un clic de désinscription via token (page publique desinscription.php).
+ * Réponse générique : n'indique JAMAIS si l'adresse existait (anti-énumération).
+ */
+function email_desinscrire_par_token(PDO $pdo, string $token): bool {
+    $token = trim($token);
+    if ($token === '' || !ctype_xdigit($token) || strlen($token) !== 64) {
+        return false;
+    }
+    $stmt = $pdo->prepare("SELECT email FROM emails_consentements WHERE token_desinscription = ?");
+    $stmt->execute([$token]);
+    $email = $stmt->fetchColumn();
+    if (!is_string($email) || $email === '') {
+        return false;
+    }
+    return email_opposition_enregistrer($pdo, $email);
+}
+
+/**
+ * Effacement des données d'un destinataire : purge de la file +
+ * du consentement. Aucun e-mail résiduel ne lui sera envoyé.
+ */
+function email_supprimer_donnees(PDO $pdo, string $email): bool {
+    try {
+        $pdo->prepare("DELETE FROM emails_queue WHERE destinataire = ?")->execute([$email]);
+        $pdo->prepare("DELETE FROM emails_consentements WHERE email = ?")->execute([$email]);
+        return true;
+    } catch (Throwable $e) {
+        error_log('Erreur effacement données emails: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Ajouter un e-mail à la file d'attente (asynchrone, non bloquant).
+ * Vérifie d'abord le consentement (opt-in marketing / opposition globale).
+ * Retourne l'id (int), ou false si refusé / échec d'insertion.
+ */
+function email_queue_ajouter(PDO $pdo, string $destinataire, string $sujet, string $corps_html, string $type = EMAILS_TYPE_ALERTE): int|false {
+    $destinataire = trim($destinataire);
+    $sujet        = trim($sujet);
+    if ($destinataire === '' || !filter_var($destinataire, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+    if (!in_array($type, [EMAILS_TYPE_TRANSACTIONNEL, EMAILS_TYPE_ALERTE, EMAILS_TYPE_MARKETING], true)) {
+        $type = EMAILS_TYPE_ALERTE;
+    }
+
+    // Pas d'envoi sans consentement valide.
+    if (!email_verifier_consentement($pdo, $destinataire, $type)) {
+        suivre_activite('EMAIL_REFUSE', 'E-mail ' . $type . ' bloqué (consentement) pour ' . $destinataire);
+        return false;
+    }
+
+    // Mention de désinscription sur la prospection.
+    if (param_bool('emails_desinscription_obligatoire', true) && $type === EMAILS_TYPE_MARKETING) {
+        $token = email_obtenir_token($pdo, $destinataire);
+        $base  = email_base_url();
+        $mention = '<p style="margin-top:24px;font-size:11px;color:#777;border-top:1px solid #eee;padding-top:10px;">'
+                 . 'Vous recevez cet e-mail car vous êtes inscrit au programme de ' . h(param_shop_name()) . '.<br>'
+                 . 'Pour ne plus recevoir nos offres, cliquez ici : '
+                 . '<a href="' . h($base . 'desinscription.php?token=' . $token) . '" style="color:#0d6efd;">me désinscrire</a>.'
+                 . '</p>';
+        $corps_html .= $mention;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            "INSERT INTO emails_queue (destinataire, type, sujet, corps_html, statut, prochaine_tentative)
+             VALUES (?, ?, ?, ?, 'EN_ATTENTE', NOW())"
+        );
+        $stmt->execute([$destinataire, $type, $sujet, $corps_html]);
+        return (int)$pdo->lastInsertId();
+    } catch (Throwable $e) {
+        error_log('Erreur insertion file e-mails: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Purge des e-mails traités (ENVOYE / ECHEC) plus anciens que $jours
+ * (limitation de la conservation). Retourne le nombre supprimé.
+ */
+function email_queue_purger(PDO $pdo, int $jours = 30): int {
+    $jours = max(1, $jours);
+    try {
+        $stmt = $pdo->prepare(
+            "DELETE FROM emails_queue
+             WHERE statut IN ('ENVOYE','ECHEC')
+               AND COALESCE(date_envoi, date_creation) < DATE_SUB(NOW(), INTERVAL ? DAY)"
+        );
+        $stmt->execute([$jours]);
+        return $stmt->rowCount();
+    } catch (Throwable $e) {
+        error_log('Erreur purge file e-mails: ' . $e->getMessage());
+        return 0;
+    }
+}
+
 /**
  * Envoyer un email de notification HTML avec fallback journal d'erreurs.
+ * Peut être bloquant en mode 'direct' (legacy) — en mode 'file' (défaut),
+ * l'e-mail est mis en file d'attente et renvoyé par bin/emails_worker.php.
  */
 function envoyer_email_notification(string $to, string $sujet, string $message_html): bool {
+    global $pdo;
+
+    // Mode asynchrone (défaut) : file d'attente.
+    if (param('emails_mode', 'file') === 'file' && isset($GLOBALS['pdo'])) {
+        return email_queue_ajouter($GLOBALS['pdo'], $to, $sujet, $message_html, EMAILS_TYPE_ALERTE) !== false;
+    }
     $from = param('smtp_from', 'noreply@estock.local');
     $shop = param_shop_name();
 

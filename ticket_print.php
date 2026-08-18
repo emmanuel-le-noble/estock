@@ -138,4 +138,7 @@ echo $twig->render('ticket_print.html.twig', [
     'csp_nonce_val' => csp_nonce(),
     'points_gagnes' => $pointsGagnes,
     'fidelite_actif' => (int)$pointsGagnes > 0 || (float)($facture['remise_fidelite'] ?? 0) > 0 || (int)($facture['points_utilises'] ?? 0) > 0,
+    'regime_tpu' => param_regime_tpu(),
+    'nif_boutique' => param('nif_boutique', ''),
+    'rccm_boutique' => param('rccm_boutique', ''),
 ]);

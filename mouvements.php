@@ -99,7 +99,7 @@ include __DIR__ . '/includes/header.php';
                 <label class="form-label small">Type</label>
                 <select name="type" class="form-select">
                     <option value="">Tous</option>
-                    <?php foreach (['Entree'=>'Entrée','Sortie'=>'Sortie','Vente'=>'Vente'] as $k=>$lbl): ?>
+                    <?php foreach (['Entree'=>'Entrée','Sortie'=>'Sortie','Vente'=>'Vente','Transfert'=>'Transfert','Ajustement'=>'Ajustement','Retour_stock'=>'Retour stock'] as $k=>$lbl): ?>
                         <option value="<?= $k ?>" <?= $f_type===$k?'selected':'' ?>><?= $lbl ?></option>
                     <?php endforeach; ?>
                 </select>

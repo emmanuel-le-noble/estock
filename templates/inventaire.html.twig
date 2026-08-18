@@ -258,7 +258,7 @@
 (function() {
     const CSRF      = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const INV_ID    = {{ inv.id }};
-    const BASE      = window.BASE_URL || '/eSotck/';
+    const BASE      = window.BASE_URL || '';
     const articles  = {{ articles|json_encode|raw }};
 
     const scanInput  = document.getElementById('scanInput');

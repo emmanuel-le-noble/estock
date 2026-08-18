@@ -228,7 +228,7 @@ if ($action === 'nouveau' || $action === 'editer') {
         var preview = document.getElementById('barcodePreview');
         var svg = document.getElementById('barcodeSvg');
         var btn = document.getElementById('btnGenererCode');
-        var BASE = window.BASE_URL || '/eSotck/';
+        var BASE = window.BASE_URL || '';
         
         function renderBarcode(code) {
             if (!code || code.length < 12 || typeof JsBarcode === 'undefined') {
@@ -374,7 +374,7 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
     const apiStatus    = document.getElementById('apiStatus');
     const resetBtn     = document.getElementById('resetBtn');
     const paginationEl = document.getElementById('paginationZone');
-    const BASE         = window.BASE_URL || '/eSotck/';
+    const BASE         = window.BASE_URL || '';
 
     if (searchForm) {
         searchForm.addEventListener('submit', function(e) {

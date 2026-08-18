@@ -21,7 +21,8 @@
                         <tr><th class="text-muted">Type</th>
                             <td>{{ client.raison_sociale ? 'B2B' : 'B2C' }}</td></tr>
                         {% if client.raison_sociale %}
-                        <tr><th class="text-muted">SIRET</th><td>{{ client.siret|e ?: '—' }}</td></tr>
+                        <tr><th class="text-muted">NIF</th><td>{{ client.nif|e ?: '—' }}</td></tr>
+                        <tr><th class="text-muted">RCCM</th><td>{{ client.rccm|e ?: '—' }}</td></tr>
                         {% endif %}
                         <tr><th class="text-muted">Adresse</th><td>{{ client.adresse|e ?: '—' }}</td></tr>
                         <tr><th class="text-muted">Téléphone</th><td>{{ client.telephone|e ?: '—' }}</td></tr>
@@ -39,7 +40,7 @@
                     <i class="bi bi-pencil"></i> Modifier la fiche
                 </button>
                 <button class="btn btn-outline-danger btn-sm mt-2 w-100" data-bs-toggle="modal" data-bs-target="#modalAnonymiser">
-                    <i class="bi bi-shield-x"></i> Anonymiser (RGPD)
+                    <i class="bi bi-shield-x"></i> Anonymiser
                 </button>
                 {% endif %}
             </div>
@@ -153,7 +154,7 @@
 
     <div class="col-md-6">
         <div class="card shadow-sm">
-            <div class="card-header bg-white"><h6 class="mb-0"><i class="bi bi-shield-lock"></i> Consentements (RGPD)</h6></div>
+            <div class="card-header bg-white"><h6 class="mb-0"><i class="bi bi-shield-lock"></i> Consentements</h6></div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-sm table-hover mb-0">
@@ -207,12 +208,16 @@
                     <input type="text" name="code_fidelite" class="form-control" maxlength="40" value="{{ client.code_fidelite|e }}">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Raison sociale</label>
+                    <label class="form-label">Raison sociale (B2B)</label>
                     <input type="text" name="raison_sociale" class="form-control" maxlength="200" value="{{ client.raison_sociale|e }}">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">SIRET</label>
-                    <input type="text" name="siret" class="form-control" maxlength="20" value="{{ client.siret|e }}">
+                    <label class="form-label">NIF (OTR)</label>
+                    <input type="text" name="nif" class="form-control" maxlength="30" value="{{ client.nif|e }}" placeholder="ex : 1001234567">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">RCCM</label>
+                    <input type="text" name="rccm" class="form-control" maxlength="30" value="{{ client.rccm|e }}" placeholder="ex : TG-LOM-2024-B2-1234">
                 </div>
                 <div class="col-md-8">
                     <label class="form-label">Adresse</label>
@@ -235,7 +240,7 @@
                            class="form-check-input ms-0" role="switch"
                            {% if client.consentement_fidelite %}checked{% endif %}>
                     <label for="consentModif" class="form-check-label small text-muted">
-                        Consentement au programme de fidélité (traçabilité RGPD)
+                        Consentement au programme de fidélité (données clients)
                     </label>
                 </div>
             </div>
@@ -295,7 +300,7 @@
             </div>
             <div class="modal-body">
                 <p class="text-muted small">
-                    Droit à l'effacement (RGPD, art. 17) : les données personnelles seront remplacées de
+                    Droit à l'effacement des données personnelles : elles seront remplacées de
                     façon irréversible. Les factures et écritures comptables restent intactes (obligation légale).
                 </p>
                 <label class="form-label">Motif</label>

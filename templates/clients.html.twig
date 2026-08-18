@@ -45,13 +45,17 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Raison sociale (B2B)</label>
-                    <input type="text" name="raison_sociale" class="form-control" maxlength="200" placeholder="ex : SARL Exemple">
+                    <input type="text" name="raison_sociale" class="form-control" maxlength="200" placeholder="ex : SARL Exemple (B2B)">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">SIRET</label>
-                    <input type="text" name="siret" class="form-control" maxlength="20" placeholder="14 chiffres">
+                    <label class="form-label">NIF (OTR)</label>
+                    <input type="text" name="nif" class="form-control" maxlength="30" placeholder="ex : 1001234567">
                 </div>
-                <div class="col-md-8">
+                <div class="col-md-6">
+                    <label class="form-label">RCCM</label>
+                    <input type="text" name="rccm" class="form-control" maxlength="30" placeholder="ex : TG-LOM-2024-B2-1234">
+                </div>
+                <div class="col-md-6">
                     <label class="form-label">Adresse</label>
                     <input type="text" name="adresse" class="form-control" maxlength="255">
                 </div>
@@ -70,7 +74,7 @@
                 <div class="col-12 form-check form-switch d-flex align-items-center gap-2 ps-5">
                     <input type="checkbox" name="consentement_fidelite" value="1" id="consentAjout" class="form-check-input ms-0" role="switch">
                     <label for="consentAjout" class="form-check-label small text-muted">
-                        Consentement au programme de fidélité (traçabilité RGPD)
+                        Consentement au programme de fidélité (données clients)
                     </label>
                 </div>
             </div>
@@ -184,8 +188,8 @@
             </div>
             <div class="modal-body">
                 <p class="text-muted small">
-                    Droit à l'effacement (RGPD, art. 17) : les données personnelles de
-                    <strong id="anonClientNom">ce client</strong> seront remplacées de façon irréversible.
+                    Droit à l'effacement des données personnelles : elles seront
+                    remplacées de façon irréversible.
                     Les factures et écritures comptables restent intactes (obligation légale).
                 </p>
                 <label class="form-label">Motif</label>
@@ -206,13 +210,13 @@
 <div class="card shadow-sm mt-3 border-danger-subtle">
     <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
-            <h6 class="mb-1"><i class="bi bi-trash3 text-danger"></i> Purge de conservation (RGPD)</h6>
+            <h6 class="mb-1"><i class="bi bi-trash3 text-danger"></i> Purge de conservation des données clients</h6>
             <p class="text-muted small mb-0">
                 Anonymise les clients sans achat depuis {{ retention_mois }} mois et sans consentement actif,
                 puis supprime définitivement les clients déjà anonymisés depuis plus de 12 mois qui n'ont aucune facture.
             </p>
         </div>
-        <form method="post" data-confirm="Lancer la purge RGPD maintenant ? (irréversible)">
+        <form method="post" data-confirm="Lancer la purge de conservation maintenant ? (irréversible)">
             {{ csrf_field() }}
             <input type="hidden" name="action" value="purger">
             <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash3"></i> Lancer la purge</button>

@@ -37,6 +37,7 @@ $top        = db_stats_top_articles($pdo, $debut, $fin, 5, $mid);
 $daily      = db_stats_daily_sales($pdo, $debut, $fin, $mid);
 $nb_ventes  = (int)($stats['nb_ventes'] ?? 0);
 $ca_total   = (float)($stats['ca_total'] ?? 0);
+$tva_collectee = (float)($stats['tva_collectee'] ?? 0);
 $panier_moyen = $nb_ventes > 0 ? $ca_total / $nb_ventes : 0;
 
 // ---- Données comptables : Dépenses & Bénéfice Net ----
@@ -180,6 +181,17 @@ include __DIR__ . '/includes/header.php';
                         <td class="ps-4 fw-semibold">= Marge brute</td>
                         <td class="text-end fw-bold"><?= money($marge_brute) ?></td>
                     </tr>
+                    <?php if (param_regime_fiscal() === 'TVA'): ?>
+                    <tr class="table-light">
+                        <td class="ps-4">+= TVA collectée (régime TVA)</td>
+                        <td class="text-end text-muted"><?= money($tva_collectee) ?></td>
+                    </tr>
+                    <?php else: ?>
+                    <tr class="table-light">
+                        <td class="ps-4">TVA — non applicable (régime TPU)</td>
+                        <td class="text-end text-muted">—</td>
+                    </tr>
+                    <?php endif; ?>
                     <tr>
                         <td class="ps-4">− Dépenses d'exploitation</td>
                         <td class="text-end text-muted">− <?= money($total_dep) ?></td>

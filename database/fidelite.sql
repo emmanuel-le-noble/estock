@@ -9,7 +9,7 @@
 -- Idempotent : CREATE TABLE IF NOT EXISTS.
 -- ============================================================
 
--- Historique des opérations de points (traçabilité RGPD + comptable)
+-- Historique des opérations de points (traçabilité comptable)
 CREATE TABLE IF NOT EXISTS `historique_points` (
     `id`             INT           NOT NULL AUTO_INCREMENT PRIMARY KEY,
     `client_id`      INT           NOT NULL,

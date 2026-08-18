@@ -50,9 +50,14 @@
             {% if magasin.adresse is defined and magasin.adresse %}{{ magasin.adresse }}<br>{% endif %}
             {% if magasin.telephone is defined and magasin.telephone %}Tél: {{ magasin.telephone }}<br>{% endif %}
             {% if magasin.email is defined and magasin.email %}{{ magasin.email }}{% endif %}
+            {% if magasin.nif is defined and magasin.nif %}<br>NIF: {{ magasin.nif }}{% endif %}
+            {% if magasin.rccm is defined and magasin.rccm %}<br>RCCM: {{ magasin.rccm }}{% endif %}
         </div>
     {% else %}
-        <h1>eStock POS</h1>
+        <h1>{{ param('app_nom', 'eStock') }}</h1>
+    {% endif %}
+    {% if nif_boutique is defined and nif_boutique %}
+    <div class="shop-info">NIF: {{ nif_boutique }}{% if rccm_boutique is defined and rccm_boutique %} · RCCM: {{ rccm_boutique }}{% endif %}</div>
     {% endif %}
 
     <div class="ticket-hr-thick"></div>
@@ -129,6 +134,10 @@
             <td>TVA ({{ tva_taux }}%)</td>
             <td class="text-right">{{ (facture.total_ttc - facture.total_ht)|number_format(decimals, '.', ' ') }} {{ devise }}</td>
         </tr>
+        {% elseif regime_tpu is defined and regime_tpu %}
+        <tr>
+            <td colspan="2" class="text-center fs-sm fw-bold">TVA non applicable (TPU)</td>
+        </tr>
         {% endif %}
         <tr>
             <td class="fw-bold fs-lg">TOTAL TTC</td>
@@ -187,7 +196,7 @@
     {# --- Footer --- #}
     <div class="footer-msg">
         Merci pour votre achat !<br>
-        eStock POS — {{ "now"|date('d/m/Y') }}
+        {{ "now"|date('d/m/Y') }}
     </div>
 
     {# --- Code-barres facture (optionnel) --- #}

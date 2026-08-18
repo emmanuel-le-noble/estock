@@ -1,7 +1,8 @@
 -- ============================================================
--- compteurs_sequences.sql — Compteurs atomiques (NF525)
--- Garantit la continuité de numérotation des factures même en
--- cas de transactions concurrentes (multi-caisses).
+-- compteurs_sequences.sql — Compteurs atomiques
+-- Garantit la continuité et la non-rupture de la numérotation des
+-- factures (exigence fiscale OTR) même en cas de transactions
+-- concurrentes (multi-caisses).
 -- Idempotent : CREATE TABLE IF NOT EXISTS.
 -- ============================================================
 

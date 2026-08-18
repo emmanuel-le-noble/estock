@@ -1,11 +1,15 @@
 -- ============================================================
--- rgpd.sql — Conformité RGPD (règlement UE 2016/679)
+-- donnees_clients.sql — Protection des données clients
 --
---  1. Table `clients` : données personnelles des clients avec
---     consentement explicite pour le programme de fidélité.
---  2. Champs d'anonymisation (droit à l'effacement) : les données
---     comptables étant conservées (obligation légale), l'effacement
---     est réalisé par ANONYMISATION et non par suppression.
+-- Bonnes pratiques de protection des données personnelles :
+--
+--  1. Table `clients` : données des clients avec consentement
+--     explicite pour le programme de fidélité (B2C) et
+--     identification fiscale B2B (nif, rccm ajoutés par
+--     conformite_togo.sql).
+--  2. Champs d'anonymisation : les données comptables étant
+--     conservées (obligation fiscale), l'effacement est réalisé
+--     par ANONYMISATION et non par suppression.
 --  3. Champs de purge automatique (politique de conservation).
 --
 -- ATTENTION : idempotence garantie par database/apply_migrations.php.
@@ -22,13 +26,13 @@ CREATE TABLE IF NOT EXISTS `clients` (
     `date_naissance`        DATE          NULL COMMENT 'Date de naissance (optionnel, fidélité)',
     `code_fidelite`         VARCHAR(40)   NULL COMMENT 'Code barre de la carte de fidélité',
     `points_fidelite`       INT           NOT NULL DEFAULT 0,
-    -- Consentement RGPD (fidélité)
+    -- Consentement programme de fidélité
     `consentement_fidelite` TINYINT(1)    NOT NULL DEFAULT 0,
     `date_consentement`     DATETIME      NULL,
     `source_consentement`   VARCHAR(100)  NULL COMMENT 'Où le consentement a été recueilli',
     `date_creation`         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `date_dernier_achat`    DATETIME      NULL,
-    -- Anonymisation (droit à l'effacement sans rupture comptable)
+    -- Anonymisation (sans rupture des écritures comptables)
     `anonymise`             TINYINT(1)    NOT NULL DEFAULT 0,
     `date_anonymisation`    DATETIME      NULL,
     UNIQUE KEY `uk_client_code_fidelite` (`code_fidelite`),
@@ -38,7 +42,7 @@ CREATE TABLE IF NOT EXISTS `clients` (
     KEY `idx_client_dernier_achat` (`date_dernier_achat`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Registre des consentements (traçabilité RGPD)
+-- Registre des consentements (traçabilité)
 CREATE TABLE IF NOT EXISTS `consentements_log` (
     `id`                 INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
     `client_id`          INT          NOT NULL,

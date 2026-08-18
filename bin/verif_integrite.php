@@ -1,6 +1,6 @@
 <?php
 /**
- * bin/verif_nf525.php — Vérification d'intégrité NF525 (audit CLI).
+ * bin/verif_integrite.php — Audit d'intégrité des ventes (CLI).
  *
  * Vérifie :
  *   1. Présence des triggers d'immuabilité (8) + colonnes hash_chaine.
@@ -11,9 +11,9 @@
  *   6. Archives de caisse : échéance de conservation respectée (>= param).
  *
  * Usage :
- *   php bin/verif_nf525.php            # vérification complète
- *   php bin/verif_nf525.php --backfill # rattrapage du chaînage manquant puis vérification
- *   php bin/verif_nf525.php --json     # sortie JSON exploitable (CI / observabilité)
+ *   php bin/verif_integrite.php            # vérification complète
+ *   php bin/verif_integrite.php --backfill # rattrapage du chaînage manquant puis vérification
+ *   php bin/verif_integrite.php --json     # sortie JSON exploitable (CI / observabilité)
  *
  * Code retour : 0 = conforme, 1 = anomalies, 2 = erreur d'exécution.
  */
@@ -29,7 +29,7 @@ $backfill = in_array('--backfill', $args, true);
 $asJson   = in_array('--json', $args, true);
 
 $rapport = [
-    'outil'    => 'eStock NF525 - verification',
+    'outil'    => 'eStock - verification integrite des ventes',
     'date'     => gmdate('Y-m-d\TH:i:s\Z'),
     'valide'   => true,
     'anomalies' => [],
@@ -54,11 +54,11 @@ try {
     $manquants = array_diff($attendus, $triggers);
     $rapport['details']['triggers_presents'] = count($attendus);
     if ($manquants) {
-        $ajouterAnomalie('TRIGGERS_MANQUANTS', 'Triggers NF525 absents : ' . implode(', ', $manquants));
+        $ajouterAnomalie('TRIGGERS_MANQUANTS', 'Triggers d\'immuabilité absents : ' . implode(', ', $manquants));
     }
 
     if (!db_facture_chainage_actif($pdo)) {
-        $ajouterAnomalie('CHAIMAGE_INACTIF', 'Colonnes hash_chaine absentes : migration nf525 non appliquée.');
+        $ajouterAnomalie('CHAIMAGE_INACTIF', 'Colonnes hash_chaine absentes : migration integrity_ventes non appliquée.');
     }
 
     // ---- 2. Rattrapage optionnel ----
@@ -128,7 +128,7 @@ try {
         $ajouterAnomalie('ARCHIVES_ECHUES', $nbEchues . ' archive(s) au-delà de l\'échéance de conservation (sans impact immédiat, mais planifier l\'export pérenne).');
     }
 } catch (Throwable $e) {
-    error_log('verif_nf525: ' . $e->getMessage());
+    error_log('verif_integrite: ' . $e->getMessage());
     if ($asJson) {
         echo json_encode(['erreur' => 'Erreur d\'exécution : ' . $e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), "\n";
     } else {
@@ -141,7 +141,7 @@ try {
 if ($asJson) {
     echo json_encode($rapport, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), "\n";
 } else {
-    echo "=== Vérification NF525 — eStock ===\n";
+    echo "=== Vérification d'intégrité des ventes — eStock ===\n";
     echo "Triggers d'immuabilité : " . $rapport['details']['triggers_presents'] . "/8\n";
     if (isset($rapport['details']['backfill_traitees'])) {
         echo "Backfill : {$rapport['details']['backfill_traitees']} facture(s) chaînée(s)\n";

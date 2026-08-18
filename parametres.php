@@ -19,18 +19,24 @@ $sections = [
         'champs' => [
             ['cle'=>'nom_boutique', 'label'=>'Nom de la boutique', 'type'=>'text', 'defaut'=>'eStock Market', 'required'=>true],
             ['cle'=>'slogan_boutique', 'label'=>'Slogan', 'type'=>'text', 'defaut'=>'Gérez votre stock et votre caisse. Simplement.'],
-            ['cle'=>'adresse_boutique', 'label'=>'Adresse', 'type'=>'textarea', 'defaut'=>'123 Rue du Commerce, Lomé'],
+            ['cle'=>'adresse_boutique', 'label'=>'Adresse', 'type'=>'textarea', 'defaut'=>''],
             ['cle'=>'code_postal', 'label'=>'Code postal / ville', 'type'=>'text', 'defaut'=>''],
             ['cle'=>'pays', 'label'=>'Pays', 'type'=>'text', 'defaut'=>'Togo'],
             ['cle'=>'telephone_boutique', 'label'=>'Téléphone', 'type'=>'tel', 'defaut'=>''],
             ['cle'=>'email_boutique', 'label'=>'E-mail', 'type'=>'email', 'defaut'=>''],
             ['cle'=>'site_boutique', 'label'=>'Site web', 'type'=>'text', 'defaut'=>''],
+            ['cle'=>'nif_boutique', 'label'=>'NIF (Numéro d\'Identification Fiscale — OTR)', 'type'=>'text', 'defaut'=>''],
+            ['cle'=>'rccm_boutique', 'label'=>'RCCM (immatriculation au registre du commerce)', 'type'=>'text', 'defaut'=>''],
         ],
     ],
     'financier' => [
-        'titre' => 'Devise & taxes',
+        'titre' => 'Devise, régime fiscal & taxes',
         'icone' => 'bi-cash-coin',
         'champs' => [
+            ['cle'=>'regime_fiscal', 'label'=>'Régime fiscal', 'type'=>'select', 'defaut'=>'TPU', 'options'=>['TPU'=>'TPU — Taxe Professionnelle Unique (factures hors taxes)', 'TVA'=>'TVA — régime classique (18 %)']],
+            ['cle'=>'tva_taux_defaut', 'label'=>'Taux de TVA (%)', 'type'=>'number', 'defaut'=>'18.00', 'min'=>0, 'max'=>100, 'step'=>'0.01'],
+            ['cle'=>'tva_active', 'label'=>'TVA active (articles assujettis)', 'type'=>'checkbox', 'defaut'=>'1'],
+            ['cle'=>'facture_prefixe', 'label'=>'Préfixe des factures (ex : FAC-20260814-0001)', 'type'=>'text', 'defaut'=>'FAC', 'maxlength'=>10],
             ['cle'=>'devise_nom', 'label'=>'Nom de la devise', 'type'=>'text', 'defaut'=>'Franc CFA'],
             ['cle'=>'devise_code', 'label'=>'Code devise', 'type'=>'text', 'defaut'=>'XOF', 'maxlength'=>3],
             ['cle'=>'devise_symbole', 'label'=>'Symbole affiché', 'type'=>'text', 'defaut'=>'FCFA'],
@@ -38,8 +44,6 @@ $sections = [
             ['cle'=>'devise_decimales', 'label'=>'Décimales', 'type'=>'number', 'defaut'=>'2', 'min'=>0, 'max'=>4, 'step'=>'1'],
             ['cle'=>'separateur_decimal', 'label'=>'Séparateur décimal', 'type'=>'text', 'defaut'=>',', 'maxlength'=>2],
             ['cle'=>'separateur_milliers', 'label'=>'Séparateur milliers', 'type'=>'text', 'defaut'=>' ', 'maxlength'=>2],
-            ['cle'=>'tva_active', 'label'=>'TVA active', 'type'=>'checkbox', 'defaut'=>'1'],
-            ['cle'=>'tva_taux_defaut', 'label'=>'Taux TVA (%)', 'type'=>'number', 'defaut'=>'20.00', 'min'=>0, 'max'=>100, 'step'=>'0.01'],
             ['cle'=>'paiement_rapide_1', 'label'=>'Montant rapide 1', 'type'=>'number', 'defaut'=>'20.00', 'min'=>0, 'step'=>'0.01'],
             ['cle'=>'paiement_rapide_2', 'label'=>'Montant rapide 2', 'type'=>'number', 'defaut'=>'50.00', 'min'=>0, 'step'=>'0.01'],
             ['cle'=>'paiement_rapide_3', 'label'=>'Montant rapide 3', 'type'=>'number', 'defaut'=>'100.00', 'min'=>0, 'step'=>'0.01'],
@@ -65,11 +69,11 @@ $sections = [
         ],
     ],
     'conformite' => [
-        'titre' => 'Conformité (NF525 / RGPD)',
+        'titre' => 'Traçabilité & conformité',
         'icone' => 'bi-shield-check',
         'champs' => [
             ['cle'=>'archives_conservation_annees', 'label'=>'Conservation des archives de caisse (années)', 'type'=>'number', 'defaut'=>'6', 'min'=>1, 'step'=>'1'],
-            ['cle'=>'rgpd_retention_clients_mois', 'label'=>'Rétention clients sans activité avant anonymisation (mois)', 'type'=>'number', 'defaut'=>'36', 'min'=>1, 'step'=>'1'],
+            ['cle'=>'retention_clients_mois', 'label'=>'Rétention clients sans activité avant anonymisation (mois)', 'type'=>'number', 'defaut'=>'36', 'min'=>1, 'step'=>'1'],
         ],
     ],
     'apparence' => [
@@ -80,6 +84,34 @@ $sections = [
             ['cle'=>'langue', 'label'=>'Langue', 'type'=>'select', 'defaut'=>'fr', 'options'=>['fr'=>'Français', 'en'=>'English', 'es'=>'Español', 'ar'=>'العربية', 'zh'=>'中文']],
             ['cle'=>'theme_couleur', 'label'=>'Couleur du thème', 'type'=>'select', 'defaut'=>'indigo', 'options'=>['indigo'=>'Indigo', 'emerald'=>'Vert', 'sky'=>'Bleu', 'rose'=>'Rose', 'amber'=>'Ambre']],
         ],
+    ],
+    'email' => [
+        'titre' => 'E-mails',
+        'icone' => 'bi-envelope-paper',
+        'largeur' => 'col-lg-12',
+        'champs' => [
+            ['cle'=>'emails_mode', 'label'=>'Mode d\'envoi', 'type'=>'select', 'defaut'=>'file', 'options'=>['file'=>'File d\'attente (worker asynchrone)', 'direct'=>'Envoi direct (bloquant)']],
+            ['cle'=>'smtp_from', 'label'=>'Adresse expéditrice', 'type'=>'email', 'defaut'=>'noreply@estock.local'],
+            ['cle'=>'base_url_ext', 'label'=>'URL publique du site (liens dans les e-mails)', 'type'=>'text', 'defaut'=>''],
+            ['cle'=>'emails_conservation_jours', 'label'=>'Conservation des e-mails traités avant purge (jours)', 'type'=>'number', 'defaut'=>'30', 'min'=>1, 'step'=>'1'],
+            ['cle'=>'emails_tentatives_max', 'label'=>'Tentatives d\'envoi maximum', 'type'=>'number', 'defaut'=>'5', 'min'=>1, 'max'=>20, 'step'=>'1'],
+            ['cle'=>'emails_desinscription_obligatoire', 'label'=>'Mention désinscription dans les e-mails de prospection', 'type'=>'checkbox', 'defaut'=>'1'],
+        ],
+        'aide' => '<strong>Comment configurer l\'envoi d\'e-mails :</strong>
+            <ol class="mb-1 ps-3 mt-1">
+                <li><strong>Mode d\'envoi</strong> — « File d\'attente » (recommandé) : les e-mails sont mis en file puis expédiés par le worker
+                    <code>bin/emails_worker.php</code>, à planifier en tâche cron toutes les minutes
+                    (ex. <code>* * * * * php C:/wamp64/www/eSotck/bin/emails_worker.php</code>).
+                    « Envoi direct » : envoi immédiat via la fonction <code>mail()</code> de PHP (bloquant).</li>
+                <li><strong>Adresse expéditrice</strong> — une adresse réelle du domaine de la boutique (ex. <code>noreply@votre-domaine.com</code>).</li>
+                <li><strong>URL publique</strong> — l\'adresse d\'accès du site vu par les clients (indispensable pour les liens de désinscription
+                    des e-mails de prospection).</li>
+                <li><strong>Environnement local (WampServer)</strong> — sans serveur SMTP actif, <code>mail()</code> échoue : les e-mails sont alors
+                    journalisés dans <code>error_log</code> (mode simulation). Pour un vrai envoi, configurez le relais dans
+                    <code>php.ini</code> (<code>sendmail_path</code> / SMTP) ou déployez le site chez un hébergeur.</li>
+            </ol>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#aideCronEmail">Voir le réglage cron type</button>
+            <pre class="collapse border rounded bg-light p-2 mt-2 mb-0 small" id="aideCronEmail"><code>* * * * * php C:/wamp64/www/eSotck/bin/emails_worker.php &gt;&gt; /tmp/emails_worker.log 2&gt;&amp;1</code></pre>',
     ],
 ];
 
@@ -295,6 +327,20 @@ if ($tab_courant === 'droits' && peut('utilisateurs_gerer')):
 ?>
 
 <?php elseif ($tab_courant === 'config'): ?>
+    <?php
+    $conformite_manquants = [];
+    if (trim(param('nif_boutique', '')) === '') $conformite_manquants[] = 'NIF de la boutique';
+    if (trim(param('rccm_boutique', '')) === '') $conformite_manquants[] = 'RCCM de la boutique';
+    ?>
+    <?php if (!empty($conformite_manquants)): ?>
+        <div class="alert alert-warning d-flex align-items-center gap-2 shadow-sm">
+            <i class="bi bi-shield-exclamation fs-4"></i>
+            <div>
+                <strong>Facturation à risque :</strong> les factures sans identification fiscale complète
+                sont non conformes auprès de l'OTR. Renseignez : <?= h(implode(', ', $conformite_manquants)) ?>.
+            </div>
+        </div>
+    <?php endif; ?>
     <!-- Configuration classique -->
     <div class="row g-3 mb-4">
         <div class="col-md-4">
@@ -321,7 +367,7 @@ if ($tab_courant === 'droits' && peut('utilisateurs_gerer')):
         <?= csrf_field() ?>
         <div class="row g-3">
             <?php foreach ($sections as $section): ?>
-                <div class="col-lg-6">
+                <div class="<?= h($section['largeur'] ?? 'col-lg-6') ?>">
                     <div class="card shadow-sm h-100">
                         <div class="card-header bg-white">
                             <h5 class="mb-0"><i class="bi <?= h($section['icone']) ?>"></i> <?= h($section['titre']) ?></h5>
@@ -367,6 +413,11 @@ if ($tab_courant === 'droits' && peut('utilisateurs_gerer')):
                                     </div>
                                 <?php endforeach; ?>
                             </div>
+                            <?php if (!empty($section['aide'])): ?>
+                                <div class="bg-info-subtle border-start border-4 border-info rounded-end p-3 mb-0 mt-3 small text-start">
+                                    <?= $section['aide'] ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>

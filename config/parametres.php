@@ -131,13 +131,44 @@ function param_locale(): string {
 }
 
 /**
+ * Régime fiscal de la boutique : TVA (classique) ou TPU (Taxe Professionnelle
+ * Unique — factures hors taxes avec mention « TVA non applicable »).
+ */
+function param_regime_fiscal(): string {
+    return param('regime_fiscal', 'TPU') === 'TVA' ? 'TVA' : 'TPU';
+}
+
+/**
+ * Vrai si la boutique est au régime TPU (Taxe Professionnelle Unique).
+ */
+function param_regime_tpu(): bool {
+    return param_regime_fiscal() === 'TPU';
+}
+
+/**
  * Taux de TVA réellement appliqué.
+ * Régime TPU : toujours 0 (facturation hors taxes).
  */
 function param_tva_taux(): float {
+    if (param_regime_tpu()) {
+        return 0.0;
+    }
     if (!param_bool('tva_active', true)) {
         return 0.0;
     }
-    return max(0.0, param_float('tva_taux_defaut', 20.0));
+    return max(0.0, param_float('tva_taux_defaut', 18.0));
+}
+
+/**
+ * Mention légale affichée sur les factures selon le régime fiscal.
+ * TPU → « TVA non applicable » ; TVA → libellé taux appliqué.
+ */
+function param_mention_tva(float $taux = 0.0): string {
+    if (param_regime_tpu()) {
+        return 'TVA non applicable (TPU)';
+    }
+    $t = $taux > 0 ? $taux : param_tva_taux();
+    return $t > 0 ? 'TVA ' . number_format($t, 2, ',', ' ') . ' %' : '';
 }
 
 /**
@@ -166,6 +197,7 @@ function param_money(float $montant): string {
 function param_pos_config(): array {
     return [
         'taux_tva' => param_tva_taux(),
+        'regime_fiscal' => param_regime_fiscal(),
         'devise_code' => param('devise_code', 'XOF'),
         'devise_symbole' => param('devise_symbole', 'FCFA'),
         'devise_position' => param('devise_position', 'apres'),

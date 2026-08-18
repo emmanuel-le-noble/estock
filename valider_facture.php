@@ -102,6 +102,7 @@ try {
         $articleId   = (int)($l['article_id'] ?? 0);
         $quantite    = (int)($l['quantite'] ?? 0);
         $prixUnitaire= (float)($l['prix_unitaire'] ?? 0);
+        $quantitePoids = isset($l['quantite_poids']) && $l['quantite_poids'] !== '' ? (float)$l['quantite_poids'] : null;
 
         if ($articleId <= 0 || $quantite <= 0) continue;
 
@@ -141,12 +142,17 @@ try {
             ? (float)$art['taux_tva']
             : $taux_tva;
 
-        $sousTotal = calc_line_subtotal($prixUnitaire, $quantite);
+        // Sous-total : quantité facturable = pesée affichée pour la vente au
+        // poids (quantite reste l'unité interne : grammes/litres × 1000),
+        // car le prix unitaire est exprimé par unité de vente (ex. /kg).
+        $quantiteFacturable = $quantitePoids !== null ? $quantitePoids : $quantite;
+        $sousTotal = calc_line_subtotal($prixUnitaire, $quantiteFacturable);
         $totalHt += $sousTotal;
 
         $lignesAFacturer[] = [
             'article_id'    => $articleId,
             'quantite'      => $quantite,
+            'quantite_poids'=> $quantitePoids,
             'prix_unitaire' => $prixUnitaire,
             'prix_original' => $prixOriginal,
             'remise_pct'    => $remisePct,
@@ -163,7 +169,8 @@ try {
     $totalTtcCalc = 0.0;
     $tauxTvaResume = []; // ['taux' => ..., 'base_ht' => ..., 'montant_tva' => ...]
     foreach ($lignesAFacturer as $lf) {
-        $htLigne = calc_line_subtotal($lf['prix_unitaire'], $lf['quantite']);
+        $qteFactLigne = $lf['quantite_poids'] ?? $lf['quantite'];
+        $htLigne = calc_line_subtotal($lf['prix_unitaire'], $qteFactLigne);
         $tvaLigne = $htLigne * ($lf['taux_tva'] / 100);
         $totalTtcCalc += $htLigne + $tvaLigne;
         $tauxKey = number_format((float)$lf['taux_tva'], 2);
@@ -216,7 +223,7 @@ try {
 
     // ---- 4 & 5) Lignes + déduction atomique stock lot + mouvements ----
     foreach ($lignesAFacturer as $l) {
-        db_ligne_facture_insert($pdo, $factureId, $l['article_id'], $l['quantite'], $l['prix_unitaire'], $l['prix_original'], $l['remise_pct'], $l['taux_tva'] ?? null);
+        db_ligne_facture_insert($pdo, $factureId, $l['article_id'], $l['quantite'], $l['prix_unitaire'], $l['prix_original'], $l['remise_pct'], $l['taux_tva'] ?? null, $l['quantite_poids'] ?? null);
 
         // ---- SÉCURITÉ DOUBLE TYPE : PÉRISSABLE & NON PÉRISSABLE ----
         if ($magasin_id > 0) {
@@ -256,7 +263,7 @@ try {
         db_paiements_insert($pdo, $factureId, $paiementsList);
     }
 
-    // ---- 7) Chaînage cryptographique NF525 (après lignes + paiements) ----
+    // ---- 7) Chaînage cryptographique de la facture (après lignes + paiements) ----
     db_facture_chainer($pdo, $factureId);
 
     // ---- 8) Consommation des points fidélité (solde verrouillé FOR UPDATE) ----

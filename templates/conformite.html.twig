@@ -4,10 +4,44 @@
 <div class="alert alert-secondary d-flex align-items-start gap-2">
     <i class="bi bi-shield-check fs-5"></i>
     <div>
-        <strong>Certification anti-fraude TVA (NF 525)</strong> — loi 2016-1918 art. 88,
-        arrêté du 20/10/2016. Chaînage cryptographique des factures et des clôtures,
-        immuabilité au niveau base de données (triggers), archives périodiques signées.
-        Voir <code>docs/conformite/nf525.md</code> pour la démarche de certification.
+        <strong>Intégrité et traçabilité des ventes</strong> — chaînage cryptographique
+        des factures et des clôtures de caisse, immuabilité au niveau base de données
+        (triggers), archives périodiques signées. Ces mécanismes garantissent une
+        piste d'audit fiable (non-suppression, non-modification) et la continuité de
+        la numérotation, exigences de la traçabilité fiscale OTR.
+        Voir <code>docs/conformite/integrite.md</code> pour les détails techniques.
+    </div>
+</div>
+
+{# ---- 0. Export comptable & e-facturation ---- #}
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white fw-bold">
+        <i class="bi bi-file-earmark-arrow-down"></i> Export comptable &amp; e-facturation OTR
+    </div>
+    <div class="card-body">
+        {% if can_export %}
+        <div class="row g-3">
+            <div class="col-md-6">
+                <a href="export_syscohada.php" class="text-decoration-none text-dark">
+                    <div class="border rounded-3 p-3 d-flex align-items-center gap-3">
+                        <i class="bi bi-file-earmark-spreadsheet fs-2 text-success"></i>
+                        <div>
+                            <strong>Export SYSCOHADA (OHADA)</strong>
+                            <div class="small text-muted">Écritures SYSCOHADA révisé, pour votre comptable (Togo / OHADA).</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+        {% endif %}
+        <div class="mt-3 d-flex align-items-center gap-2 small text-muted">
+            <i class="bi bi-info-circle"></i>
+            <div>
+                Préparation à l'e-facturation OTR : voir
+                <code>docs/conformite/otr.md</code> (régime TPU / TVA, NIF &amp; RCCM,
+                colonne <code>factures.statut_transmission</code>).
+            </div>
+        </div>
     </div>
 </div>
 
@@ -20,7 +54,7 @@
         {% if not chainage_actif %}
             <div class="alert alert-warning mb-0">
                 Les colonnes de chaînage ne sont pas installées. Exécutez
-                <code>php database/apply_migrations.php</code> (migration nf525.sql).
+                <code>php database/apply_migrations.php</code> (migration integrite_ventes.sql).
             </div>
         {% else %}
             <div class="row text-center g-3 mb-3">

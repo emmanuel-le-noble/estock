@@ -154,12 +154,19 @@ window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;
                             <th class="text-end">Total HT :</th>
                             <td class="text-end fs-5" id="totalHt"><?= h(money(0)) ?></td>
                         </tr>
+                        <?php if (param_regime_tpu()): ?>
+                        <tr>
+                            <th class="text-end small text-muted">TVA :</th>
+                            <td class="text-end text-muted small fw-bold" id="tvaDisplay">TVA non applicable (TPU)</td>
+                        </tr>
+                        <?php else: ?>
                         <tr>
                             <th class="text-end">TVA (<?= h(number_format($taux_tva, 2, ',', ' ')) ?>%) :</th>
                             <td class="text-end text-muted small">
                                 <span id="tvaDisplay"></span>
                             </td>
                         </tr>
+                        <?php endif; ?>
                         <tr class="border-top">
                             <th class="text-end fs-4">Total TTC :</th>
                             <td class="text-end fs-4 fw-bold text-success" id="totalTtc"><?= h(money(0)) ?></td>
@@ -187,6 +194,10 @@ window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;
                                     <small class="text-muted" id="clientSolde"></small>
                                 </div>
                                 <button type="button" class="btn-close btn-sm" id="btnClientClear" title="Retirer le client"></button>
+                            </div>
+                            <div id="clientAlert" class="d-none small text-warning mt-1">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <span id="clientAlertMsg"></span>
                             </div>
                         </div>
                         <div id="zonePoints" class="mt-2 d-none">

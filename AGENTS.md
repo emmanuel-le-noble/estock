@@ -27,7 +27,7 @@ http://localhost/eSotck/
 ### Core Files
 - `config/connexion.php` — PDO, session, auth helpers, CSRF, RBAC, Twig setup, pagination
 - `config/parametres.php` — Shop parameters (auto-creates table on first run)
-- `includes/db_functions.php` — All SQL queries (2100+ lines, 50+ functions)
+- `includes/db_functions.php` — All SQL queries (4200+ lines, 180+ functions)
 - `includes/helpers.php` — Validation, business logic, HTML rendering, HMAC URLs
 - `includes/security_headers.php` — HTTP security headers (CSP with nonce)
 

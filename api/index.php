@@ -361,26 +361,36 @@ function handle_scan(): void {
         $alerte = 'Stock faible (' . (int)$article['quantite_stock'] . ' restant).';
     }
 
+    // Blocage des lots périmés : si le lot FEFO vendable le plus proche est
+    // périmé (== tous les lots en stock sont périmés), le scan est refusé
+    // comme le fera la validation finale (db_deduire_stock_lot).
     if ($magasin_id > 0 && isset($article['id'])) {
         $lot_fefo = db_lot_get_fefo($pdo, (int)$article['id'], $magasin_id);
         if ($lot_fefo && !empty($lot_fefo['date_peremption'])) {
             $date_peremption = new DateTime((string)$lot_fefo['date_peremption']);
             $aujourd_hui = new DateTime('today');
             $jours = (int)$aujourd_hui->diff($date_peremption)->days;
-            
-            if ($date_peremption < $aujourd_hui || $jours <= 7) {
+
+            if ($date_peremption < $aujourd_hui) {
+                json_out([
+                    'found'   => false,
+                    'code'    => $code,
+                    'message' => 'Article périmé — vente bloquée (lot ' . $lot_fefo['numero_lot'] . ' périmé depuis ' . $jours . ' jour(s)).',
+                ]);
+            }
+            if ($jours <= 7) {
                 $response['alerte_peremption'] = [
                     'numero_lot'     => $lot_fefo['numero_lot'],
                     'date_peremption'=> $lot_fefo['date_peremption'],
-                    'jours_restants' => $date_peremption < $aujourd_hui ? -$jours : $jours,
-                    'statut'         => $date_peremption < $aujourd_hui ? 'expire' : 'urgent',
-                    'message'        => $date_peremption < $aujourd_hui 
-                        ? '⚠ LOT PÉRIMÉ depuis ' . $jours . ' jours !'
-                        : '⚠ Lot expire dans ' . $jours . ' jour(s) !',
+                    'jours_restants' => $jours,
+                    'statut'         => 'urgent',
+                    'message'        => '⚠ Lot expire dans ' . $jours . ' jour(s) !',
                 ];
             }
-        } else {
-            // db_lot_get_fefo() exclut les lots périmés : on vérifie leur présence séparément
+        } elseif (!$lot_fefo) {
+            // db_lot_get_fefo() exclut les lots périmés : si aucun lot actif,
+            // vérifier la présence de lots périmés restants (ancienne alerte
+            // non bloquante remplacée par un blocage, cohérent avec la validation).
             $stmt_expire = $pdo->prepare(
                 "SELECT numero_lot, date_peremption FROM article_lots
                  WHERE article_id = ? AND magasin_id = ? AND quantite > 0
@@ -392,13 +402,11 @@ function handle_scan(): void {
             if ($lot_expire) {
                 $date_expire = new DateTime((string)$lot_expire['date_peremption']);
                 $jours_expire = (int)(new DateTime('today'))->diff($date_expire)->days;
-                $response['alerte_peremption'] = [
-                    'numero_lot'     => $lot_expire['numero_lot'],
-                    'date_peremption'=> $lot_expire['date_peremption'],
-                    'jours_restants' => -$jours_expire,
-                    'statut'         => 'expire',
-                    'message'        => '⚠ LOT PÉRIMÉ depuis ' . $jours_expire . ' jours !',
-                ];
+                json_out([
+                    'found'   => false,
+                    'code'    => $code,
+                    'message' => 'Article périmé — vente bloquée (lot ' . $lot_expire['numero_lot'] . ' périmé depuis ' . $jours_expire . ' jour(s)).',
+                ]);
             }
         }
     }
@@ -418,6 +426,9 @@ function handle_scan(): void {
         'prix_display'  => money($prix_final),
         'stock_dispo'   => (int)$article['quantite_stock'],
         'taux_tva'      => ($article['taux_tva'] ?? null) !== null && $article['taux_tva'] !== '' ? (float)$article['taux_tva'] : null,
+        'unite_mesure'  => $article['unite_mesure'] ?? 'UNITE',
+        'vente_au_poids'=> (bool)($article['vente_au_poids'] ?? 0),
+        'poids_precision' => (int)($article['poids_precision'] ?? 3),
         'alerte'        => $alerte,
     ];
 
@@ -516,6 +527,7 @@ function handle_caisse_sync(): void {
         foreach ($lignes as $l) {
             $articleId    = (int)($l['article_id'] ?? 0);
             $quantite     = (int)($l['quantite'] ?? 0);
+            $quantitePoids = isset($l['quantite_poids']) && $l['quantite_poids'] !== '' ? (float)$l['quantite_poids'] : null;
 
             if ($articleId <= 0 || $quantite <= 0) continue;
 
@@ -556,10 +568,12 @@ function handle_caisse_sync(): void {
             $tauxTvaLigne = ($art['taux_tva'] !== null && $art['taux_tva'] !== '')
                 ? (float)$art['taux_tva']
                 : $tauxTva;
-            $sousTotal = calc_line_subtotal($prixUnitaire, $quantite);
+            // Sous-total : quantité facturable = pesée pour la vente au poids
+            $quantiteFacturable = $quantitePoids !== null ? $quantitePoids : $quantite;
+            $sousTotal = calc_line_subtotal($prixUnitaire, $quantiteFacturable);
             $totalHt += $sousTotal;
 
-            $lignesValides[] = compact('articleId', 'quantite', 'prixUnitaire', 'prixOriginal', 'remisePct', 'tauxTvaLigne', 'sousTotal');
+            $lignesValides[] = compact('articleId', 'quantite', 'prixUnitaire', 'prixOriginal', 'remisePct', 'tauxTvaLigne', 'sousTotal', 'quantitePoids');
         }
 
         if (empty($lignesValides)) {
@@ -615,7 +629,7 @@ function handle_caisse_sync(): void {
             ->execute([$clientSaleId, $factureId]);
 
         foreach ($lignesValides as $lv) {
-            db_ligne_facture_insert($pdo, $factureId, $lv['articleId'], $lv['quantite'], $lv['prixUnitaire'], $lv['prixOriginal'], $lv['remisePct'], $lv['tauxTvaLigne'] ?? null);
+            db_ligne_facture_insert($pdo, $factureId, $lv['articleId'], $lv['quantite'], $lv['prixUnitaire'], $lv['prixOriginal'], $lv['remisePct'], $lv['tauxTvaLigne'] ?? null, $lv['quantitePoids'] ?? null);
             $lots_decrementes = db_deduire_stock_lot($pdo, $lv['articleId'], $magasinId, $lv['quantite'], $numero);
             
             $lot_parts = [];
@@ -643,7 +657,7 @@ function handle_caisse_sync(): void {
             }
         }
 
-        // Chaînage cryptographique NF525 (après lignes + paiements)
+        // Chaînage cryptographique des factures (après lignes + paiements)
         db_facture_chainer($pdo, $factureId);
 
         // Consommation des points fidélité (solde verrouillé FOR UPDATE)
@@ -800,6 +814,8 @@ function handle_clients_search(): void {
             'id'                  => (int)$c['id'],
             'nom'                 => $c['nom'] ?: $c['raison_sociale'],
             'raison_sociale'      => $c['raison_sociale'],
+            'nif'                 => $c['nif'] ?? '',
+            'rccm'                => $c['rccm'] ?? '',
             'telephone'           => $c['telephone'],
             'email'               => $c['email'],
             'code_fidelite'       => $c['code_fidelite'],

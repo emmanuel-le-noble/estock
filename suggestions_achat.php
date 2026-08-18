@@ -20,9 +20,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'envoy
     csrf_guard('suggestions_achat.php');
     $ok = notifier_stock_faible_email($pdo);
     if ($ok) {
-        flash_success('Alerte de stock envoyé par email.');
+        flash_success('Alerte de stock mise en file d\'attente pour envoi par e-mail.');
     } else {
-        flash_info('Email de notification simulé / enregistré dans les logs de l\'application.');
+        flash_info('Aucun destinataire configuré ou e-mail bloqué (consentement requis).');
     }
     redirect('suggestions_achat.php');
 }

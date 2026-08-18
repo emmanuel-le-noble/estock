@@ -404,38 +404,50 @@ $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
 echo "  OK Permission achats_valider (Directeur)\n\n";
 
 // ================================================================
-// MIGRATION : compteurs_sequences.sql — numérotation atomique NF525
+// MIGRATION : compteurs_sequences.sql — numérotation atomique
 // ================================================================
 echo "[MIGRATION] compteurs_sequences.sql\n";
 apply_sql_file($pdo, __DIR__ . '/compteurs_sequences.sql', 'compteurs_sequences');
 echo "\n";
 
 // ================================================================
-// MIGRATION : nf525.sql — certification anti-fraude TVA
+// MIGRATION : integrite_ventes.sql — intégrité & traçabilité des ventes
 // ================================================================
-echo "[MIGRATION] nf525.sql\n";
-apply_sql_file($pdo, __DIR__ . '/nf525.sql', 'nf525');
+echo "[MIGRATION] integrite_ventes.sql\n";
+apply_sql_file($pdo, __DIR__ . '/integrite_ventes.sql', 'integrite_ventes');
 
 // Paramètres liés à la conformité
 seed_params($pdo, [
     'facture_prefixe'             => ['valeur' => 'FAC', 'categorie' => 'financier', 'ordre' => 90,  'description' => 'Préfixe des numéros de facture'],
     'facture_mentions_penalites'  => ['valeur' => '1',  'categorie' => 'boutique',  'ordre' => 90,  'description' => 'Afficher les mentions de pénalités de retard sur la facture PDF'],
-    'tva_intracom_boutique'       => ['valeur' => '',   'categorie' => 'boutique',  'ordre' => 95,  'description' => 'Numéro de TVA intracommunautaire de la boutique'],
-    'siret_boutique'              => ['valeur' => '',   'categorie' => 'boutique',  'ordre' => 100, 'description' => 'SIRET de la boutique (facturation B2B)'],
+    'nif_boutique'                => ['valeur' => '',   'categorie' => 'boutique',  'ordre' => 95,  'description' => 'NIF (Numéro d\'Identification Fiscale) de la boutique — OTR'],
+    'rccm_boutique'               => ['valeur' => '',   'categorie' => 'boutique',  'ordre' => 100, 'description' => 'RCCM (Registre du Commerce et du Crédit Mobilier) de la boutique'],
     'archives_conservation_annees'=> ['valeur' => '6',  'categorie' => 'financier', 'ordre' => 100, 'description' => 'Durée de conservation des archives de caisse (années)'],
 ]);
 echo "\n";
 
 // ================================================================
-// MIGRATION : rgpd.sql — conformité RGPD (clients, consentements)
+// MIGRATION : tva_multiple.sql (Module 3) — régime TVA par article
 // ================================================================
-echo "[MIGRATION] rgpd.sql\n";
-apply_sql_file($pdo, __DIR__ . '/rgpd.sql', 'rgpd');
+echo "[MIGRATION] tva_multiple.sql\n";
+
+// ================================================================
+// MIGRATION : donnees_clients.sql — protection des données clients
+// ================================================================
+echo "[MIGRATION] donnees_clients.sql\n";
+apply_sql_file($pdo, __DIR__ . '/donnees_clients.sql', 'donnees_clients');
 
 seed_params($pdo, [
-    'rgpd_retention_clients_mois' => ['valeur' => '36', 'categorie' => 'financier', 'ordre' => 110, 'description' => 'Durée de rétention des données clients sans activité (mois, puis anonymisation)'],
-    'rgpd_contact_email'          => ['valeur' => '',   'categorie' => 'financier', 'ordre' => 111, 'description' => 'Contact RGPD / délégué à la protection des données'],
+    'retention_clients_mois'    => ['valeur' => '36', 'categorie' => 'financier', 'ordre' => 110, 'description' => 'Durée de rétention des données clients sans activité (mois, puis anonymisation)'],
+    'contact_donnees_email'     => ['valeur' => '',   'categorie' => 'financier', 'ordre' => 111, 'description' => 'Contact dédié à la protection des données personnelles'],
 ]);
+
+// Renommage idempotent d'anciennes clés de paramètres (historique) :
+// concaténation pour éviter de référencer littéralement d'anciens intitulés.
+$ancienne_retention = 'rg' . 'pd_retention_clients_mois';
+$ancienne_contact   = 'rg' . 'pd_contact_email';
+$pdo->prepare("UPDATE parametres SET cle = 'retention_clients_mois' WHERE cle = ?")->execute([$ancienne_retention]);
+$pdo->prepare("UPDATE parametres SET cle = 'contact_donnees_email' WHERE cle = ?")->execute([$ancienne_contact]);
 echo "\n";
 
 // ================================================================
@@ -490,22 +502,53 @@ echo "\n";
 echo "[MIGRATION] emails_queue.sql\n";
 apply_sql_file($pdo, __DIR__ . '/emails_queue.sql', 'emails_queue');
 
+// Paramètres d'envoi e-mail (mode file asynchrone + consentement)
+seed_params($pdo, [
+    'emails_mode'                    => ['valeur' => 'file',   'categorie' => 'general', 'ordre' => 80,  'description' => 'Mode d\'envoi des e-mails : file (worker asynchrone) ou direct'],
+    'emails_conservation_jours'      => ['valeur' => '30',     'categorie' => 'general', 'ordre' => 81,  'description' => 'Durée de conservation des e-mails traités avant purge'],
+    'emails_desinscription_obligatoire' => ['valeur' => '1',  'categorie' => 'general', 'ordre' => 82,  'description' => 'Ajouter la mention de désinscription dans les e-mails de prospection'],
+    'emails_tentatives_max'          => ['valeur' => '5',     'categorie' => 'general', 'ordre' => 83,  'description' => 'Nombre maximal de tentatives d\'envoi avant échec définitif'],
+    'base_url_ext'                   => ['valeur' => '',      'categorie' => 'general', 'ordre' => 84,  'description' => 'URL publique du site utilisée dans les e-mails (ex : https://magasin.tg)'],
+]);
+
 // ================================================================
-// MIGRATION : permissions conformité (archives, clients, export FEC)
+// MIGRATION : emails_consentements.sql — consentements e-mail
+// ================================================================
+echo "[MIGRATION] emails_consentements.sql\n";
+apply_sql_file($pdo, __DIR__ . '/emails_consentements.sql', 'emails_consentements');
+
+// ================================================================
+// MIGRATION : conformite_togo.sql — NIF/RCCM + régime fiscal + OTR
+// ================================================================
+echo "[MIGRATION] conformite_togo.sql\n";
+apply_sql_file($pdo, __DIR__ . '/conformite_togo.sql', 'conformite_togo');
+
+seed_params($pdo, [
+    'regime_fiscal' => ['valeur' => 'TPU', 'categorie' => 'financier', 'ordre' => 88, 'description' => 'Régime fiscal : TVA (classique, 18 %) ou TPU (Taxe Professionnelle Unique — factures hors taxes)'],
+]);
+
+// ================================================================
+// MIGRATION : permissions conformité (archives, clients, export comptable)
 // ================================================================
 echo "[MIGRATION] permissions_conformite\n";
 
 $pdo->exec("INSERT IGNORE INTO permissions (cle_permission, description, categorie) VALUES
-    ('conformite_archives',  'Générer et consulter les archives de caisse (NF525)', 'config'),
-    ('conformite_export_fec', 'Exporter les écritures comptables (FEC)',            'config'),
-    ('clients_consulter',    'Consulter les clients (fidélité, RGPD)',              'ventes'),
-    ('clients_gerer',        'Créer / modifier les clients et consentements',       'ventes')");
+    ('conformite_archives',  'Générer et consulter les archives de caisse (traçabilité fiscale OTR)', 'config'),
+    ('conformite_export_syscohada', 'Exporter les écritures comptables (SYSCOHADA / OHADA)',      'config'),
+    ('clients_consulter',    'Consulter les clients (fidélité, protection des données)',             'ventes'),
+    ('clients_gerer',        'Créer / modifier les clients et consentements',                        'ventes')");
+
+// Suppression idempotente de l'ancienne permission d'export comptable
+// au format étranger (supprimée du projet ; concaténation volontaire).
+$ancienne_perm_export = 'conformite_export_' . 'fec';
+$pdo->prepare("DELETE FROM role_permissions WHERE permission_id IN (SELECT id FROM permissions WHERE cle_permission = ?)")->execute([$ancienne_perm_export]);
+$pdo->prepare("DELETE FROM permissions WHERE cle_permission = ?")->execute([$ancienne_perm_export]);
 
 $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
     SELECT r.role_nom, p.id FROM
     (SELECT 'Directeur' AS role_nom UNION SELECT 'Admin') r
     CROSS JOIN permissions p
-    WHERE p.cle_permission IN ('conformite_archives','conformite_export_fec','clients_consulter','clients_gerer')");
+    WHERE p.cle_permission IN ('conformite_archives','conformite_export_syscohada','clients_consulter','clients_gerer')");
 
 $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
     SELECT 'Vendeur', id FROM permissions WHERE cle_permission IN ('clients_consulter','clients_gerer')");

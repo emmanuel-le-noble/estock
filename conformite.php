@@ -1,12 +1,15 @@
 <?php
 /**
- * conformite.php - Conformité NF525 (certification anti-fraude TVA).
+ * conformite.php - Traçabilité et intégrité des ventes.
  *
+ * Bonnes pratiques de traçabilité comptable (non liées à une norme
+ * étrangère) :
  *  1. Vérification de l'intégrité de la chaîne cryptographique des factures
  *     (incluant les clôtures de caisse) + rattrapage (backfill) des factures
  *     antérieures à l'activation.
- *  2. Archivage périodique obligatoire : export signé (HMAC) des données de
- *     caisse sur une période, conservation configurable (>= 6 ans par défaut).
+ *  2. Archivage périodique des données de caisse : export signé (HMAC) sur
+ *     une période, conservation longue configurable (>= 6 ans par défaut)
+ *     au titre de la traçabilité fiscale OTR.
  */
 if (!function_exists('est_connecte')) { require_once __DIR__ . '/config/connexion.php'; }
 if (!function_exists('db_article_insert')) { require_once __DIR__ . '/includes/db_functions.php'; }
@@ -52,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 1) Rattrapage du chaînage des factures antérieures
     if ($action === 'backfill') {
         $traitees = db_facture_chainage_backfill($pdo);
-        suivre_activite('NF525_BACKFILL', 'Rattrapage chaînage : ' . $traitees . ' facture(s)');
+        suivre_activite('CHAINAGE_BACKFILL', 'Rattrapage chaînage : ' . $traitees . ' facture(s)');
         flash_success($traitees . ' facture(s) chaînée(s) cryptographiquement.');
         redirect('conformite.php');
     }
@@ -87,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fichier = 'archive_' . str_replace('-', '', $data['debut']) . '_' . str_replace('-', '', $data['fin']) . '.json';
 
             $contenu = json_encode([
-                'outil'        => 'eStock NF525',
+                'outil'        => 'eStock — archives caisse',
                 'periode'      => ['debut' => $data['debut'], 'fin' => $data['fin']],
                 'magasin_id'   => $data['magasin_id'],
                 'nb_factures'  => $periode['nb_factures'],
@@ -162,7 +165,7 @@ foreach ($archives as &$a) {
 unset($a);
 
 echo $twig->render('conformite.html.twig', [
-    'titre_page'      => 'Conformité NF525',
+    'titre_page'      => 'Traçabilité des ventes',
     'verification'    => $verification,
     'chainage_actif'  => db_facture_chainage_actif($pdo),
     'nb_non_chainees' => (int)$pdo->query("SELECT COUNT(*) FROM factures WHERE hash_chaine IS NULL")->fetchColumn(),
@@ -176,4 +179,5 @@ echo $twig->render('conformite.html.twig', [
     'annees_conservation' => param_int('archives_conservation_annees', 6),
     'magasin_id_defaut'   => user_magasin_id(),
     'magasins_dispo'      => $magasins,
+    'can_export'          => peut('conformite_export_syscohada'),
 ]);

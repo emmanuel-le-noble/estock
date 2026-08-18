@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const SEPARATEUR_DECIMAL = String(config.separateur_decimal || ',');
     const SEPARATEUR_MILLIERS = String(config.separateur_milliers ?? ' ');
 
-    const BASE = window.BASE_URL || '/eSotck/';
+    const BASE = window.BASE_URL || '';
     const PENDING_SALES_KEY = 'estock_pending_sales';
 
     // Le panier : { [article_id]: {article, qte} }
@@ -263,8 +263,43 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // ---- Anti-doublon matériel : même code renvoyé deux fois en < 800 ms ----
+    var dernierScan = { code: '', ts: 0 };
+
+    // ---- Modale de saisie pour la vente au poids (construite à la volée) ----
+    var modalePoids = null;
+    var articlePoidsActuel = null;
+
+    // Facteur de conversion unité de vente → unités entières internes (grammes)
+    var FACTEUR_UNITE = { KILOGRAMME: 1000, LITRE: 1000, GRAMME: 1, MILLILITRE: 1 };
+    var LABEL_UNITE = { KILOGRAMME: 'kg', LITRE: 'l', GRAMME: 'g', MILLILITRE: 'ml' };
+
+    function facteurUnite(art) {
+        var u = String(art && art.unite_mesure ? art.unite_mesure : '').toUpperCase();
+        return FACTEUR_UNITE[u] || 1;
+    }
+
+    function labelUnite(art) {
+        var u = String(art && art.unite_mesure ? art.unite_mesure : '').toUpperCase();
+        return LABEL_UNITE[u] || u.toLowerCase();
+    }
+
+    function formaterPoids(qte, art) {
+        var precision = Math.max(0, Math.min(3, parseInt(art && art.poids_precision, 10) || 0));
+        return Number(qte).toFixed(precision).replace('.', SEPARATEUR_DECIMAL) + (labelUnite(art) ? ' ' + labelUnite(art) : '');
+    }
+
     // ---- Traitement d'un scan ----
     function traiterScan(code) {
+        var maintenant = Date.now();
+        if (code === dernierScan.code && (maintenant - dernierScan.ts) < 800) {
+            // La douchette a renvoyé deux fois le même code (bip double) : on ignore
+            if (scanInput) { scanInput.disabled = false; scanInput.focus(); }
+            return;
+        }
+        dernierScan = { code: code, ts: maintenant };
+
+        // Vider le champ AVANT l'appel réseau pour enchaîner le scan suivant
         if (scanInput) { scanInput.value = ''; scanInput.disabled = true; }
 
         var spinner = document.createElement('div');
@@ -273,19 +308,37 @@ document.addEventListener('DOMContentLoaded', function () {
         spinner.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"></div> Recherche...';
         if (zoneAlerte) zoneAlerte.appendChild(spinner);
 
-        fetch(BASE + 'api/scan?code=' + encodeURIComponent(code))
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
+        fetch(BASE + 'api/scan?code=' + encodeURIComponent(code), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) {
+                return r.json().then(function (d) { return { ok: r.ok, statut: r.status, d: d }; });
+            })
+            .then(function (res) {
+                var data = res.d || {};
+
+                if (!res.ok) {
+                    alerter((data.message || data.error || 'Erreur serveur (' + res.statut + ')') + ' — code ' + code, 'danger');
+                    scanInput.classList.add('is-invalid');
+                    setTimeout(function () { scanInput.classList.remove('is-invalid'); }, 600);
+                    return;
+                }
+
                 if (data.found) {
-                    ajouterAuPanier(data.article);
-                    alerter(data.article.alerte || 'Article ajouté : ' + data.article.nom, 'success');
+                    if (data.article.vente_au_poids) {
+                        // Vente au poids : proposer la saisie de la pesée avant l'ajout
+                        proposerPoids(data.article);
+                        alerter(data.article.alerte || 'Article trouvé : ' + data.article.nom, 'success');
+                    } else {
+                        ajouterAuPanier(data.article);
+                        alerter(data.article.alerte || 'Article ajouté : ' + data.article.nom, 'success');
+                    }
 
                     // Notification de péremption
                     if (data.alerte_peremption) {
                         const alerte = data.alerte_peremption;
-                        const isExpired = alerte.statut === 'expire';
-                        const bgColor = isExpired ? '#dc3545' : '#fd7e14';
-                        const icon = isExpired ? 'bi-exclamation-octagon' : 'bi-exclamation-triangle';
+                        const bgColor = '#fd7e14';
+                        const icon = 'bi-exclamation-triangle';
 
                         const toast = document.createElement('div');
                         toast.className = 'position-fixed top-0 end-0 m-3 p-3 text-white rounded shadow';
@@ -294,8 +347,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             '<div class="d-flex align-items-center gap-2">' +
                             '<i class="bi ' + icon + ' fs-4"></i>' +
                             '<div>' +
-                            '<strong>' + (isExpired ? 'LOT PÉRIMÉ' : 'DLC Proche') + '</strong><br>' +
-                            '<small>Lot ' + alerte.numero_lot + ' — ' + (isExpired ? 'Périmé depuis ' + Math.abs(alerte.jours_restants) + 'j' : 'Expire dans ' + alerte.jours_restants + 'j') + '</small>' +
+                            '<strong>DLC PROCH</strong><br>' +
+                            '<small>Lot ' + alerte.numero_lot + ' — expire dans ' + alerte.jours_restants + 'j</small>' +
                             '</div>' +
                             '<button class="btn-close btn-close-white ms-auto" id="btnToastClose"></button>' +
                             '</div>';
@@ -333,13 +386,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             })
             .catch(function (err) {
-                // Mode hors-ligne : proposer d'ajouter manuellement ?
-                alerter('Erreur réseau : ' + err.message, 'danger');
+                if (!navigator.onLine) {
+                    alerter('Hors-ligne : scan impossible (prix non vérifiable en direct). Les ventes déjà au panier peuvent être validées : elles seront synchronisées au retour du réseau.', 'warning');
+                } else {
+                    alerter('Erreur réseau : ' + err.message, 'danger');
+                }
             })
             .finally(function () {
                 var sp = document.getElementById('scanSpinner');
                 if (sp) sp.remove();
-                if (scanInput) { scanInput.disabled = false; scanInput.focus(); }
+                if (scanInput) {
+                    scanInput.disabled = false;
+                    if (!(modalePoids && modalePoids.classList.contains('show'))) {
+                        scanInput.focus();
+                    }
+                }
             });
     }
 
@@ -349,19 +410,142 @@ document.addEventListener('DOMContentLoaded', function () {
     function ajouterAuPanier(art) {
         var id = art.id;
         if (panier[id]) {
-            if (panier[id].qte + 1 > art.stock_dispo) {
+            if (panier[id].qte_interne + 1 > art.stock_dispo) {
                 alerter('Stock maximum atteint pour ' + art.nom, 'warning');
                 return;
             }
             panier[id].qte += 1;
+            panier[id].qte_interne += 1;
         } else {
             if (art.stock_dispo <= 0) {
                 alerter('Stock épuisé pour ' + art.nom, 'danger');
                 return;
             }
-            panier[id] = { article: art, qte: 1 };
+            panier[id] = { article: art, qte: 1, qte_interne: 1 };
         }
         rafraichirPanier();
+    }
+
+    // ---- Ajout d'une pesée pour un article vendu au poids ----
+    function ajouterAuPoids(art, poidsSaisi) {
+        var poids = Number.parseFloat(poidsSaisi);
+        if (!(poids > 0)) {
+            alerter('Poids invalide pour ' + art.nom + '.', 'warning');
+            return;
+        }
+        var facteur = facteurUnite(art);
+        var qteInterne = Math.round(poids * facteur);
+        if (qteInterne <= 0) {
+            alerter('Quantité trop faible pour ' + art.nom + '.', 'warning');
+            return;
+        }
+        var id = art.id;
+        if (panier[id]) {
+            if (panier[id].qte_interne + qteInterne > art.stock_dispo) {
+                alerter('Stock maximum atteint pour ' + art.nom, 'warning');
+                return;
+            }
+            panier[id].qte += poids;
+            panier[id].qte_interne += qteInterne;
+        } else {
+            if (art.stock_dispo <= 0) {
+                alerter('Stock épuisé pour ' + art.nom, 'danger');
+                return;
+            }
+            if (qteInterne > art.stock_dispo) {
+                alerter('Stock insuffisant : ' + art.stock_dispo + ' ' + (facteur > 1 ? 'g' : labelUnite(art)) + ' disponible(s) pour ' + art.nom + '.', 'warning');
+                return;
+            }
+            panier[id] = { article: art, qte: poids, qte_interne: qteInterne };
+        }
+        rafraichirPanier();
+        alerter('Pesée ajoutée : ' + art.nom + ' — ' + formaterPoids(panier[id].qte, art), 'success');
+    }
+
+    // ---- Construction & affichage de la modale de saisie du poids ----
+    function proposerPoids(art) {
+        articlePoidsActuel = art;
+        if (!modalePoids) {
+            modalePoids = document.createElement('div');
+            modalePoids.className = 'modal fade';
+            modalePoids.id = 'modalSaisiePoids';
+            modalePoids.setAttribute('tabindex', '-1');
+            modalePoids.setAttribute('aria-hidden', 'true');
+            modalePoids.innerHTML =
+                '<div class="modal-dialog modal-sm modal-dialog-centered">' +
+                '<div class="modal-content">' +
+                '<div class="modal-header">' +
+                '<h5 class="modal-title">Vente au poids</h5>' +
+                '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>' +
+                '</div>' +
+                '<div class="modal-body">' +
+                '<div class="fw-semibold mb-1" id="poidsNomArticle"></div>' +
+                '<div class="small text-muted mb-2" id="poidsPrixInfo"></div>' +
+                '<div class="input-group input-group-lg">' +
+                '<input type="number" id="poidsInput" class="form-control" min="0" step="0.001" inputmode="decimal">' +
+                '<span class="input-group-text" id="poidsUniteLabel"></span>' +
+                '</div>' +
+                '<div class="form-text mt-1" id="poidsStockInfo"></div>' +
+                '</div>' +
+                '<div class="modal-footer">' +
+                '<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>' +
+                '<button type="button" class="btn btn-success" id="btnValiderPoids">Ajouter au panier</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            document.body.appendChild(modalePoids);
+
+            var btn = modalePoids.querySelector('#btnValiderPoids');
+            var input = modalePoids.querySelector('#poidsInput');
+            btn.addEventListener('click', function () {
+                var art = articlePoidsActuel;
+                if (!art) return;
+                if (!(Number.parseFloat(input.value) > 0)) {
+                    input.classList.add('is-invalid');
+                    setTimeout(function () { input.classList.remove('is-invalid'); }, 800);
+                    return;
+                }
+                var facteur = facteurUnite(art);
+                var maxPesee = art.stock_dispo / facteur;
+                if (Number.parseFloat(input.value) > maxPesee) {
+                    alerter('Poids supérieur au stock disponible pour ' + art.nom + '.', 'warning');
+                    return;
+                }
+                ajouterAuPoids(art, input.value);
+                input.value = '';
+                bootstrap.Modal.getInstance(modalePoids).hide();
+                if (scanInput) scanInput.focus();
+            });
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    btn.click();
+                }
+            });
+            // Reprise du focus scan une fois la modale fermée
+            modalePoids.addEventListener('hidden.bs.modal', function () {
+                if (scanInput) scanInput.focus();
+            });
+        }
+
+        modalePoids.querySelector('#poidsNomArticle').textContent = art.nom + ' — ' + (art.code_barre || '');
+        modalePoids.querySelector('#poidsPrixInfo').textContent = 'Prix : ' + formatMoney(art.prix_unitaire) + ' / ' + labelUnite(art);
+        modalePoids.querySelector('#poidsUniteLabel').textContent = labelUnite(art);
+        modalePoids.querySelector('#poidsStockInfo').textContent = 'Stock disponible : ' + formaterPoids(art.stock_dispo / facteurUnite(art), art);
+
+        var input = modalePoids.querySelector('#poidsInput');
+        input.value = '';
+        input.step = Math.pow(10, -Math.max(0, Math.min(3, parseInt(art.poids_precision, 10) || 0))).toFixed(3);
+
+        var modalInstance = (window.bootstrap && bootstrap.Modal.getOrCreateInstance)
+            ? bootstrap.Modal.getOrCreateInstance(modalePoids)
+            : null;
+        if (modalInstance) {
+            modalInstance.show();
+            setTimeout(function () { input.focus(); }, 120);
+        } else {
+            alerter('Saisie du poids indisponible (Bootstrap modal non chargé).', 'danger');
+        }
     }
 
     var modifierQte = function modifierQte(id, delta) {
@@ -373,7 +557,8 @@ document.addEventListener('DOMContentLoaded', function () {
             alerter('Stock maximum atteint pour ' + panier[id].article.nom, 'warning');
             return;
         } else {
-            panier[id].qte = nouvelleQte;
+            panier[id].qte += delta;
+            panier[id].qte_interne += delta;
         }
         rafraichirPanier();
     };
@@ -498,6 +683,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 ? (c.points_fidelite || 0) + ' points disponibles'
                 : 'Pas de consentement fidélité';
         }
+
+        // Avertissement facture B2B : client professionnel (raison sociale / RCCM)
+        // sans NIF — la facture sera jugée non conforme (OTR). N'empêche pas la vente.
+        var estPro = !!(c.raison_sociale || c.rccm);
+        var alertBox = document.getElementById('clientAlert');
+        var alertMsg = document.getElementById('clientAlertMsg');
+        if (alertBox && alertMsg) {
+            if (estPro && !c.nif) {
+                alertMsg.textContent = 'Client professionnel sans NIF — facture non conforme (OTR).';
+                alertBox.classList.remove('d-none');
+            } else {
+                alertBox.classList.add('d-none');
+            }
+        }
         if (zonePoints) {
             zonePoints.classList.toggle('d-none', !(c.consentement_fidelite && (c.points_fidelite || 0) >= FIDELITE.minPoints));
         }
@@ -510,6 +709,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (clientChip) clientChip.classList.add('d-none');
         if (zonePoints) zonePoints.classList.add('d-none');
         if (inpClientId) inpClientId.value = 0;
+        var alertBox = document.getElementById('clientAlert');
+        if (alertBox) alertBox.classList.add('d-none');
         if (inpPointsUtilises) inpPointsUtilises.value = 0;
         if (pointsUtilises) pointsUtilises.value = 0;
         if (lblRemiseFidelite) lblRemiseFidelite.textContent = '';
@@ -589,9 +790,10 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             panierTbody.innerHTML = lignes.map(function (l) {
                 var sousTotal = l.article.prix_unitaire * l.qte;
+                var estPoids = !!l.article.vente_au_poids;
                 totalHt += sousTotal;
                 totalTva += sousTotal * tauxTvaDe(l.article) / 100;
-                nbArticles += l.qte;
+                nbArticles += estPoids ? 1 : l.qte;
 
                 // Déterminer l'affichage du prix (promo ou normal)
                 var promo = l.article.promotion || null;
@@ -613,19 +815,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     promoLabel = '<br><span class="badge glass-badge-qty is-danger" style="font-size:.65rem"><i class="bi bi-lightning"></i> ' + escapeHtml(promo.label) + '</span>';
                 }
 
+                // Colonne quantité : boutons +/- pour les unitaires, pesée affichée pour le poids
+                var qteHtml = estPoids
+                    ? '<span class="badge text-bg-light border rounded-pill px-3 py-2">' + formaterPoids(l.qte, l.article) + '</span>'
+                    : '<div class="btn-group btn-group-sm">' +
+                      '<button type="button" class="btn btn-outline-secondary btn-decrease" data-id="' + l.article.id + '">−</button>' +
+                      '<span class="btn btn-light disabled qty-badge">' + l.qte + '</span>' +
+                      '<button type="button" class="btn btn-outline-secondary btn-increase" data-id="' + l.article.id + '">+</button>' +
+                      '</div>';
+
                 return '<tr data-id="' + l.article.id + '">' +
                     '<td>' +
                     '<div class="fw-semibold">' + escapeHtml(l.article.nom) + promoLabel + '</div>' +
                     '<small class="text-muted"><code>' + escapeHtml(l.article.code_barre) + '</code></small>' +
                     '</td>' +
-                    '<td class="text-end">' + prixHtml + '</td>' +
-                    '<td class="text-center">' +
-                    '<div class="btn-group btn-group-sm">' +
-                    '<button type="button" class="btn btn-outline-secondary btn-decrease" data-id="' + l.article.id + '">−</button>' +
-                    '<span class="btn btn-light disabled qty-badge">' + l.qte + '</span>' +
-                    '<button type="button" class="btn btn-outline-secondary btn-increase" data-id="' + l.article.id + '">+</button>' +
-                    '</div>' +
-                    '</td>' +
+                    '<td class="text-end">' + prixHtml + (estPoids ? '<div class="small text-muted" style="font-size:.7rem">/' + labelUnite(l.article) + '</div>' : '') + '</td>' +
+                    '<td class="text-center">' + qteHtml + '</td>' +
                     '<td class="text-end fw-bold">' + formatMoney(sousTotal) + '</td>' +
                     '<td class="text-center">' +
                     '<button type="button" class="btn btn-sm btn-outline-danger btn-delete" data-id="' + l.article.id + '" title="Retirer">' +
@@ -784,7 +989,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 var b = document.createElement('input');
                 b.type = 'hidden'; b.dataset.dyn = '1';
                 b.name = 'lignes[' + l.article.id + '][quantite]';
-                b.value = l.qte;
+                b.value = l.qte_interne;
                 conteneur.appendChild(b);
 
                 var c = document.createElement('input');
@@ -792,6 +997,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 c.name = 'lignes[' + l.article.id + '][prix_unitaire]';
                 c.value = l.article.prix_unitaire.toFixed(2);
                 conteneur.appendChild(c);
+
+                if (l.article.vente_au_poids) {
+                    var d = document.createElement('input');
+                    d.type = 'hidden'; d.dataset.dyn = '1';
+                    d.name = 'lignes[' + l.article.id + '][quantite_poids]';
+                    d.value = l.qte;
+                    conteneur.appendChild(d);
+                }
             });
         }
     });
@@ -805,7 +1018,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 article_id:    l.article.id,
                 code_barre:    l.article.code_barre || '',
                 nom:           l.article.nom || '',
-                quantite:      l.qte,
+                quantite:      l.qte_interne,
+                quantite_poids: l.article.vente_au_poids ? l.qte : null,
                 prix_unitaire: l.article.prix_unitaire,
                 taux_tva:      (l.article.taux_tva != null && isFinite(parseFloat(l.article.taux_tva)))
                     ? parseFloat(l.article.taux_tva)
@@ -813,11 +1027,13 @@ document.addEventListener('DOMContentLoaded', function () {
             };
         });
 
-        // HT et TVA calculées ligne par ligne (taux spécifique article ou taux global)
+        // HT et TVA calculées ligne par ligne (taux spécifique article ou taux global) ;
+        // pour la vente au poids, la quantité facturable est la pesée (quantite_poids)
         var totalHt = 0;
         var totalTva = 0;
         lignes.forEach(function (l) {
-            var ht = l.prix_unitaire * l.quantite;
+            var qteFacturable = (l.quantite_poids != null && !isNaN(l.quantite_poids)) ? l.quantite_poids : l.quantite;
+            var ht = l.prix_unitaire * qteFacturable;
             totalHt += ht;
             totalTva += ht * l.taux_tva / 100;
         });
@@ -902,6 +1118,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ---- Raccourcis clavier ----
     document.addEventListener('keydown', function (e) {
+        // Ne jamais intercepter F2/F8 pendant la saisie dans les champs
+        // de paiement / recherche — seul le champ de scan reste concerné
+        // (un code-barres douchette ne contient jamais F2/F8 ; le vendeur
+        // peut valider via F8 juste après le dernier scan).
+        var cible = e.target;
+        if (cible && cible !== scanInput &&
+            (cible.tagName === 'INPUT' || cible.tagName === 'TEXTAREA' || cible.tagName === 'SELECT')) {
+            return;
+        }
         if (e.key === 'F2') { e.preventDefault(); viderPanier(); }
         if (e.key === 'F8') { e.preventDefault(); if (btnValider) btnValider.click(); }
     });

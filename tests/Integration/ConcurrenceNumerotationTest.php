@@ -1,6 +1,6 @@
 <?php
 /**
- * Test de concurrence NF525 : la numérotation des factures doit rester
+ * Test de concurrence : la numérotation des factures doit rester
  * continue et sans doublon quand plusieurs caisses vendent simultanément.
  *
  * Stratégie : N processus PHP enfants appellent generate_invoice_number()
@@ -29,7 +29,7 @@ final class ConcurrenceNumerotationTest extends PHPUnit\Framework\TestCase
 
         // Réinitialisation des compteurs du jour (base de test uniquement).
         // NB : les DELETE physiques sur factures/lignes sont interdits par les
-        // triggers NF525 (immuabilité) — ici on ne fait que repartir de zéro
+        // triggers d'immuabilité — ici on ne fait que repartir de zéro
         // sur les séquences, ce qui valide précisément l'atomicité.
         $aujourdhui = date('Ymd');
         self::$pdo->exec("DELETE FROM sequences WHERE cle LIKE 'numero_facture:%'");

@@ -31,13 +31,13 @@ function db_article_insert(PDO $pdo, array $data): int {
     $stmt->execute([
         ':code' => $data['code_barre'],
         ':nom'  => $data['nom'],
-        ':sku'  => $data['sku'],
+        ':sku'  => $data['sku'] ?? null,
         ':pa'   => $data['prix_achat'],
         ':pv'   => $data['prix_vente'],
         ':qte'  => $data['quantite_stock'],
         ':seuil'=> $data['seuil_alerte'],
-        ':emp'  => $data['emplacement'],
-        ':four' => $data['fournisseur_id'],
+        ':emp'  => $data['emplacement'] ?? null,
+        ':four' => $data['fournisseur_id'] ?? null,
         ':cat'  => !empty($data['categorie_id']) ? (int)$data['categorie_id'] : null,
         ':tva'  => isset($data['taux_tva']) && $data['taux_tva'] !== null ? (float)$data['taux_tva'] : null,
     ]);
@@ -65,13 +65,13 @@ function db_article_update(PDO $pdo, int $id, array $data): void {
     $stmt->execute([
         ':code' => $data['code_barre'],
         ':nom'  => $data['nom'],
-        ':sku'  => $data['sku'],
+        ':sku'  => $data['sku'] ?? null,
         ':pa'   => $data['prix_achat'],
         ':pv'   => $data['prix_vente'],
         ':qte'  => $data['quantite_stock'],
         ':seuil'=> $data['seuil_alerte'],
-        ':emp'  => $data['emplacement'],
-        ':four' => $data['fournisseur_id'],
+        ':emp'  => $data['emplacement'] ?? null,
+        ':four' => $data['fournisseur_id'] ?? null,
         ':cat'  => !empty($data['categorie_id']) ? (int)$data['categorie_id'] : null,
         ':tva'  => isset($data['taux_tva']) && $data['taux_tva'] !== null ? (float)$data['taux_tva'] : null,
         ':id'   => $id,
@@ -108,6 +108,7 @@ function db_article_get_by_barcode(PDO $pdo, string $code, int $magasin_id = 0):
     if ($magasin_id > 0) {
         $stmt = $pdo->prepare("
             SELECT a.id, a.code_barre, a.nom, a.sku, a.prix_vente, a.taux_tva,
+                   a.unite_mesure, a.vente_au_poids, a.poids_precision,
                    COALESCE(sm.quantite, 0) AS quantite_stock,
                    COALESCE(sm.stock_alerte, a.seuil_alerte) AS seuil_alerte
             FROM articles a
@@ -118,7 +119,8 @@ function db_article_get_by_barcode(PDO $pdo, string $code, int $magasin_id = 0):
         $stmt->execute([$magasin_id, $code]);
     } else {
         $stmt = $pdo->prepare("
-            SELECT id, code_barre, nom, sku, prix_vente, taux_tva, quantite_stock, seuil_alerte
+            SELECT id, code_barre, nom, sku, prix_vente, taux_tva,
+                   unite_mesure, vente_au_poids, poids_precision, quantite_stock, seuil_alerte
             FROM articles WHERE code_barre = ? AND actif = 1 LIMIT 1
         ");
         $stmt->execute([$code]);
@@ -155,14 +157,14 @@ function db_article_get_for_update(PDO $pdo, int $id, int $magasin_id = 0): ?arr
 function db_article_get_for_mouvement(PDO $pdo, int $id, int $magasin_id = 0): ?array {
     if ($magasin_id > 0) {
         $stmt = $pdo->prepare("
-            SELECT COALESCE(sm.quantite, 0) AS quantite_stock, a.nom
+            SELECT COALESCE(sm.quantite, 0) AS quantite_stock, a.nom, a.prix_achat, a.cump
             FROM articles a
             LEFT JOIN stock_magasins sm ON sm.article_id = a.id AND sm.magasin_id = ?
             WHERE a.id = ? FOR UPDATE
         ");
         $stmt->execute([$magasin_id, $id]);
     } else {
-        $stmt = $pdo->prepare("SELECT quantite_stock, nom FROM articles WHERE id = ? FOR UPDATE");
+        $stmt = $pdo->prepare("SELECT quantite_stock, nom, prix_achat, cump FROM articles WHERE id = ? FOR UPDATE");
         $stmt->execute([$id]);
     }
     return $stmt->fetch() ?: null;
@@ -798,9 +800,12 @@ function db_facture_insert(PDO $pdo, array $data): int {
  * Récupérer une facture par ID avec le nom du vendeur.
  */
 function db_facture_get_by_id(PDO $pdo, int $id): ?array {
-    $stmt = $pdo->prepare("SELECT f.*, u.nom AS vendeur_nom
+    $stmt = $pdo->prepare("SELECT f.*, u.nom AS vendeur_nom,
+        COALESCE(c.raison_sociale, c.nom) AS client_nom,
+        c.nif AS client_nif, c.rccm AS client_rccm
         FROM factures f
         LEFT JOIN utilisateurs u ON u.id = f.utilisateur_id
+        LEFT JOIN clients c ON c.id = f.client_id
         WHERE f.id = ?
     ");
     $stmt->execute([$id]);
@@ -910,7 +915,8 @@ function db_factures_revenue_today(PDO $pdo, int $magasin_id = 0): float {
  * Stats globales sur une période : nombre de ventes + CA total.
  */
 function db_stats_period(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): array {
-    $sql = "SELECT COUNT(*) AS nb_ventes, COALESCE(SUM(total_ttc), 0) AS ca_total
+    $sql = "SELECT COUNT(*) AS nb_ventes, COALESCE(SUM(total_ttc), 0) AS ca_total,
+            COALESCE(SUM(total_ttc - total_ht), 0) AS tva_collectee
         FROM factures
         WHERE DATE(date_facture) BETWEEN ? AND ? AND statut = 'Payee'";
     $params = [$debut, $fin];
@@ -920,7 +926,7 @@ function db_stats_period(PDO $pdo, string $debut, string $fin, int $magasin_id =
     }
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
-    return $stmt->fetch() ?: ['nb_ventes' => 0, 'ca_total' => 0];
+    return $stmt->fetch() ?: ['nb_ventes' => 0, 'ca_total' => 0, 'tva_collectee' => 0];
 }
 
 /**
@@ -980,12 +986,12 @@ function db_stats_daily_sales(PDO $pdo, string $debut, string $fin, int $magasin
  * @param float|null $prix_original Prix unitaire avant remise (null si pas de remise)
  * @param float|null $remise_pct    Pourcentage de remise appliqué (null si pas de remise)
  */
-function db_ligne_facture_insert(PDO $pdo, int $facture_id, int $article_id, int $quantite, float $prix_unitaire, ?float $prix_original = null, ?float $remise_pct = null, ?float $taux_tva = null): void {
+function db_ligne_facture_insert(PDO $pdo, int $facture_id, int $article_id, int $quantite, float $prix_unitaire, ?float $prix_original = null, ?float $remise_pct = null, ?float $taux_tva = null, ?float $quantite_poids = null): void {
     $stmt = $pdo->prepare("
-        INSERT INTO lignes_facture (facture_id, article_id, quantite, prix_unitaire, prix_original, remise_pct, taux_tva)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO lignes_facture (facture_id, article_id, quantite, prix_unitaire, prix_original, remise_pct, taux_tva, quantite_poids)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ");
-    $stmt->execute([$facture_id, $article_id, $quantite, $prix_unitaire, $prix_original, $remise_pct, $taux_tva]);
+    $stmt->execute([$facture_id, $article_id, $quantite, $prix_unitaire, $prix_original, $remise_pct, $taux_tva, $quantite_poids]);
 }
 
 // ============================================================
@@ -1040,7 +1046,7 @@ function db_mouvements_search_sql(array $filters = []): array {
         $params[] = "%$f_article%";
         $params[] = "%$f_article%";
     }
-    if (in_array($f_type, ['Entree', 'Sortie', 'Vente'], true)) {
+    if (in_array($f_type, ['Entree', 'Sortie', 'Vente', 'Transfert', 'Ajustement', 'Retour_stock'], true)) {
         $where[] = "m.type = ?";
         $params[] = $f_type;
     }
@@ -1172,7 +1178,7 @@ function db_magasins_list(PDO $pdo): array {
  * Récupérer un magasin par ID.
  */
 function db_magasin_get_by_id(PDO $pdo, int $id): ?array {
-    $stmt = $pdo->prepare("SELECT id, nom, adresse, code_postal FROM magasins WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, nom, adresse, code_postal, nif, rccm, actif FROM magasins WHERE id = ?");
     $stmt->execute([$id]);
     return $stmt->fetch() ?: null;
 }
@@ -1181,20 +1187,22 @@ function db_magasin_get_by_id(PDO $pdo, int $id): ?array {
  * Lister tous les magasins (actifs + inactifs), triés par statut puis nom.
  */
 function db_magasins_list_all(PDO $pdo): array {
-    return $pdo->query("SELECT id, nom, adresse, code_postal, actif, date_creation FROM magasins ORDER BY actif DESC, nom")->fetchAll();
+    return $pdo->query("SELECT id, nom, adresse, code_postal, nif, rccm, actif, date_creation FROM magasins ORDER BY actif DESC, nom")->fetchAll();
 }
 
 /**
  * Créer un nouveau magasin et initialiser le stock à 0 pour tous les articles actifs.
  */
-function db_magasin_insert(PDO $pdo, string $nom, ?string $adresse, ?string $code_postal): int {
+function db_magasin_insert(PDO $pdo, string $nom, ?string $adresse, ?string $code_postal, ?string $nif = null, ?string $rccm = null): int {
     $stmt = $pdo->prepare(
-        "INSERT INTO magasins (nom, adresse, code_postal) VALUES (:nom, :adresse, :cp)"
+        "INSERT INTO magasins (nom, adresse, code_postal, nif, rccm) VALUES (:nom, :adresse, :cp, :nif, :rccm)"
     );
     $stmt->execute([
         ':nom'     => $nom,
         ':adresse' => $adresse !== '' ? $adresse : null,
         ':cp'      => $code_postal !== '' ? $code_postal : null,
+        ':nif'     => $nif !== '' && $nif !== null ? $nif : null,
+        ':rccm'    => $rccm !== '' && $rccm !== null ? $rccm : null,
     ]);
     $magasin_id = (int) $pdo->lastInsertId();
 
@@ -1202,6 +1210,23 @@ function db_magasin_insert(PDO $pdo, string $nom, ?string $adresse, ?string $cod
     db_stock_magasin_init_for_articleBulk($pdo, $magasin_id);
 
     return $magasin_id;
+}
+
+/**
+ * Mettre à jour les informations d'un magasin (identité + identification fiscale).
+ */
+function db_magasin_update(PDO $pdo, int $id, string $nom, ?string $adresse, ?string $code_postal, ?string $nif = null, ?string $rccm = null): void {
+    $stmt = $pdo->prepare(
+        "UPDATE magasins SET nom = :nom, adresse = :adresse, code_postal = :cp, nif = :nif, rccm = :rccm WHERE id = :id"
+    );
+    $stmt->execute([
+        ':nom'     => $nom,
+        ':adresse' => $adresse !== '' ? $adresse : null,
+        ':cp'      => $code_postal !== '' ? $code_postal : null,
+        ':nif'     => $nif !== '' && $nif !== null ? $nif : null,
+        ':rccm'    => $rccm !== '' && $rccm !== null ? $rccm : null,
+        ':id'      => $id,
+    ]);
 }
 
 /**
@@ -1396,6 +1421,11 @@ function db_transferer_stock(
             ':motif' => $motif,
         ]);
 
+        // 5. Traçabilité : un mouvement pour chaque magasin (sortie source, entrée destination)
+        $uid = $_SESSION['user']['id'] ?? null;
+        db_mouvement_insert($pdo, $article_id, $uid, 'Transfert', $quantite, $motif, $source_id);
+        db_mouvement_insert($pdo, $article_id, $uid, 'Entree', $quantite, $motif, $destination_id);
+
         $pdo->commit();
     } catch (\Throwable $e) {
         $pdo->rollBack();
@@ -1540,10 +1570,12 @@ function db_depenses_daily(PDO $pdo, string $debut, string $fin, int $magasin_id
 
 /**
  * Coût d'achat des marchandises vendues (CAMV) sur une période.
- * Formule : Σ(lignes_facture.quantite × articles.prix_achat)
+ * Coût retenu par ligne : CUMP courant de l'article quand il est alimenté
+ * (valorisation_stock.sql), sinon prix_achat de la fiche article (rétro-compat
+ * pour les articles créés avant l'activation de la valorisation).
  */
 function db_stats_cout_achat_ventes(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): float {
-    $sql = "SELECT COALESCE(SUM(lf.quantite * a.prix_achat), 0)
+    $sql = "SELECT COALESCE(SUM(lf.quantite * COALESCE(NULLIF(a.cump, 0), a.prix_achat)), 0)
             FROM lignes_facture lf
             JOIN articles a ON a.id = lf.article_id
             JOIN factures f ON f.id = lf.facture_id
@@ -3077,8 +3109,16 @@ function db_promotions_search_sql(array $filters = []): array {
 }
 
 // ============================================================
-//  NF525 — CHAÎNAGE CRYPTOGRAPHIQUE DES FACTURES
+//  INTÉGRITÉ — CHAÎNAGE CRYPTOGRAPHIQUE DES FACTURES
 // ============================================================
+
+/** Gènes de genèse de la chaîne (première facture / première clôture). */
+const GENESIS_FACTURE_INTEGRITE = 'GENESIS-ESTOCK-INTEGRITE-V1';
+const GENESIS_CLOTURE_INTEGRITE = 'GENESIS-ESTOCK-CLOTURES-INTEGRITE-V1';
+
+/** Compatibilité : gènes historiques des bases chaînées avant août 2026. */
+const GENESIS_FACTURE_INTEGRITE_LEGACY = 'GENESIS-ESTOCK-NF' . '525-V1';
+const GENESIS_CLOTURE_INTEGRITE_LEGACY = 'GENESIS-ESTOCK-CLOTURES-NF' . '525-V1';
 
 /** Vrai si la table sequences est disponible (numérotation atomique). */
 function db_sequences_exists(PDO $pdo): bool {
@@ -3165,7 +3205,7 @@ function db_facture_predecesseur_hash(PDO $pdo, int $facture_id): string {
     $st = $pdo->prepare("SELECT hash_chaine FROM factures WHERE hash_chaine IS NOT NULL AND id < ? ORDER BY id DESC LIMIT 1");
     $st->execute([$facture_id]);
     $hash = $st->fetchColumn();
-    return $hash !== false && $hash !== null ? (string)$hash : 'GENESIS-ESTOCK-NF525-V1';
+    return $hash !== false && $hash !== null ? (string)$hash : GENESIS_FACTURE_INTEGRITE;
 }
 
 /**
@@ -3227,7 +3267,12 @@ function db_facture_chainage_verifier(PDO $pdo, int $limite = 50000): array {
             continue;
         }
         $lignes = db_facture_get_lignes($pdo, (int)$f['id']);
-        $attendu = db_facture_calculer_hash($pdo, $f, $lignes, $prev ?? 'GENESIS-ESTOCK-NF525-V1');
+        $genese = $prev ?? GENESIS_FACTURE_INTEGRITE;
+        $attendu = db_facture_calculer_hash($pdo, $f, $lignes, $genese);
+        if (!hash_equals($attendu, (string)$f['hash_chaine']) && $prev === null) {
+            // Tolérance historique : première facture chaînée avec l'ancien gène
+            $attendu = db_facture_calculer_hash($pdo, $f, $lignes, GENESIS_FACTURE_INTEGRITE_LEGACY);
+        }
         if (!hash_equals($attendu, (string)$f['hash_chaine'])) {
             $erreurs[] = (int)$f['id'];
         } else {
@@ -3246,7 +3291,7 @@ function db_facture_chainage_verifier(PDO $pdo, int $limite = 50000): array {
 }
 
 /**
- * Annulation comptable d'une facture (soft-delete NF525).
+ * Annulation comptable d'une facture (soft-delete).
  * Transition Payee -> Annulee avec date + motif (exigés par le trigger).
  * Aucun DELETE physique n'est possible (trigger d'inaltérabilité).
  */
@@ -3265,7 +3310,7 @@ function db_facture_annuler(PDO $pdo, int $facture_id, string $motif, int $par_u
 }
 
 // ============================================================
-//  NF525 — CHAÎNAGE DES CLÔTURES DE CAISSE
+//  INTÉGRITÉ — CHAÎNAGE DES CLÔTURES DE CAISSE
 // ============================================================
 
 /**
@@ -3292,7 +3337,7 @@ function db_cloture_predecesseur_hash(PDO $pdo, int $cloture_id): string {
     $st = $pdo->prepare("SELECT hash_chaine FROM clotures_caisse WHERE hash_chaine IS NOT NULL AND id < ? ORDER BY id DESC LIMIT 1");
     $st->execute([$cloture_id]);
     $hash = $st->fetchColumn();
-    return $hash !== false && $hash !== null ? (string)$hash : 'GENESIS-ESTOCK-CLOTURES-V1';
+    return $hash !== false && $hash !== null ? (string)$hash : GENESIS_CLOTURE_INTEGRITE;
 }
 
 /**
@@ -3350,7 +3395,12 @@ function db_cloture_chainage_verifier(PDO $pdo, int $limite = 2000): array {
             rtrim(rtrim(number_format((float)$c['ecart'], 2, '.', ''), '0'), '.'),
             $empreinte,
         ]);
-        $attendu = hash('sha256', $canonique . '|' . ($prev ?? 'GENESIS-ESTOCK-CLOTURES-V1'));
+        $genese = $prev ?? GENESIS_CLOTURE_INTEGRITE;
+        $attendu = hash('sha256', $canonique . '|' . $genese);
+        if (!hash_equals($attendu, (string)$c['hash_chaine']) && $prev === null) {
+            // Tolérance historique : première clôture chaînée avec l'ancien gène
+            $attendu = hash('sha256', $canonique . '|' . GENESIS_CLOTURE_INTEGRITE_LEGACY);
+        }
         if (!hash_equals($attendu, (string)$c['hash_chaine'])) {
             $erreurs[] = (int)$c['id'];
         } else {
@@ -3369,7 +3419,7 @@ function db_cloture_chainage_verifier(PDO $pdo, int $limite = 2000): array {
 }
 
 // ============================================================
-//  ARCHIVAGE NF525 (archives_caisse)
+//  ARCHIVAGE CAISSE (archives_caisse)
 // ============================================================
 
 /**
@@ -3493,14 +3543,18 @@ function db_archive_get_by_periode(PDO $pdo, string $debut, string $fin, int $ma
 }
 
 // ============================================================
-//  FEC — FICHIER DES ÉCRITURES COMPTABLES
+//  JOURNAUX COMPTABLES (SYSCOHADA / OHADA)
+//
+//  Écritures comptables brutes issues de l'activité, destinées aux
+//  exports comptables (plan SYSCOHADA révisé — OHADA) :
+//  VT (ventes), AC (achats), DG (dépenses), INV (variation de stocks).
 // ============================================================
 
 /**
- * Écritures FEC issues des ventes (factures Payee de la période).
+ * Écritures issues des ventes (factures Payee / Annulee de la période).
  * JournalCode = VT (ventes), CompteNum 411/7070/4457 + modes de paiement.
  */
-function db_fec_factures(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): array {
+function db_journal_ventes(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): array {
     $sql = "SELECT f.*, u.nom AS vendeur_nom FROM factures f
             LEFT JOIN utilisateurs u ON u.id = f.utilisateur_id
             WHERE DATE(f.date_facture) BETWEEN ? AND ? AND f.statut IN ('Payee','Annulee')";
@@ -3560,14 +3614,16 @@ function db_fec_factures(PDO $pdo, string $debut, string $fin, int $magasin_id =
                 'EcritureLib' => 'Annulation ' . $f['numero_facture'],
                 'MontantDebit' => number_format($baseHtTotale, 2, '.', ''), 'MontantCredit' => '',
             ];
-            $ecritures[] = [
-                'JournalCode' => 'VT', 'JournalLib' => 'Ventes',
-                'EcritureNum' => (string)$f['id'], 'EcritureDate' => $dateEnr,
-                'CompteNum' => '4457', 'CompteLib' => 'TVA collectee',
-                'PieceRef' => $piece, 'PieceDate' => $dateE,
-                'EcritureLib' => 'Annulation ' . $f['numero_facture'],
-                'MontantDebit' => number_format($tvaTotale, 2, '.', ''), 'MontantCredit' => '',
-            ];
+            if ($tvaTotale > 0) {
+                $ecritures[] = [
+                    'JournalCode' => 'VT', 'JournalLib' => 'Ventes',
+                    'EcritureNum' => (string)$f['id'], 'EcritureDate' => $dateEnr,
+                    'CompteNum' => '4457', 'CompteLib' => 'TVA collectee',
+                    'PieceRef' => $piece, 'PieceDate' => $dateE,
+                    'EcritureLib' => 'Annulation ' . $f['numero_facture'],
+                    'MontantDebit' => number_format($tvaTotale, 2, '.', ''), 'MontantCredit' => '',
+                ];
+            }
             continue;
         }
 
@@ -3589,22 +3645,24 @@ function db_fec_factures(PDO $pdo, string $debut, string $fin, int $magasin_id =
             'EcritureLib' => $lib,
             'MontantDebit' => '', 'MontantCredit' => number_format($baseHtTotale, 2, '.', ''),
         ];
-        $ecritures[] = [
-            'JournalCode' => 'VT', 'JournalLib' => 'Ventes',
-            'EcritureNum' => (string)$f['id'], 'EcritureDate' => $dateEnr,
-            'CompteNum' => '4457', 'CompteLib' => 'TVA collectee',
-            'PieceRef' => $piece, 'PieceDate' => $dateE,
-            'EcritureLib' => $lib,
-            'MontantDebit' => '', 'MontantCredit' => number_format($tvaTotale, 2, '.', ''),
-        ];
+        if ($tvaTotale > 0) {
+            $ecritures[] = [
+                'JournalCode' => 'VT', 'JournalLib' => 'Ventes',
+                'EcritureNum' => (string)$f['id'], 'EcritureDate' => $dateEnr,
+                'CompteNum' => '4457', 'CompteLib' => 'TVA collectee',
+                'PieceRef' => $piece, 'PieceDate' => $dateE,
+                'EcritureLib' => $lib,
+                'MontantDebit' => '', 'MontantCredit' => number_format($tvaTotale, 2, '.', ''),
+            ];
+        }
     }
     return $ecritures;
 }
 
 /**
- * Écritures FEC issues des dépenses (JournalCode = DG).
+ * Écritures issues des dépenses (JournalCode = DG).
  */
-function db_fec_depenses(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): array {
+function db_journal_depenses(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): array {
     $sql = "SELECT d.*, m.nom AS magasin_nom FROM depenses d
             LEFT JOIN magasins m ON m.id = d.magasin_id
             WHERE d.date_depense BETWEEN ? AND ?";
@@ -3658,9 +3716,9 @@ function db_fec_depenses(PDO $pdo, string $debut, string $fin, int $magasin_id =
 }
 
 /**
- * Écritures FEC issues des commandes fournisseur reçues (JournalCode = AC).
+ * Écritures issues des commandes fournisseur reçues (JournalCode = AC).
  */
-function db_fec_achats(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): array {
+function db_journal_achats(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): array {
     $sql = "SELECT c.*, f.nom AS fournisseur_nom FROM commandes_fournisseur c
             LEFT JOIN fournisseurs f ON f.id = c.fournisseur_id
             WHERE c.statut IN ('Recue','Recue_Partielle') AND DATE(c.date_commande) BETWEEN ? AND ?";
@@ -3704,21 +3762,95 @@ function db_fec_achats(PDO $pdo, string $debut, string $fin, int $magasin_id = 0
     return $ecritures;
 }
 
+/**
+ * Écritures de variation de stocks (JournalCode = INV) sur la période,
+ * évaluées au CUMP (fallback prix_achat) — compte 31 (Stocks de
+ * marchandises) en contrepartie du 6037 (Variation des stocks).
+ * Une variation positive (entrées > sorties) est débitée au 31.
+ */
+function db_journal_stocks(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): array {
+    $sql = "SELECT m.article_id, a.nom AS article_nom, a.code_barre,
+                   COALESCE(NULLIF(a.cump, 0), a.prix_achat) AS cout_unitaire,
+                   SUM(CASE WHEN m.type IN ('Entree','Retour_stock') THEN m.quantite ELSE 0 END) AS entrees,
+                   SUM(CASE WHEN m.type IN ('Sortie','Vente','Transfert') THEN m.quantite ELSE 0 END) AS sorties
+            FROM mouvements_stock m
+            JOIN articles a ON a.id = m.article_id
+            WHERE DATE(m.date_mouvement) BETWEEN ? AND ?";
+    $params = [$debut, $fin];
+    if ($magasin_id > 0) {
+        $sql .= " AND m.magasin_id = ?";
+        $params[] = $magasin_id;
+    }
+    $sql .= " GROUP BY m.article_id, a.nom, a.code_barre, a.cump, a.prix_achat
+              HAVING (entrees - sorties) <> 0";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $articles = $stmt->fetchAll();
+
+    $ecritures = [];
+    $piece = 'INV-' . str_replace('-', '', $debut) . '_' . str_replace('-', '', $fin);
+    $i = 0;
+    foreach ($articles as $a) {
+        $i++;
+        $variation = (int)$a['entrees'] - (int)$a['sorties'];
+        $montant = round(abs($variation) * (float)$a['cout_unitaire'], 2);
+        if ($montant <= 0) continue;
+        $lib = 'Variation de stock ' . ($a['article_nom'] ?? '') . ' (' . ($variation > 0 ? '+' : '') . $variation . ')';
+        if ($variation > 0) {
+            $ecritures[] = [
+                'JournalCode' => 'INV', 'JournalLib' => 'Variation de stocks',
+                'EcritureNum' => 'INV' . $i, 'EcritureDate' => $fin . ' 23:59:59',
+                'CompteNum' => '31', 'CompteLib' => 'Stocks de marchandises',
+                'PieceRef' => $piece, 'PieceDate' => $fin,
+                'EcritureLib' => $lib,
+                'MontantDebit' => number_format($montant, 2, '.', ''), 'MontantCredit' => '',
+            ];
+            $ecritures[] = [
+                'JournalCode' => 'INV', 'JournalLib' => 'Variation de stocks',
+                'EcritureNum' => 'INV' . $i, 'EcritureDate' => $fin . ' 23:59:59',
+                'CompteNum' => '6037', 'CompteLib' => 'Variation des stocks de marchandises',
+                'PieceRef' => $piece, 'PieceDate' => $fin,
+                'EcritureLib' => $lib,
+                'MontantDebit' => '', 'MontantCredit' => number_format($montant, 2, '.', ''),
+            ];
+        } else {
+            $ecritures[] = [
+                'JournalCode' => 'INV', 'JournalLib' => 'Variation de stocks',
+                'EcritureNum' => 'INV' . $i, 'EcritureDate' => $fin . ' 23:59:59',
+                'CompteNum' => '6037', 'CompteLib' => 'Variation des stocks de marchandises',
+                'PieceRef' => $piece, 'PieceDate' => $fin,
+                'EcritureLib' => $lib,
+                'MontantDebit' => number_format($montant, 2, '.', ''), 'MontantCredit' => '',
+            ];
+            $ecritures[] = [
+                'JournalCode' => 'INV', 'JournalLib' => 'Variation de stocks',
+                'EcritureNum' => 'INV' . $i, 'EcritureDate' => $fin . ' 23:59:59',
+                'CompteNum' => '31', 'CompteLib' => 'Stocks de marchandises',
+                'PieceRef' => $piece, 'PieceDate' => $fin,
+                'EcritureLib' => $lib,
+                'MontantDebit' => '', 'MontantCredit' => number_format($montant, 2, '.', ''),
+            ];
+        }
+    }
+    return $ecritures;
+}
+
 // ============================================================
-//  CLIENTS & FIDÉLITÉ (RGPD + programme de points)
+//  CLIENTS & FIDÉLITÉ (protection des données + programme de points)
 // ============================================================
 
 /** Insérer un client. Retourne l'ID. */
 function db_client_insert(PDO $pdo, array $data): int {
     $stmt = $pdo->prepare(
-        "INSERT INTO clients (nom, raison_sociale, siret, adresse, telephone, email, date_naissance,
+        "INSERT INTO clients (nom, raison_sociale, nif, rccm, adresse, telephone, email, date_naissance,
                               code_fidelite, consentement_fidelite, date_consentement, source_consentement)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
     $stmt->execute([
         $data['nom'] ?? null,
         $data['raison_sociale'] ?? null,
-        $data['siret'] ?? null,
+        $data['nif'] ?? null,
+        $data['rccm'] ?? null,
         $data['adresse'] ?? null,
         $data['telephone'] ?? null,
         $data['email'] ?? null,
@@ -3769,7 +3901,7 @@ function db_clients_search_sql(array $filters = [], int $magasin_id = 0): array 
  * Mettre à jour les données d'un client + consentement du programme de fidélité.
  */
 function db_client_update(PDO $pdo, int $id, array $data): void {
-    $champs = ['nom', 'raison_sociale', 'siret', 'adresse', 'telephone', 'email', 'date_naissance', 'code_fidelite'];
+    $champs = ['nom', 'raison_sociale', 'nif', 'rccm', 'adresse', 'telephone', 'email', 'date_naissance', 'code_fidelite'];
     $sets = [];
     $params = [];
     foreach ($champs as $c) {
@@ -3795,9 +3927,10 @@ function db_client_update(PDO $pdo, int $id, array $data): void {
 }
 
 /**
- * Droit à l'effacement (RGPD) : ANONYMISATION. Les factures et écritures
- * comptables restent intactes (obligation de conservation), les données
- * personnelles sont remplacées par des placeholders irréversibles.
+ * Anonymisation (protection des données clients) : les factures et
+ * écritures comptables restent intactes (obligation de conservation),
+ * les données personnelles sont remplacées par des placeholders
+ * irréversibles.
  */
 function db_client_anonymiser(PDO $pdo, int $id, ?string $motif = null): bool {
     $client = db_client_get_by_id($pdo, $id);
@@ -3818,7 +3951,7 @@ function db_client_anonymiser(PDO $pdo, int $id, ?string $motif = null): bool {
     } else {
         $log = "Anonymisation du client #$id ($tag)";
     }
-    suivre_activite('RGPD_ANONYMISATION', $log);
+    suivre_activite('ANONYMISATION_CLIENT', $log);
     return true;
 }
 
@@ -3828,7 +3961,7 @@ function db_client_anonymiser(PDO $pdo, int $id, ?string $motif = null): bool {
  * physiquement les clients anonymisés de plus de M mois sans écritures.
  * Retourne ['anonymises' => n, 'supprimes' => n].
  */
-function db_clients_purge_rgpd(PDO $pdo, int $mois_sans_activite = 36, int $mois_anonyme_avant_suppression = 12): array {
+function db_clients_purger(PDO $pdo, int $mois_sans_activite = 36, int $mois_anonyme_avant_suppression = 12): array {
     $result = ['anonymises' => 0, 'supprimes' => 0];
 
     $st = $pdo->prepare(
@@ -3946,7 +4079,7 @@ function db_client_points_historique(PDO $pdo, int $client_id, int $limit = 50):
     return $st->fetchAll();
 }
 
-/** Consigner un consentement RGPD (traçabilité). */
+/** Consigner un consentement (traçabilité). */
 function db_consentement_log(PDO $pdo, int $client_id, string $type, bool $consenti, ?string $ip = null): void {
     $st = $pdo->prepare(
         "INSERT INTO consentements_log (client_id, type_consentement, consenti, ip_source, utilisateur_id)
@@ -4063,7 +4196,7 @@ function db_client_ajuster_points(PDO $pdo, int $client_id, int $delta, string $
  * Formule : nouveau CUMP = (CUMP actuel × quantité existante + coût × quantité entrée)
  *                            / (quantité totale).
  */
-function db_article_cump_entree(PDO $pdo, int $article_id, int $quantite_entree, float $cout_unitaire, ?string $reference = null): void {
+function db_article_cump_entree(PDO $pdo, int $article_id, int $quantite_entree, float $cout_unitaire, ?string $reference = null, int $magasin_id = 1): void {
     $quantite_entree = max(0, (int)$quantite_entree);
     if ($quantite_entree <= 0) return;
 
@@ -4082,16 +4215,19 @@ function db_article_cump_entree(PDO $pdo, int $article_id, int $quantite_entree,
     $upd = $pdo->prepare("UPDATE articles SET cump = ?, valeur_stock = ? WHERE id = ?");
     $upd->execute([round($cump_apres, 4), round($qte_apres * $cump_apres, 2), $article_id]);
 
-    // Couche de coût FIFO
-    $pdo->prepare(
-        "INSERT INTO article_couts (article_id, magasin_id, quantite, cout_unitaire, reference)
-         VALUES (?, 1, ?, ?, ?)"
-    )->execute([$article_id, $quantite_entree, $cout_unitaire, $reference]);
+    // Couche de coût FIFO (par magasin)
+    if ($magasin_id > 0) {
+        $pdo->prepare(
+            "INSERT INTO article_couts (article_id, magasin_id, quantite, cout_unitaire, reference)
+             VALUES (?, ?, ?, ?, ?)"
+        )->execute([$article_id, $magasin_id, $quantite_entree, $cout_unitaire, $reference]);
 
-    // Valeur par magasin (magasin 1 par défaut : rétrocompatibilité mono-magasin)
-    $pdo->prepare(
-        "UPDATE stock_magasins SET valeur_stock = valeur_stock + ? WHERE article_id = ? AND magasin_id = 1"
-    )->execute([round($quantite_entree * $cout_unitaire, 2), $article_id]);
+        // Valeur comptable par magasin
+        $pdo->prepare(
+            "UPDATE stock_magasins SET valeur_stock = COALESCE(valeur_stock, 0) + ?
+             WHERE article_id = ? AND magasin_id = ?"
+        )->execute([round($quantite_entree * $cout_unitaire, 2), $article_id, $magasin_id]);
+    }
 }
 
 /**

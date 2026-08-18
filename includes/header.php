@@ -133,6 +133,7 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
 </head>
 <body>
 
+<script nonce="<?= h(csp_nonce()) ?>">window.BASE_URL = <?= json_encode(BASE_URL, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
 <?php if (est_connecte()): ?>
 <div class="app-shell">
 

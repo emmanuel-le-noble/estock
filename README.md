@@ -144,11 +144,11 @@ eSotck/                          # Dossier Apache (nom historique) — projet "e
 ├── facture_view.php             # Détail facture + impression (ticket / A4 légal)
 ├── ticket_print.php             # Ticket thermique 80 mm (impression)
 ├── cloture.php                  # Clôture / Z de caisse journalière (chaînée)
-├── clients.php                  # Clients : fidélité, consentement RGPD, effacement
+├── clients.php                  # Clients : fidélité, consentement, anonymisation
 ├── depenses.php                 # Dépenses d'exploitation (charges)
 ├── statistiques.php             # Analyse CA, marges, top ventes, compte de résultat
-├── export_fec.php               # Export FEC (fichier des écritures comptables)
-├── conformite.php               # NF525 : intégrité de chaîne, archives de caisse
+├── export_syscohada.php         # Export SYSCOHADA (écritures comptables OHADA)
+├── conformite.php               # Traçabilité : intégrité de chaîne, archives de caisse
 ├── exports.php                  # Exports CSV (articles, factures, mouvements, inventaires)
 ├── utilisateurs.php             # CRUD utilisateurs + affectation magasin
 ├── magasins.php                 # CRUD magasins + statut actif
@@ -160,8 +160,8 @@ eSotck/                          # Dossier Apache (nom historique) — projet "e
 ├── templates/                   # Templates Twig (layout + pages + impressions)
 │   ├── base.html.twig           # Layout maître (sidebar sections + topbar + CSS)
 │   ├── *.html.twig              # Une vue par page applicative
-│   ├── facture_a4.html.twig     # Facture A4 légale B2B (impression / PDF)
 │   ├── etiquettes_print.html.twig / ticket_print.html.twig  # Impressions
+│   └── facture_view.php         # A4 légal B2B rendu via header/footer legacy
 ├── config/
 │   ├── connexion.php            # PDO, sessions, auth, CSRF, RBAC, Twig, pagination
 │   └── parametres.php           # Cache des paramètres boutique (auto-install + seed)
@@ -170,16 +170,17 @@ eSotck/                          # Dossier Apache (nom historique) — projet "e
 │   ├── footer.php               # Pied de page (version APP_VERSION) + scripts JS
 │   ├── acces_refuse.php         # Page 403
 │   ├── security_headers.php     # CSP nonce + en-têtes HTTP de sécurité
-│   ├── db_functions.php         # Couche d'accès aux données (130+ fonctions SQL)
+│   ├── db_functions.php         # Couche d'accès aux données (180+ fonctions SQL)
 │   └── helpers.php              # Validation, logique métier, rendu HTML, HMAC
 ├── bin/                         # Scripts CLI (maintenance, backups, worker)
 │   ├── backup_db.php            # Sauvegarde CLI (dump SQL zippé + rotation 30 j)
 │   ├── test_restore.php         # Test de restauration sur base de test
 │   ├── inventaire_tables.php    # Inventaire réel des tables vs base
-│   ├── worker_emails.php        # Worker de la file d'attente e-mails
-│   └── purge_rgpd.php           # Purge RGPD programmée (anonymisation/suppression)
+│   ├── emails_worker.php        # Worker de la file d'attente e-mails
+│   ├── purge_donnees_clients.php # Purge programmée (anonymisation/suppression)
+│   └── verif_integrite.php      # Audit CLI de la chaîne cryptographique
 ├── database/                    # Scripts SQL (dump + migrations idempotentes)
-├── docs/                        # Documentation (conformité NF525/RGPD, ADR, OpenAPI)
+├── docs/                        # Documentation (conformité, ADR, OpenAPI)
 ├── tests/                       # Suite de tests (run_tests.php + cas)
 ├── assets/
 │   ├── css/style.css            # Styles globaux + impression
@@ -226,6 +227,12 @@ et DLC, derniers mouvements, top produits. **Toujours filté au magasin actif**
 - **Mode hors-ligne** : ventes mises en file d'attente (`localStorage`) et
   synchronisées automatiquement via `api/caisse/sync` (voir §12).
 - **Clôture** : bouton d'accès à la clôture de caisse (voir 6.8).
+- **Quantités** : saisie en nombres entiers (la vente au poids — quantités
+  décimales via `vente_au_poids` / `unite_mesure` — est prévue mais non
+  branchée, voir 6.5).
+- **Client fidélité** : sélection par nom/téléphone/code carte, points
+  disponibles ; avertissement visuel si un client professionnel (raison
+  sociale / RCCM) n'a pas de NIF — la vente reste possible.
 
 ### 6.3 Encaissement (`valider_facture.php`)
 Opération **transactionnelle** :
@@ -247,6 +254,10 @@ factures d'un autre magasin sont inaccessibles (contrôle `magasin_id`).
   seuil d'alerte, **DLC/DDM optionnelle** (lot), image, catégorie, actif.
 - Recherche AJAX (code-barres / nom) via l'API.
 - Catégories activables/désactivables (jamais supprimées si utilisées).
+- **Vente au poids** : la structure est prête (`articles.vente_au_poids`,
+  `unite_mesure`, `poids_precision` via la migration `unite_mesure.sql`) mais la
+  saisie décimale en caisse n'est pas encore branchée — les quantités restent
+  des nombres entiers.
 
 ### 6.6 Stock multi-magasins (`stock.php`, `mouvements.php`)
 - **Stock par magasin** (`stock_magasins`) + stock global (`articles.quantite_stock`).
@@ -270,6 +281,9 @@ factures d'un autre magasin sont inaccessibles (contrôle `magasin_id`).
 ### 6.9 Achats fournisseurs (`commandes_fournisseur.php`)
 Cycle complet : **Brouillon → En_Attente (soumission) → Envoyee (validation)
 → Recue / Recue_Partielle**, plus **Annulee** (rejet → retour au brouillon).
+- Fournisseurs (`fournisseurs.php`) : CRUD, coordonnées et, le cas échéant,
+  **devise de facturation** (achats multi-devises, taux de change appliqué à la
+  réception).
 - Création manuelle ou **pré-remplie** depuis les suggestions d'achat.
 - **Réception partielle ou totale** : réintègre le stock (mouvement `Entree`,
   multi-lots DLC) et vérifie le fournisseur de la commande.
@@ -299,11 +313,11 @@ regroupés par fournisseur, avec quantité à commander suggérée. Génère les
   **catégorie** ; conditions : montant minimum d'achat, dates (début/fin),
   limite d'utilisations, activable/désactivable.
 - Code promo unique (MAJUSCULE) → application automatique dans la caisse.
-- **Règles de réappro** (`regles_promotions`, gérées dans `parametres.php`) :
-  règles métier de seuil de stock (`condition_type`, `seuil_stock`,
-  `jours_limite`, `pourcentage_remise`) utilisées par `suggestions_achat.php`
-  pour déclencher les suggestions d'achat par fournisseur. Consommées par
-  `db_regles_promotions_*` (liste/insertion/mise à jour/suppression).
+- **Ventes Flash** (`regles_promotions`, gérées dans `parametres.php` — onglet
+  Promotions) : règles de remise automatiques appliquées en caisse par
+  `db_calculer_prix_article()` (api/scan, api/caisse/sync, valider_facture.php)
+  quand un lot approche de sa péremption (`PEREMPTION_PROCHE`) ou qu'un article
+  est en surstock (`SURSTOCK`). La règle la plus forte l'emporte.
 
 ### 6.14 Étiquetage rayon (`etiquettes.php` + `etiquettes_print.html.twig`)
 Sélection d'articles → génération **EAN-13** (JsBarcode) → étiquettes
@@ -322,19 +336,29 @@ imprimables au format A4 (page dédiée, impression propre).
 ### 6.17 Statistiques & compte de résultat (`statistiques.php`)
 - Période au choix, magasin de suivi.
 - CA (factures Payée), nombre de ventes, panier moyen, **marge brute** et taux,
-  TVA collectée, **top ventes / top produits**, répartition paiements, **compte
-  de résultat** (CA, achats de la période, dépenses, résultat net), graphiques
-  Chart.js, export CSV.
+  **TVA collectée** (régime TVA uniquement — en TPU, la ligne affiche
+  « non applicable »), **top ventes / top produits**, répartition paiements,
+  **compte de résultat** (CA, achats de la période, dépenses, résultat net),
+  graphiques Chart.js, export CSV.
+- **Valorisation des stocks (CUMP)** : chaque entrée actualise le coût moyen
+  pondéré (`articles.cump`, couches `article_couts` consommées FIFO en sortie) ;
+  la **CAMV** est valorisée au CUMP courant (fallback `prix_achat`). C'est une
+  valorisation **comptable** — à distinguer du **FEFO** (6.7) qui gère la
+  **péremption** des lots DLC/DDM à la sortie, et non leur coût.
 
 ### 6.18 Utilisateurs & magasins (`utilisateurs.php`, `magasins.php`)
 - Utilisateurs : nom, prénom, identifiant, mot de passe (BCRYPT), **rôle**,
   **magasin d'affectation** (obligatoire), actif, dernière connexion.
-- Magasins : nom, adresse, actif/inactif (un magasin désactivé est verrouillé
+- Magasins : nom, adresse, **NIF / RCCM** (repris sur le ticket et la facture
+  de ce point de vente), actif/inactif (un magasin désactivé est verrouillé
   pour ses utilisateurs).
 
 ### 6.19 Paramètres (`parametres.php`)
 - **Boutique** : nom, slogan, devise (symbole, position, code, décimales),
-  TVA (active, taux par défaut), numéro de TVA.
+  **NIF** (OTR) et **RCCM**, **régime fiscal** (TPU — factures hors taxes avec
+  mention « TVA non applicable » — ou TVA classique, taux par défaut,
+  exonérations par article), préfixe des numéros de facture, avertissement si
+  NIF/RCCM manquants (factures non conformes).
 - **Ticket** : format (80 mm), en-tête, remarque, paiements rapides (1/2/3).
 - **RBAC** : gestion des permissions par rôle (matrice interactive, voir §7).
 - **Thème** : couleur de l'interface (indigo par défaut).
@@ -348,15 +372,50 @@ retours, promotions, transferts, clôtures, gestion utilisateurs/permissions.
 ### 6.21 Notifications par e-mail (`emails_queue` + worker CLI)
 Les e-mails passent par une file d'attente (`emails_queue`) : l'application
 insère uniquement le message (jamais de blocage de la requête utilisateur), puis
-`bin/worker_emails.php` (CLI / cron) envoie via `mail()` avec retries (3 max).
+`bin/emails_worker.php` (CLI / cron) envoie via `mail()` avec retries (3 max).
 `envoyer_email_enqueue()` remplace les envois synchrones de
 `envoyer_email_notification()` (rétrocompatible : si `emails_queue` absente,
 repli sur `mail()`).
 
-### 6.22 2FA TOTP (`includes/helpers.php`)
+### 6.22 Clients & fidélité (`clients.php`, `carte_fidelite.php`, `desinscription.php`)
+- Fiche client : NIF / RCCM (B2B), téléphone, e-mail, points de fidélité
+  (historique `historique_points`), carte avec QR code, suggestion d'achats
+  (`suggestions_achat.php`).
+- **Consentement** au programme de fidélité (opt-in, switch en caisse et
+  `consentements_log`), désinscription par e-mail via lien signé HMAC.
+- **Purge de conservation** : anonymisation des clients sans achat depuis
+  N mois sans consentement actif, suppression des fiches anonymisées > 12
+  mois sans facture (manuel dans l'UI ou planifié `bin/purge_donnees_clients.php`).
+
+### 6.23 Traçabilité des ventes (`conformite.php`)
+- Chaînage cryptographique SHA-256 des factures et clôtures (hash incluant le
+  précédent, écrit dans la même transaction), triggers SGBD d'immuabilité
+  (aucune mise à jour / suppression d'écritures validées).
+- **Vérification d'intégrité** (page + audit CLI `bin/verif_integrite.php`) et
+  rattrapage idempotent des factures antérieures à l'activation.
+- **Archives périodiques** : export JSON signé HMAC par période/magasin,
+  conservation paramétrable (≥ 6 ans par défaut). Détails :
+  `docs/conformite/integrite.md`.
+
+### 6.24 Export comptable SYSCOHADA (`export_syscohada.php`)
+- Écritures SYSCOHADA révisé (en-tête PCEC) pour le comptable : journaux
+  **VT** (ventes), **AC** (achats fournisseurs), **DG** (dépenses) et **INV**
+  (variation de stocks au CUMP) ; annulations contre-passées ; compte 4457
+  (TVA) alimenté uniquement en régime TVA, aucun en TPU. CSV UTF-8, période et
+  magasin au choix, permission dédiée (`conformite_export_syscohada`).
+- **Couverture DSF** : achats (607 / 401), ventes (707 / 53 caisse ·
+  58 mobile money · 512 banque selon le mode de paiement), stocks (31 / 6037),
+  dépenses (comptes 6xx) — de quoi établir la déclaration statistique et
+  fiscale SYSCOHADA. Préparation e-facturation OTR : `docs/conformite/otr.md`.
+
+### 6.25 2FA TOTP (`includes/helpers.php`)
 Helpers génération/vérification TOTP (`totp_generer_secret`,
 `totp_calculer_code`, `totp_verifier_code`) + colonnes `totp_secret` /
 `totp_actif` sur `utilisateurs`. À activer par interface (profil) en production.
+
+### 6.26 Exports CSV (`exports.php`)
+Exports UTF-8 (séparateur `;`) depuis l'interface : articles, factures,
+mouvements de stock, inventaires — période et magasin au choix.
 
 ---
 
@@ -475,8 +534,8 @@ Navigateur ──▶ Apache (RewriteRule) ──▶ index.php (routeur chiffré)
 ### Pages PHP « legacy » (header.php)
 Quelques pages (`stock.php`, `facture_view.php`, `ticket_print.php`,
 `scan_ajax.php`, `valider_facture.php`, `suggestions_impression.php`,
-`etiquettes.php`, `etiquettes_print.php`, `exports.php`, `profil.php`,
-`cloture.php` pour partie) utilisent `includes/header.php` : **le menu et la
+`exports.php`, `profil.php`, `cloture.php` pour partie) utilisent
+`includes/header.php` : **le menu et la
 topbar y sont construits à l'identique** des vues Twig (4 sections pliables,
 mêmes conditions rôle) — toute modification de navigation doit être reproduite
 **dans les deux layouts**.
@@ -499,23 +558,23 @@ scripts `database/*.sql` avec la base réelle, sortie `--md` lisible).
 
 | Table | Rôle |
 |---|---|
-| `archives_caisse` | Archives périodiques de caisse (NF525, conservation ≥ 6 ans) |
+| `archives_caisse` | Archives périodiques de caisse (conservation ≥ 6 ans) |
 | `article_couts` | Couches de coût (FIFO / CUMP) — valorisation comptable |
 | `article_lots` | Lots DLC/DDM par article (FEFO) |
 | `articles` | Articles (CUMP, valeur_stock, unite_mesure, vente_au_poids) |
 | `categories` | Référentiel produits |
-| `clients` | Clients (fidélité + RGPD : consentement, anonymisation) |
+| `clients` | Clients (fidélité + consentement, anonymisation) |
 | `clotures_caisse` | Z de caisse journaliers (chaînés cryptographiquement) |
 | `commandes_fournisseur` | Commandes d'achat (devise + taux de change) |
-| `consentements_log` | Registre des consentements RGPD (traçabilité) |
+| `consentements_log` | Registre des consentements (traçabilité) |
 | `depenses` | Dépenses d'exploitation |
 | `emails_queue` | File d'attente des e-mails (worker CLI) |
-| `factures` | Ventes (hash chaîne NF525, horodatage, B2B, soft-delete) |
+| `factures` | Ventes (hash chaîne, horodatage, B2B, soft-delete) |
 | `fournisseurs` | Fournisseurs (devise de facturation) |
 | `historique_points` | Historique des opérations de points fidélité |
 | `inventaires` / `inventaire_lignes` | Sessions d'inventaire physique |
 | `lignes_commande_fournisseur` | Lignes de commande fournisseur |
-| `lignes_facture` | Lignes de facture (immuables, triggers NF525) |
+| `lignes_facture` | Lignes de facture (immuables, triggers) |
 | `lignes_retour` | Lignes de retour SAV |
 | `login_attempts` | Rate limiting connexion |
 | `logs_activite` | Journal d'audit |
@@ -525,9 +584,9 @@ scripts `database/*.sql` avec la base réelle, sortie `--md` lisible).
 | `parametres` | Paramètres boutique (devise, TVA, conformité) |
 | `permissions` / `role_permissions` | Catalogue des permissions + matrice RBAC |
 | `promotions` | Codes promo & remises ciblées |
-| `regles_promotions` | Règles de réappro / seuils (suggestions d'achat) |
+| `regles_promotions` | Ventes Flash : règles de remise auto (péremption proche / surstock) |
 | `retours_factures` | Retours / avoirs SAV |
-| `sequences` | Compteurs atomiques (numérotation factures NF525) |
+| `sequences` | Compteurs atomiques (numérotation factures) |
 | `stock_magasins` | Stock par magasin (+ valeur comptable) |
 | `transferts_stock` | Transferts inter-magasins |
 | `utilisateurs` | Comptes utilisateurs (rôles + magasin affecté) |
@@ -538,19 +597,20 @@ scripts `database/*.sql` avec la base réelle, sortie `--md` lisible).
 | Fichier | Contenu |
 |---|---|
 | `database/estock_db (1).sql` | Dump initial complet (schéma + données) — base de référence |
-| `database/apply_migrations.php` | **Migrateur CLI** — applique toutes les migrations (catégories, TVA multiple, commandes fournisseur, inventaires, retours, promotions, dépenses, multi-magasins, lots FEFO, clôtures, offline sync, permissions, sécurité, NF525, RGPD, fidélité, unités, archives, FEC) idempotentes |
+| `database/apply_migrations.php` | **Migrateur CLI** — applique toutes les migrations (catégories, TVA multiple, commandes fournisseur, inventaires, retours, promotions, dépenses, multi-magasins, lots FEFO, clôtures, offline sync, permissions, sécurité, intégrité des ventes, données clients, fidélité, unités, archives) idempotentes |
 | `database/*.sql` | Migrations individuelles (importables à la main) |
 
 **Génération de l'inventaire** : `php bin/inventaire_tables.php` (comparaison
 scripts ↔ base réelle) et `php bin/inventaire_tables.php --md` (liste Markdown
 pour ce README).
 
-**Fonctions SQL principales** (`includes/db_functions.php`, 70+ fonctions) :
+**Fonctions SQL principales** (`includes/db_functions.php`, 180+ fonctions) :
 `db_article_*`, `db_user_*`, `db_facture_*`, `db_stock_*`, `db_mouvement_*`,
 `db_lot_*` (FEFO), `db_commande_fournisseur_*`, `db_inventaire_*`,
 `db_retour_*`, `db_promotion_*`, `db_transfert_*`, `db_depense_*`,
-`db_magasin_*`, `db_stats_*`. Les recherches renvoient `['sql', 'params']`
-pour la pagination (ex. `db_articles_search_sql()`).
+`db_magasin_*`, `db_stats_*`, `db_journal_*` (exports comptables), `db_client_*`
+(fidélité, consentements), `db_archives_*` (traçabilité). Les recherches
+renvoient `['sql', 'params']` pour la pagination (ex. `db_articles_search_sql()`).
 
 ### Transactions & intégrité
 - Écritures multi-tables via `db_transaction(callback, ok, err, redirect)`.
@@ -592,6 +652,7 @@ Routeur : `api/index.php` — réponses `application/json`, auth par session
 | `api/stats` | GET | Dir./Admin/Magasinier |
 | `api/peremptions` | GET | Vendeur+ |
 | `api/caisse/status` | GET | Vendeur+ (état stock + config caisse) |
+| `api/clients/search?q=` | GET | Vendeur+ (recherche client — renvoie aussi `nif` / `rccm` pour l'alerte facture B2B) |
 | `api/caisse/sync` | POST | Vendeur+ (synchronisation ventes hors-ligne) |
 | `api/export/*` | GET | selon permission |
 
@@ -659,12 +720,14 @@ php -r "require 'config/connexion.php'; var_dump(peut('articles_gerer'));"
 |---|---|
 | `bin/backup_db.php` | Sauvegarde CLI de la base : `php bin/backup_db.php` (dump SQL zippé + rotation 30 j) — penser au cron quotidien |
 | `bin/test_restore.php` | Test de restauration automatique : `php bin/test_restore.php` (restaure la dernière sauvegarde sur une base de test `estock_db_test` et vérifie l'intégrité) |
-| `bin/worker_emails.php` | Worker de la file d'attente e-mails : `php bin/worker_emails.php` (cron toutes les minutes recommandé) |
-| `bin/purge_rgpd.php` | Purge RGPD programmée : `php bin/purge_rgpd.php` (anonymisation clients sans consentement > 36 mois, puis suppression des fiches anonymisées > 12 mois) |
+| `bin/emails_worker.php` | Worker de la file d'attente e-mails : `php bin/emails_worker.php` (cron toutes les minutes recommandé) |
+| `bin/purge_donnees_clients.php` | Purge programmée : `php bin/purge_donnees_clients.php` (anonymisation clients sans consentement actif > 36 mois, puis suppression des fiches anonymisées > 12 mois) |
+| `bin/verif_integrite.php` | Audit CLI de la chaîne cryptographique : `php bin/verif_integrite.php` (rapport texte / `--json`, code retour 0/1/2) |
 | `bin/inventaire_tables.php` | Inventaire réel des tables : `php bin/inventaire_tables.php` (comparaison scripts ↔ base) / `--md` pour la liste README |
 | `database/apply_migrations.php` | Migrateur idempotent : `php database/apply_migrations.php` |
 | `exports.php` | Exports CSV UTF-8 depuis l'interface (articles, factures, mouvements, inventaires) |
-| `export_fec.php` | Export FEC (fichier des écritures comptables, norme DGFiP) depuis l'interface |
+| `export_syscohada.php` | Export SYSCOHADA (écritures comptables OHADA) depuis l'interface |
+| `vendor/bin/phpunit` | Suite de tests : `vendor\bin\phpunit` (unitaire + intégration sur `estock_db_test`, jamais la production) |
 
 ---
 
