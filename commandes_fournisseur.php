@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'creer') {
     $fournisseur_id = (int)($_POST['fournisseur_id'] ?? 0);
     $magasin_id     = $user_magasin_id;
     $date_rec       = $_POST['date_reception_prevue'] ?? null;
-    $notes          = trim($_POST['notes'] ?? '');
+    $notes          = input_string($_POST['notes'] ?? '');
     $lignes_input   = $_POST['lignes'] ?? [];
 
     if ($fournisseur_id <= 0 || $magasin_id <= 0) {
@@ -158,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'editer') {
     $fournisseur_id = (int)($_POST['fournisseur_id'] ?? $cmd['fournisseur_id']);
     $magasin_id     = $user_magasin_id;
     $date_rec       = $_POST['date_reception_prevue'] ?? null;
-    $notes          = trim($_POST['notes'] ?? '');
+    $notes          = input_string($_POST['notes'] ?? '');
     $lignes_input   = $_POST['lignes'] ?? [];
 
     $lignes = [];
@@ -209,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'editer') {
 }
 
 // ---- ACTION POST : FLUX DE VALIDATION (SOUMETTRE / VALIDER / REJETER) ----
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['soumettre', 'valider', 'rejeter', 'envoyer'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['soumettre', 'valider', 'rejeter', 'envoyer', 'annuler'], true)) {
     $cmd_id = (int)($_POST['id'] ?? 0);
     csrf_guard('commandes_fournisseur.php');
 
@@ -339,14 +339,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'receptionner') {
 
             $nouveau_statut = $tout_recu ? 'Recue' : ($au_moins_un_recu ? 'Recue_Partielle' : $cmd['statut']);
             db_commande_fournisseur_update_statut($pdo, $cmd_id, $nouveau_statut);
-        }, '', '', '');
+        }, '', 'Erreur lors de la réception. Veuillez vérifier les quantités saisies.', generate_signed_url('commandes_fournisseur.php', $cmd_id, ['action' => 'voir']));
 
         suivre_activite('COMMANDE_RECUE', "Réception de {$nb_recus} produit(s) sur la commande #{$cmd_id}");
         flash_success("Réception enregistrée avec succès ({$nb_recus} produit(s) entré(s) en stock).");
 
     } catch (Throwable $e) {
         error_log('Erreur réception commande: ' . $e->getMessage());
-        flash_error($e->getMessage() ?: 'Erreur lors de la réception. Veuillez vérifier les quantités saisies.');
+        flash_error('Erreur lors de la réception. Veuillez vérifier les quantités saisies.');
     }
 
     redirect(generate_signed_url('commandes_fournisseur.php', $cmd_id, ['action' => 'voir']));
@@ -354,7 +354,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'receptionner') {
 
 // ---- AFFICHAGE : VUE DÉTAILLÉE D'UNE COMMANDE ----
 if ($action === 'voir' && $id_get > 0) {
-    if (!verify_url_signature($id_get, $_GET['token'] ?? '', ['action' => 'voir'])) {
+    if (!verify_url_signature($id_get, input_string($_GET['token'] ?? ''), ['action' => 'voir'])) {
         flash_error('Lien expiré ou invalide.');
         redirect('commandes_fournisseur.php');
     }
@@ -384,7 +384,7 @@ if (in_array($action, ['nouveau', 'editer_form'], true) && $can_manage) {
     $cmd = null;
     $lignes = [];
     if ($action === 'editer_form' && $id_get > 0) {
-        if (!verify_url_signature($id_get, $_GET['token'] ?? '', ['action' => 'editer_form'])) {
+        if (!verify_url_signature($id_get, input_string($_GET['token'] ?? ''), ['action' => 'editer_form'])) {
             flash_error('Lien expiré ou invalide.');
             redirect('commandes_fournisseur.php');
         }

@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     exiger_permission('retours_gerer');
 
     $facture_id = (int)($_POST['facture_id'] ?? 0);
-    $motif      = trim($_POST['motif'] ?? '');
+    $motif      = input_string($_POST['motif'] ?? '');
     $lignes_post = $_POST['lignes'] ?? [];
 
     if ($facture_id <= 0 || empty($lignes_post) || !is_array($lignes_post)) {
@@ -117,14 +117,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     );
 
     suivre_activite('RETOUR_SAV', 'Création retour #' . $retourId . ' sur facture #' . $facture['numero_facture']);
-    flash_success('Retour enregistré avec succès.');
     redirect(generate_signed_url('retours.php', $retourId, ['action' => 'detail']));
 }
 
 // ---- Détail d'un retour ----
 if ($action === 'detail') {
     $get_id = (int)($_GET['id'] ?? 0);
-    $token  = $_GET['token'] ?? '';
+    $token  = input_string($_GET['token'] ?? '');
     if ($get_id <= 0 || !verify_url_signature($get_id, $token, ['action' => 'detail'])) {
         flash_error('Lien invalide ou expiré.'); redirect('retours.php');
     }
@@ -147,7 +146,7 @@ if ($action === 'detail') {
 // ---- Formulaire nouveau retour pour une facture spécifique ----
 if ($action === 'nouveau_facture') {
     $facture_id = (int)($_GET['id'] ?? 0);
-    $token      = $_GET['token'] ?? '';
+    $token      = input_string($_GET['token'] ?? '');
     if ($facture_id <= 0 || !verify_url_signature($facture_id, $token, ['action' => 'nouveau_facture'])) {
         flash_error('Lien invalide ou expiré.'); redirect('retours.php');
     }
@@ -169,7 +168,7 @@ if ($action === 'nouveau_facture') {
 
 // ---- Chercher une facture par numéro ----
 if ($action === 'nouveau') {
-    $num_search = trim($_GET['num'] ?? '');
+$num_search = input_string($_GET['num'] ?? '');
     $facture    = null;
     $lignes     = [];
 

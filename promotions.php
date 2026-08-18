@@ -46,7 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     );
 
     suivre_activite('PROMOTION_ENREGISTREMENT', ($id > 0 ? 'Modification' : 'Création') . ' promotion : ' . $data['nom']);
-    flash_success('Promotion enregistrée.');
     redirect('promotions.php');
 }
 

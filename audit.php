@@ -10,7 +10,7 @@ require_once __DIR__ . '/includes/db_functions.php';
 require_once __DIR__ . '/includes/helpers.php';
 exiger_role(ROLE_DIRECTEUR);
 
-$search   = trim($_GET['search'] ?? '');
+$search   = input_string($_GET['search'] ?? '');
 $f_action = $_GET['action_filter'] ?? '';
 $debut    = $_GET['debut'] ?? '';
 $fin      = $_GET['fin'] ?? '';

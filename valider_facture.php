@@ -32,20 +32,23 @@ $lignes      = $_POST['lignes'] ?? [];
 if (!is_array($lignes)) {
     $lignes = [];
 }
+$lignes = array_values(array_filter($lignes, 'is_array'));
 $totalTtcPost= (float)($_POST['total_ttc'] ?? 0);
 $montantPaye = (float)($_POST['montant_paye'] ?? 0);
 $clientId    = (int)($_POST['client_id'] ?? 0);
 $pointsUtilises = (int)($_POST['points_utilises'] ?? 0);
 
 // Multi-paiements : parser le JSON envoyé par caisse.js
-$paiementsJsonRaw = $_POST['paiements_json'] ?? '[]';
+$paiementsJsonRaw = input_string($_POST['paiements_json'] ?? '[]');
 $paiementsList = json_decode($paiementsJsonRaw, true);
 if (!is_array($paiementsList)) $paiementsList = [];
+$paiementsList = array_values(array_filter($paiementsList, 'is_array'));
 
 // Calculer le total payé depuis les paiements individuels
 $montantPayeCalc = 0.0;
 foreach ($paiementsList as $p) {
-    $montantPayeCalc += (float)($p['montant'] ?? 0);
+    $montant = input_string($p['montant'] ?? '');
+    $montantPayeCalc += is_numeric($montant) ? (float)$montant : 0.0;
 }
 // Si aucun paiement JSON valide, fallback sur montant_paye classique
 if ($montantPayeCalc <= 0 && $montantPaye > 0) {
@@ -289,7 +292,9 @@ try {
     redirect(generate_signed_url('facture_view.php', (int)$factureId, ['print' => '1']));
 
 } catch (Throwable $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     error_log('Erreur validation facture: ' . $e->getMessage());
     suivre_activite('ECHEC_VENTE', 'Erreur lors de la validation de vente.');
     

@@ -28,7 +28,7 @@ if ($factureId <= 0) {
 }
 
 // Sécurité : exiger l'authentification OU signature HMAC valide
-$token = $_GET['token'] ?? '';
+$token = input_string($_GET['token'] ?? '');
 $print_param = $_GET['print'] ?? '';
 $verify_extra = $print_param !== '' ? ['print' => $print_param] : [];
 

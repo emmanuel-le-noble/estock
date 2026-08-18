@@ -11,7 +11,7 @@ require_once __DIR__ . '/includes/db_functions.php';
 require_once __DIR__ . '/includes/helpers.php';
 exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_VENDEUR);
 
-$search = trim($_GET['q'] ?? '');
+$search = input_string($_GET['q'] ?? '');
 $statut = $_GET['statut'] ?? '';
 $debut  = $_GET['debut'] ?? '';
 $fin    = $_GET['fin'] ?? '';

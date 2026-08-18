@@ -106,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     }
 
     suivre_activite('MODIFICATION_UTILISATEUR', ($data['id'] > 0 ? 'Modification' : 'Création') . ' utilisateur "' . $data['login'] . '" (' . $data['role'] . ')');
+    redirect('utilisateurs.php');
 }
 
 // ---- Activation / Désactivation ----
@@ -133,7 +134,7 @@ if ($action === 'nouveau' || $action === 'editer') {
     $u = ['id' => '', 'nom' => '', 'login' => '', 'role' => ROLE_VENDEUR, 'magasin_id' => user_magasin_id(), 'actif' => 1];
     if ($action === 'editer') {
         $get_id = (int)($_GET['id'] ?? 0);
-        if (!verify_url_signature($get_id, $_GET['token'] ?? '', ['action' => 'editer'])) {
+        if (!verify_url_signature($get_id, input_string($_GET['token'] ?? ''), ['action' => 'editer'])) {
             flash_error('Lien invalide ou expiré.');
             redirect('utilisateurs.php');
         }

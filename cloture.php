@@ -63,7 +63,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$deja_ferme) {
         flash_success('Clôture de caisse enregistrée avec succès.');
         redirect('cloture.php?recap=1');
     } catch (Throwable $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log('Erreur clôture caisse: ' . $e->getMessage());
         flash_error('Une erreur est survenue lors de la clôture.');
         redirect('cloture.php');

@@ -86,15 +86,26 @@ APP_ENV=development      # development | production
 > Le routeur chiffré AES-256-CBC est activé : toutes les URLs de navigation
 > internes passent par `/?route=<token>` (chiffrées + signées HMAC, validité 24 h).
 
-## 2. Comptes par défaut
+## 2. Création du premier compte
 
-| Rôle       | Login     | Mot de passe  | Module d'accueil |
-|------------|-----------|---------------|------------------|
-| Directeur  | `admin`   | `admin123`    | Tableau de bord  |
-| Magasinier | `magasin` | `magasin123`  | Stock            |
-| Vendeur    | `vendeur` | `vendeur123`  | Caisse (POS)     |
+La base livrée ne contient **aucun compte actif** et aucun mot de passe connu.
+Après l'import de la base et les migrations, créez le premier Directeur depuis
+la ligne de commande :
 
-> ⚠️ **Changez ces mots de passe dès la première connexion** (menu Profil).
+```powershell
+php bin/create_admin.php "Nom du responsable" directeur "un-mot-de-passe-d-au-moins-12-caracteres"
+```
+
+Ne réutilisez jamais un mot de passe de démonstration et ne conservez pas cette
+commande dans un historique partagé. Le Directeur crée ensuite les autres
+comptes depuis l'interface Utilisateurs.
+
+Pour une ancienne installation qui contient encore `admin`, `magasin` ou
+`vendeur`, créez d'abord le nouveau Directeur puis exécutez :
+
+```powershell
+php bin/disable_demo_accounts.php
+```
 
 ## 3. Démarrage rapide
 
@@ -723,6 +734,9 @@ php -r "require 'config/connexion.php'; var_dump(peut('articles_gerer'));"
 | `bin/emails_worker.php` | Worker de la file d'attente e-mails : `php bin/emails_worker.php` (cron toutes les minutes recommandé) |
 | `bin/purge_donnees_clients.php` | Purge programmée : `php bin/purge_donnees_clients.php` (anonymisation clients sans consentement actif > 36 mois, puis suppression des fiches anonymisées > 12 mois) |
 | `bin/verif_integrite.php` | Audit CLI de la chaîne cryptographique : `php bin/verif_integrite.php` (rapport texte / `--json`, code retour 0/1/2) |
+| `bin/create_admin.php` | Création unique du premier compte Directeur après import : `php bin/create_admin.php "Nom" login "mot-de-passe"` |
+| `bin/disable_demo_accounts.php` | Désactive les comptes de démonstration après création d'un Directeur distinct |
+| `bin/preflight_release.php` | Contrôle non destructif avant remise : configuration, extensions, tables, comptes actifs et sauvegardes |
 | `bin/inventaire_tables.php` | Inventaire réel des tables : `php bin/inventaire_tables.php` (comparaison scripts ↔ base) / `--md` pour la liste README |
 | `database/apply_migrations.php` | Migrateur idempotent : `php database/apply_migrations.php` |
 | `exports.php` | Exports CSV UTF-8 depuis l'interface (articles, factures, mouvements, inventaires) |

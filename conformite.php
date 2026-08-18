@@ -26,7 +26,7 @@ if (!is_dir($archiveDir)) { @mkdir($archiveDir, 0755, true); }
 if ($_SERVER['REQUEST_METHOD'] === 'GET'
     && ($_GET['action'] ?? '') === 'download'
     && !empty($_GET['id'])) {
-    if (!verify_url_signature((int)$_GET['id'], (string)($_GET['t'] ?? ''), ['action' => 'download'])) {
+    if (!verify_url_signature((int)$_GET['id'], input_string($_GET['t'] ?? ''), ['action' => 'download'])) {
         flash_error('Lien invalide ou expiré.');
         redirect('conformite.php');
     }
@@ -135,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash_success('Archive créée et signée pour la période ' . $data['debut'] . ' → ' . $data['fin'] . '.');
         } catch (Throwable $e) {
             error_log('Erreur création archive: ' . $e->getMessage());
-            flash_error($e->getCode() === 0 ? 'Création d\'archive impossible : ' . $e->getMessage() : 'Erreur technique lors de l\'archivage.');
+            flash_error('Création d\'archive impossible. Consultez le journal technique si le problème persiste.');
         }
         redirect('conformite.php');
     }

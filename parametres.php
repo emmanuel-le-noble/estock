@@ -205,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     }
 
     $promo_data = [
-        'nom'                 => trim($_POST['nom'] ?? ''),
+        'nom'                 => input_string($_POST['nom'] ?? ''),
         'condition_type'      => $_POST['condition_type'] ?? 'PEREMPTION_PROCHE',
         'jours_limite'        => ($_POST['jours_limite'] ?? '') !== '' ? (int)($_POST['jours_limite'] ?? 0) : null,
         'seuil_stock'         => ($_POST['seuil_stock'] ?? '') !== '' ? (int)($_POST['seuil_stock'] ?? 0) : null,
@@ -247,7 +247,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
             suivre_activite('SUPPRESSION_PROMOTION', 'Suppression règle promotion #' . $promo_id);
             flash_success('Règle de promotion supprimée avec succès.');
         } catch (\Throwable $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             error_log("Erreur critique suppression promotion: " . $e->getMessage());
             flash_error("Une erreur système est survenue lors de la suppression.");
         }

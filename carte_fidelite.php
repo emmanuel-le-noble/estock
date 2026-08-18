@@ -34,7 +34,7 @@ if ($clientId <= 0) {
 }
 
 // Sécurité : authentification OU signature HMAC valide
-$token = $_GET['token'] ?? '';
+$token = input_string($_GET['token'] ?? '');
 if (!est_connecte()) {
     if (!verify_url_signature($clientId, $token)) {
         http_response_code(403);

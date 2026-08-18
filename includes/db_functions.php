@@ -2410,9 +2410,13 @@ function db_paiements_insert(PDO $pdo, int $facture_id, array $paiements): void 
         VALUES (?, ?, ?, ?)
     ");
     foreach ($paiements as $p) {
-        $mode = $p['mode_paiement'] ?? 'Especes';
-        $montant = (float)($p['montant'] ?? 0);
-        $reference = !empty($p['reference']) ? $p['reference'] : null;
+        if (!is_array($p)) {
+            continue;
+        }
+        $mode = input_string($p['mode_paiement'] ?? 'Especes') ?: 'Especes';
+        $montant_brut = input_string($p['montant'] ?? '');
+        $montant = is_numeric($montant_brut) ? (float)$montant_brut : 0.0;
+        $reference = input_string($p['reference'] ?? '') ?: null;
         if ($montant > 0) {
             $stmt->execute([$facture_id, $mode, $montant, $reference]);
         }
@@ -4301,4 +4305,4 @@ function db_stats_cout_reel_ventes(PDO $pdo, string $debut, string $fin, int $ma
 }
 
 
-
+

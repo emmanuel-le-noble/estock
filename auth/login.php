@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erreur = 'Trop de tentatives. Réessayez dans 15 minutes.';
         suivre_activite('ECHEC_CONNEXION', 'Rate limited depuis ' . ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'));
     } else {
-        $login = trim($_POST['login'] ?? '');
+        $login = input_string($_POST['login'] ?? '');
         $mdp   = $_POST['mot_de_passe'] ?? '';
         if ($login === '' || $mdp === '') {
             $erreur = 'Veuillez renseigner tous les champs.';

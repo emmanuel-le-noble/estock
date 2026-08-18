@@ -34,11 +34,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
         $pdo->beginTransaction();
         $u = user_courant();
         $magasin_id = user_magasin_id();
-        $numero_lot = !empty($_POST['numero_lot']) ? trim($_POST['numero_lot']) : null;
+        $numero_lot = input_string($_POST['numero_lot'] ?? '') ?: null;
         if ($numero_lot !== null && mb_strlen($numero_lot) > 100) {
             $numero_lot = mb_substr($numero_lot, 0, 100);
         }
-        $date_peremption = !empty($_POST['date_peremption']) ? $_POST['date_peremption'] : null;
+        $date_peremption = input_string($_POST['date_peremption'] ?? '') ?: null;
         
         // 1. Enregistrement de l'historique du mouvement (et stock par magasin)
         //    process_stock_movement() synchronise déjà le stock global via
@@ -50,7 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
         flash_success(sprintf('%s de %d unité(s) enregistrée pour « %s ».',
             $data['type'] === 'Entree' ? 'Entrée' : 'Sortie', $data['quantite'], $art['nom']));
     } catch (Throwable $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log('Erreur mouvement: ' . $e->getMessage());
         flash_error('Une erreur est survenue lors de l\'enregistrement du mouvement.');
     }
@@ -58,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
 }
 
 // ---- Filtres GET ----
-$f_article = trim($_GET['article'] ?? '');
+$f_article = input_string($_GET['article'] ?? '');
 $f_type    = $_GET['type'] ?? '';
 $f_debut   = $_GET['debut'] ?? '';
 $f_fin     = $_GET['fin'] ?? '';

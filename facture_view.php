@@ -12,7 +12,7 @@ require_once __DIR__ . '/includes/helpers.php';
 exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_VENDEUR);
 
 $id = (int)($_GET['id'] ?? 0);
-$token = $_GET['token'] ?? '';
+$token = input_string($_GET['token'] ?? '');
 $print_param = $_GET['print'] ?? '';
 $verify_extra = $print_param !== '' ? ['print' => $print_param] : [];
 if ($id <= 0 || !verify_url_signature($id, $token, $verify_extra)) {

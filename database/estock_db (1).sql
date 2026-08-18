@@ -755,9 +755,9 @@ CREATE TABLE IF NOT EXISTS `utilisateurs` (
 --
 
 INSERT INTO `utilisateurs` (`id`, `nom`, `login`, `mot_de_passe`, `role`, `magasin_id`, `actif`, `date_creation`) VALUES
-(1, 'Administrateur ', 'admin', '$2y$10$ynEM3uM1KAHQtjuqGFThoOuOT/NVCPJ/nHaUKU4pjB58d8dt6/Bk.', 'Directeur', 1, 1, '2026-07-01 16:51:22'),
-(2, 'Magasinier Rayon', 'magasin', '$2y$10$KgIOuMmBR/qpr5mnn7XGA.pa4b3bLDJJr4fPJ1uyBB4HO0SisIAg.', 'Magasinier', 1, 1, '2026-07-01 16:51:22'),
-(3, 'Vendeur Comptoir', 'vendeur', '$2y$10$fIRsNoDrYmOyvUYOovJ6peHj1c6kLDl6lrbgMTndFlT9mI78MaBLK', 'Vendeur', 1, 1, '2026-07-01 16:51:22');
+(1, 'Compte directeur à initialiser', 'admin', '$2y$12$c6vU1JnjnZSaO5PEz6Xop.tsPVT6nst6uZYA3guM7xXtDRDpMl3Oe', 'Directeur', 1, 0, '2026-07-01 16:51:22'),
+(2, 'Compte magasinier à initialiser', 'magasin', '$2y$12$7JZ2.I9AYRixmb8Y7V6kjOiRwQqWOJb583Xjdrpq6899w59rzzU9G', 'Magasinier', 1, 0, '2026-07-01 16:51:22'),
+(3, 'Compte vendeur à initialiser', 'vendeur', '$2y$12$FUvEJSv7zxJgaWUTJfUE0uP4JSGd8wPefApMuUkbX2Ml8YZk1GHDm', 'Vendeur', 1, 0, '2026-07-01 16:51:22');
 
 --
 -- Contraintes pour les tables déchargées

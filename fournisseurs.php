@@ -44,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'fournisseurs.php'
     );
     suivre_activite('MODIFICATION_FOURNISSEUR', ($data['id'] > 0 ? 'Modification' : 'Création') . ' fournisseur "' . $data['nom'] . '"');
+    redirect('fournisseurs.php');
 }
 
 // ---- Suppression ----
@@ -65,7 +66,7 @@ if ($action === 'nouveau' || $action === 'editer') {
     $f = ['id'=>'','nom'=>'','contact'=>'','telephone'=>''];
     if ($action === 'editer') {
         $get_id = (int)($_GET['id'] ?? 0);
-        if (!verify_url_signature($get_id, $_GET['token'] ?? '', ['action' => 'editer'])) {
+        if (!verify_url_signature($get_id, input_string($_GET['token'] ?? ''), ['action' => 'editer'])) {
             flash_error('Lien invalide ou expiré.');
             redirect('fournisseurs.php');
         }

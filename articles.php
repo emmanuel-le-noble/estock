@@ -87,7 +87,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     );
     
     suivre_activite('MODIFICATION_ARTICLE', ($data['id'] > 0 ? 'Modification' : 'Création') . ' article #' . $id . ' - ' . $data['nom']);
-    flash_success('Article enregistré avec succès.');
     redirect('articles.php');
 }
 
@@ -111,7 +110,7 @@ if ($action === 'nouveau' || $action === 'editer') {
     ];
     if ($action === 'editer') {
         $get_id = (int)($_GET['id'] ?? 0);
-        if (!isset($_GET['token']) || !verify_url_signature($get_id, $_GET['token'], ['action' => 'editer'])) {
+        if (!verify_url_signature($get_id, input_string($_GET['token'] ?? ''), ['action' => 'editer'])) {
             flash_error('Lien invalide ou expiré.');
             redirect('articles.php');
         }
@@ -289,7 +288,7 @@ if ($action === 'nouveau' || $action === 'editer') {
 }
 
 // ---- LISTE des articles (vue par défaut) ----
-$search = trim($_GET['q'] ?? '');
+$search = input_string($_GET['q'] ?? '');
 $search_sql = db_articles_search_sql($search, user_magasin_id());
 $result = paginate($search_sql['sql'], $search_sql['params'], 25);
 $articles = $result['items'];

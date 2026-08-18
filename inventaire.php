@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'saisie') {
     $inv_id      = (int)($_POST['inventaire_id'] ?? 0);
     $article_id  = (int)($_POST['article_id'] ?? 0);
     $qte_comptee = (int)($_POST['quantite_comptee'] ?? 0);
-    $notes       = trim(substr($_POST['notes'] ?? '', 0, 255));
+    $notes       = mb_substr(input_string($_POST['notes'] ?? ''), 0, 255);
 
     if ($inv_id <= 0 || $article_id <= 0) {
         echo json_encode(['ok' => false, 'msg' => 'Paramètres invalides']); exit;
@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'annuler') {
 // ---- Vue détail d'une session ----
 if ($action === 'detail') {
     $get_id = (int)($_GET['id'] ?? 0);
-    $token  = $_GET['token'] ?? '';
+    $token  = input_string($_GET['token'] ?? '');
     if ($get_id <= 0 || !verify_url_signature($get_id, $token, ['action' => 'detail'])) {
         flash_error('Lien invalide ou expiré.'); redirect('inventaire.php');
     }

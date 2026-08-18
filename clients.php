@@ -177,7 +177,7 @@ if ($action === 'voir' && $idView > 0) {
 }
 
 // ---- Vue : liste + recherche ----
-$search = trim($_GET['search'] ?? '');
+$search = input_string($_GET['search'] ?? '');
 $result = paginate(db_clients_search_sql(['search' => $search])['sql'], db_clients_search_sql(['search' => $search])['params'], 25);
 $clients = $result['items'];
 

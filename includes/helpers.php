@@ -46,6 +46,12 @@ function extract_post_data(array $schema, string $global_redirect = ''): array {
         $type     = $def['type'] ?? 'string';
         $default  = $def['default'] ?? null;
         $raw      = $_POST[$cle] ?? null;
+        // Les champs scalaires ne doivent jamais accepter une structure
+        // arbitraire (ex. champ[]=x). Cela évite les TypeError dans trim()
+        // et les conversions silencieuses en PHP 8.
+        if ($raw !== null && !is_scalar($raw)) {
+            $raw = null;
+        }
 
         switch ($type) {
             case 'int':
@@ -168,19 +174,29 @@ function validate_uniqueness(callable $check_fn, string $message, string $redire
 /**
  * Exécuter une opération transactionnelle avec gestion d'erreur standardisée.
  */
-function db_transaction(callable $callback, string $success_msg, string $error_msg, string $redirect_url): void {
+function db_transaction(callable $callback, string $success_msg, string $error_msg, string $redirect_url): mixed {
     global $pdo;
     try {
         $pdo->beginTransaction();
-        $callback($pdo);
+        $result = $callback($pdo);
         $pdo->commit();
-        flash_success($success_msg);
+        if ($success_msg !== '') {
+            flash_success($success_msg);
+        }
+        return $result;
     } catch (Throwable $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log('Erreur transaction: ' . $e->getMessage());
-        flash_error($error_msg);
+        if ($error_msg !== '') {
+            flash_error($error_msg);
+        }
+        if ($redirect_url !== '') {
+            redirect($redirect_url);
+        }
+        return null;
     }
-    redirect($redirect_url);
 }
 
 /**

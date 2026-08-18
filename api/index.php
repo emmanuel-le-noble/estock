@@ -104,7 +104,7 @@ function handle_login(): void {
     $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) $input = [];
 
-    $login = trim($input['login'] ?? $_POST['login'] ?? '');
+    $login = input_string($input['login'] ?? $_POST['login'] ?? '');
     $mdp   = $input['mot_de_passe'] ?? $_POST['mot_de_passe'] ?? '';
 
     if ($login === '' || $mdp === '') {
@@ -139,7 +139,7 @@ function handle_login(): void {
 
 function handle_logout(): void {
     // SEC-12 : Vérifier le token CSRF pour le logout
-    $csrfToken = $_POST['_csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    $csrfToken = input_string($_POST['_csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
     if (empty($csrfToken) || !hash_equals(csrf_token(), $csrfToken)) {
         json_out(['error' => 'Token CSRF invalide.'], 403);
     }
@@ -175,7 +175,7 @@ function handle_articles_list(): void {
     }
 
     global $pdo;
-    $search    = trim($_GET['q'] ?? '');
+    $search    = input_string($_GET['q'] ?? '');
     $search_sql = db_articles_search_sql($search, user_magasin_id());
     $stmt = $pdo->prepare($search_sql['sql']);
     $stmt->execute($search_sql['params']);
@@ -207,9 +207,9 @@ function handle_article_create(): void {
     $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) $input = [];
 
-    $code_barre    = trim($input['code_barre'] ?? '');
-    $nom           = trim($input['nom'] ?? '');
-    $sku           = trim($input['sku'] ?? '');
+    $code_barre    = input_string($input['code_barre'] ?? '');
+    $nom           = input_string($input['nom'] ?? '');
+    $sku           = input_string($input['sku'] ?? '');
 
     if ($code_barre === '' || $nom === '') {
         json_out(['error' => 'Les champs code_barre et nom sont obligatoires.'], 422);
@@ -229,7 +229,7 @@ function handle_article_create(): void {
         'prix_vente'     => (float)($input['prix_vente'] ?? 0),
         'quantite_stock' => (int)($input['quantite_stock'] ?? 0),
         'seuil_alerte'   => (int)($input['seuil_alerte'] ?? 5),
-        'emplacement'    => trim($input['emplacement'] ?? ''),
+        'emplacement'    => input_string($input['emplacement'] ?? ''),
         'fournisseur_id' => (int)($input['fournisseur_id'] ?? 0) ?: null,
     ];
 
@@ -242,7 +242,9 @@ function handle_article_create(): void {
         suivre_activite('MODIFICATION_ARTICLE', 'Création article #' . $new_id . ' via API — ' . $nom);
         json_out(['success' => true, 'id' => $new_id, 'message' => 'Article créé.'], 201);
     } catch (\Throwable $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log('API article create error: ' . $e->getMessage());
         json_out(['error' => 'Erreur lors de la création.'], 500);
     }
@@ -268,8 +270,8 @@ function handle_article_update(int $id): void {
     $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) $input = [];
 
-    $code_barre = trim($input['code_barre'] ?? $existing['code_barre']);
-    $nom        = trim($input['nom'] ?? $existing['nom']);
+    $code_barre = input_string($input['code_barre'] ?? $existing['code_barre']);
+    $nom        = input_string($input['nom'] ?? $existing['nom']);
 
     if ($code_barre === '' || $nom === '') {
         json_out(['error' => 'Les champs code_barre et nom sont obligatoires.'], 422);
@@ -282,12 +284,12 @@ function handle_article_update(int $id): void {
     $data = [
         'code_barre'     => $code_barre,
         'nom'            => $nom,
-        'sku'            => trim($input['sku'] ?? $existing['sku']),
+        'sku'            => input_string($input['sku'] ?? $existing['sku']),
         'prix_achat'     => (float)($input['prix_achat'] ?? $existing['prix_achat']),
         'prix_vente'     => (float)($input['prix_vente'] ?? $existing['prix_vente']),
         'quantite_stock' => (int)($input['quantite_stock'] ?? $existing['quantite_stock']),
         'seuil_alerte'   => (int)($input['seuil_alerte'] ?? $existing['seuil_alerte']),
-        'emplacement'    => trim($input['emplacement'] ?? $existing['emplacement']),
+        'emplacement'    => input_string($input['emplacement'] ?? $existing['emplacement']),
         'fournisseur_id' => isset($input['fournisseur_id']) ? ((int)$input['fournisseur_id'] ?: null) : $existing['fournisseur_id'],
     ];
 
@@ -335,7 +337,7 @@ function handle_scan(): void {
         json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
     }
 
-    $code = trim($_GET['code'] ?? '');
+    $code = input_string($_GET['code'] ?? '');
     if ($code === '') {
         json_out(['found' => false, 'message' => 'Paramètre "code" requis.'], 422);
     }
@@ -462,8 +464,12 @@ function handle_caisse_sync(): void {
     $input = json_decode(file_get_contents('php://input'), true);
     if (!is_array($input)) $input = [];
 
-    $clientSaleId = trim($input['client_sale_id'] ?? '');
+    $clientSaleId = input_string($input['client_sale_id'] ?? '');
     $lignes       = $input['lignes'] ?? [];
+    if (!is_array($lignes)) {
+        $lignes = [];
+    }
+    $lignes = array_values(array_filter($lignes, 'is_array'));
     $totalTtc     = (float)($input['total_ttc'] ?? 0);
     $montantPaye  = (float)($input['montant_paye'] ?? 0);
     $magasinId    = (int)($input['magasin_id'] ?? 0);
@@ -651,9 +657,9 @@ function handle_caisse_sync(): void {
 
         // Enregistrer les paiements multi-modes (même logique que valider_facture.php)
         if (!empty($input['paiements_json'])) {
-            $paiementsList = json_decode((string)$input['paiements_json'], true);
+            $paiementsList = json_decode(input_string($input['paiements_json']), true);
             if (is_array($paiementsList) && !empty($paiementsList)) {
-                db_paiements_insert($pdo, $factureId, $paiementsList);
+                db_paiements_insert($pdo, $factureId, array_values(array_filter($paiementsList, 'is_array')));
             }
         }
 
@@ -692,7 +698,9 @@ function handle_caisse_sync(): void {
         ]);
 
     } catch (Throwable $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log('API caisse sync error: ' . $e->getMessage());
         if ($e instanceof RuntimeException) {
             json_out(['success' => false, 'error' => $e->getMessage()], 409);
@@ -758,7 +766,7 @@ function handle_promo_check(): void {
     if (!est_connecte()) {
         json_out(['error' => 'Non autorisé.'], 401);
     }
-    $code  = trim($_GET['code'] ?? '');
+    $code  = input_string($_GET['code'] ?? '');
     $total = (float)($_GET['total'] ?? 0);
 
     if ($code === '') {
@@ -793,8 +801,8 @@ function handle_clients_search(): void {
         json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
     }
 
-    $q = trim($_GET['q'] ?? '');
-    $trie = trim($_GET['tri'] ?? ''); // 'code' = scan d'une carte de fidélité
+    $q = input_string($_GET['q'] ?? '');
+    $trie = input_string($_GET['tri'] ?? ''); // 'code' = scan d'une carte de fidélité
 
     $clients = [];
     if ($trie === 'code' && $q !== '') {

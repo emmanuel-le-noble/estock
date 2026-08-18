@@ -124,7 +124,13 @@ if (!defined('APP_VERSION')) {
 //  1bis. URL RACINE DYNAMIQUE (s'adapte au sous-dossier Wamp)
 // ============================================================
 $_scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$_host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$_host   = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+// HTTP_HOST est contrôlé par le client : ne jamais le refléter tel quel dans
+// BASE_URL (liens Twig, emails, redirections). Les hôtes valides incluent un
+// port optionnel pour WampServer en développement.
+if (!preg_match('/\A[a-zA-Z0-9.-]+(?::\d{1,5})?\z/', $_host)) {
+    $_host = 'localhost';
+}
 $_path   = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/\\');
 define('BASE_URL', $_scheme . '://' . $_host . $_path . '/');
 
@@ -195,6 +201,11 @@ setlocale(LC_ALL, $langue_site . '_' . strtoupper($langue_site) . '.UTF-8', $lan
  */
 function h($value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
+/** Convertit une valeur HTTP/JSON en texte sans accepter les tableaux. */
+function input_string(mixed $value): string {
+    return is_scalar($value) ? trim((string)$value) : '';
 }
 
 /**
@@ -422,25 +433,26 @@ function csrf_token(): string {
 /**
  * Afficher un champ hidden avec le token CSRF.
  */
-function csrf_field(): void {
-    echo '<input type="hidden" name="_csrf_token" value="' . h(csrf_token()) . '">';
+function csrf_field(): string {
+    return '<input type="hidden" name="_csrf_token" value="' . h(csrf_token()) . '">';
 }
 
 /**
  * Valider un token CSRF.
  */
 function csrf_validate(): bool {
-    $token = $_POST['_csrf_token'] ?? $_POST['csrf_token'] ?? '';
+    $token = input_string($_POST['_csrf_token'] ?? $_POST['csrf_token'] ?? '');
     if (empty($token) || empty($_SESSION['csrf_token'])) {
         return false;
     }
     return hash_equals($_SESSION['csrf_token'], $token);
 }
 
-function verify_csrf_token(string $token = ''): bool {
+function verify_csrf_token(mixed $token = ''): bool {
     if (empty($token)) {
         $token = $_POST['_csrf_token'] ?? $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     }
+    $token = input_string($token);
     return !empty($token) && !empty($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
@@ -573,7 +585,7 @@ $twig = new \Twig\Environment($loader, [
 $twig->addFunction(new \Twig\TwigFunction('money', 'money'));
 $twig->addFunction(new \Twig\TwigFunction('date_fr', 'date_fr'));
 $twig->addFunction(new \Twig\TwigFunction('h', 'h', ['is_safe' => ['html']]));
-$twig->addFunction(new \Twig\TwigFunction('csrf_field', 'csrf_field'));
+$twig->addFunction(new \Twig\TwigFunction('csrf_field', 'csrf_field', ['is_safe' => ['html']]));
 $twig->addFunction(new \Twig\TwigFunction('csp_nonce', 'csp_nonce'));
 $twig->addFunction(new \Twig\TwigFunction('param', 'param'));
 $twig->addFunction(new \Twig\TwigFunction('param_app_name', 'param_app_name'));

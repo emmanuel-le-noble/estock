@@ -14,7 +14,7 @@ exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_VENDEUR);
 
 header('Content-Type: application/json; charset=utf-8');
 
-$code = trim($_GET['code'] ?? $_POST['code'] ?? '');
+$code = input_string($_GET['code'] ?? $_POST['code'] ?? '');
 
 if ($code === '') {
     json_out(['found' => false, 'message' => 'Code vide.']);

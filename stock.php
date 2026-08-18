@@ -12,7 +12,7 @@ require_once __DIR__ . '/includes/db_functions.php';
 require_once __DIR__ . '/includes/helpers.php';
 exiger_permission('stock_consulter');
 
-$search = trim($_GET['q'] ?? '');
+$search = input_string($_GET['q'] ?? '');
 $u = user_courant();
 
 // Déterminer le magasin à filtrer : choix de l'utilisateur via paramètre GET, 
