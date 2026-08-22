@@ -32,6 +32,10 @@ if ($deja_ferme) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$deja_ferme) {
     csrf_guard('cloture.php');
     $montant_reel = (float)($_POST['montant_reel'] ?? 0);
+    if ($montant_reel < 0) {
+        flash_error('Le montant réel ne peut pas être négatif.');
+        redirect('cloture.php');
+    }
     $ecart = round($montant_reel - $montant_attendu, 2);
 
     try {

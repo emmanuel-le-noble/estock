@@ -138,7 +138,6 @@ function handle_login(): void {
 }
 
 function handle_logout(): void {
-    // SEC-12 : Vérifier le token CSRF pour le logout
     $csrfToken = input_string($_POST['_csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
     if (empty($csrfToken) || !hash_equals(csrf_token(), $csrfToken)) {
         json_out(['error' => 'Token CSRF invalide.'], 403);
@@ -149,6 +148,16 @@ function handle_logout(): void {
     }
     $login = user_courant()['login'] ?? 'unknown';
     suivre_activite('DECONNEXION_API', 'Déconnexion API: ' . $login);
+
+    $_SESSION = [];
+    session_regenerate_id(true);
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params['path'], $params['domain'],
+            $params['secure'], $params['httponly']
+        );
+    }
     session_destroy();
     json_out(['success' => true, 'message' => 'Déconnecté.']);
 }
@@ -175,22 +184,28 @@ function handle_articles_list(): void {
     }
 
     global $pdo;
-    $search    = input_string($_GET['q'] ?? '');
-    $search_sql = db_articles_search_sql($search, user_magasin_id());
-    $stmt = $pdo->prepare($search_sql['sql']);
-    $stmt->execute($search_sql['params']);
-    $articles = $stmt->fetchAll();
+    try {
+        $search    = input_string($_GET['q'] ?? '');
+        $limit     = min(max((int)($_GET['limit'] ?? 100), 1), 500);
+        $search_sql = db_articles_search_sql($search, user_magasin_id());
+        $search_sql['sql'] .= " LIMIT $limit";
+        $stmt = $pdo->prepare($search_sql['sql']);
+        $stmt->execute($search_sql['params']);
+        $articles = $stmt->fetchAll();
 
-    // NOU-7 : Ajouter l'URL signée pour chaque article
-    foreach ($articles as &$a) {
-        $a['edit_url'] = generate_signed_url('articles.php', (int)$a['id'], ['action' => 'editer']);
+        foreach ($articles as &$a) {
+            $a['edit_url'] = generate_signed_url('articles.php', (int)$a['id'], ['action' => 'editer']);
+        }
+        unset($a);
+
+        json_out([
+            'data'  => $articles,
+            'total' => count($articles),
+        ]);
+    } catch (\Throwable $e) {
+        error_log('API articles list error: ' . $e->getMessage());
+        json_out(['error' => 'Erreur lors de la récupération des articles.'], 500);
     }
-    unset($a);
-
-    json_out([
-        'data'  => $articles,
-        'total' => count($articles),
-    ]);
 }
 
 function handle_article_create(): void {
@@ -703,9 +718,9 @@ function handle_caisse_sync(): void {
         }
         error_log('API caisse sync error: ' . $e->getMessage());
         if ($e instanceof RuntimeException) {
-            json_out(['success' => false, 'error' => $e->getMessage()], 409);
+            json_out(['success' => false, 'error' => 'Erreur lors de la synchronisation : ' . $e->getMessage()], 409);
         }
-        json_out(['success' => false, 'error' => 'Erreur lors de la synchronisation de la vente.'], 409);
+        json_out(['success' => false, 'error' => 'Erreur lors de la synchronisation de la vente.'], 500);
     }
 }
 

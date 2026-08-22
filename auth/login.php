@@ -49,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 redirect('../tableau_bord.php');
             } else {
+                usleep(random_int(100000, 300000)); // Anti-timing même si l'utilisateur existe
                 db_login_attempt_insert($pdo, $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1', $login);
                 suivre_activite('ECHEC_CONNEXION', 'Tentative échouée: ' . $login);
                 $erreur = 'Identifiant ou mot de passe incorrect.';

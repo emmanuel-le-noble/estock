@@ -168,6 +168,33 @@ if (php_sapi_name() !== 'cli' && session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Session timeout : idle 30 min / absolu 8 h
+if (php_sapi_name() !== 'cli' && isset($_SESSION['user'])) {
+    $now = time();
+    if (!isset($_SESSION['last_activity'])) {
+        $_SESSION['last_activity'] = $now;
+    }
+    $IDLE_TIMEOUT  = 30 * 60;   // 30 minutes
+    $ABSOLUTE_TIMEOUT = 8 * 3600; // 8 heures
+
+    if (($now - $_SESSION['last_activity']) > $IDLE_TIMEOUT) {
+        session_unset();
+        session_destroy();
+        header('Location: auth/login.php?timeout=1');
+        exit;
+    }
+    if (!isset($_SESSION['login_time'])) {
+        $_SESSION['login_time'] = $now;
+    }
+    if (($now - $_SESSION['login_time']) > $ABSOLUTE_TIMEOUT) {
+        session_unset();
+        session_destroy();
+        header('Location: auth/login.php?timeout=1');
+        exit;
+    }
+    $_SESSION['last_activity'] = $now;
+}
+
 // Générer un nonce CSP par requête (plus de réutilisation inter-requests)
 if (php_sapi_name() === 'cli') {
     $_SESSION = [];
@@ -622,3 +649,21 @@ $twig->addGlobal('page_courante', $_GET['_page'] ?? str_replace('.php', '', base
 
 $twig->addGlobal('nb_alertes_topbar', (est_connecte() && peut_gerer_stock()) ? db_articles_low_stock_count($pdo, user_magasin_id()) : 0);
 $twig->addGlobal('nb_alertes_peremption', (est_connecte() && peut('stock_consulter')) ? db_peremption_alert_count($pdo, 30, user_magasin_id()) : 0);
+
+// ============================================================
+//  GESTIONNAIRE GLOBAL D'EXCEPTIONS (filet de sécurité)
+// ============================================================
+set_exception_handler(function (\Throwable $e) {
+    error_log('[EXCEPTION NON CAPTUREE] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    if (php_sapi_name() !== 'cli' && !headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: text/html; charset=utf-8');
+    }
+    if (php_sapi_name() !== 'cli') {
+        echo '<!DOCTYPE html><html><head><title>Erreur interne</title></head><body>';
+        echo '<h1>Une erreur interne est survenue.</h1>';
+        echo '<p>Veuillez réessayer ultérieurement. Si le problème persiste, contactez l\'administrateur.</p>';
+        echo '</body></html>';
+    }
+    exit(1);
+});

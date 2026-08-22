@@ -39,6 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'ajout
             $numero_lot = mb_substr($numero_lot, 0, 100);
         }
         $date_peremption = input_string($_POST['date_peremption'] ?? '') ?: null;
+        if ($date_peremption !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_peremption)) {
+            $date_peremption = null;
+        }
         
         // 1. Enregistrement de l'historique du mouvement (et stock par magasin)
         //    process_stock_movement() synchronise déjà le stock global via

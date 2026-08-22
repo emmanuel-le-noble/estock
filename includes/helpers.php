@@ -474,6 +474,56 @@ function generate_invoice_number(PDO $pdo): string {
     return $numero;
 }
 
+function generate_return_number(PDO $pdo): string {
+    $prefixe = 'RET-' . date('Y') . '-';
+    $cle     = 'numero_retour:' . date('Y');
+
+    if (db_sequences_exists($pdo)) {
+        $rang    = db_sequence_next($pdo, $cle);
+        $numero  = $prefixe . str_pad((string)$rang, 4, '0', STR_PAD_LEFT);
+        while (db_return_number_exists($pdo, $numero)) {
+            $rang   = db_sequence_next($pdo, $cle);
+            $numero = $prefixe . str_pad((string)$rang, 4, '0', STR_PAD_LEFT);
+        }
+        return $numero;
+    }
+
+    $year  = date('Y');
+    $count = (int)$pdo->query("SELECT COUNT(*)+1 FROM retours_factures WHERE YEAR(created_at) = $year")->fetchColumn();
+    return 'RET-' . $year . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+}
+
+function db_return_number_exists(PDO $pdo, string $numero): bool {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM retours_factures WHERE numero_retour = ?");
+    $stmt->execute([$numero]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function generate_inventory_ref(PDO $pdo): string {
+    $prefixe = 'INV-' . date('Y') . '-';
+    $cle     = 'numero_inventaire:' . date('Y');
+
+    if (db_sequences_exists($pdo)) {
+        $rang    = db_sequence_next($pdo, $cle);
+        $ref     = $prefixe . str_pad((string)$rang, 4, '0', STR_PAD_LEFT);
+        while (db_inventory_ref_exists($pdo, $ref)) {
+            $rang = db_sequence_next($pdo, $cle);
+            $ref  = $prefixe . str_pad((string)$rang, 4, '0', STR_PAD_LEFT);
+        }
+        return $ref;
+    }
+
+    $year  = date('Y');
+    $count = (int)$pdo->query("SELECT COUNT(*)+1 FROM inventaires WHERE YEAR(created_at) = $year")->fetchColumn();
+    return 'INV-' . $year . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+}
+
+function db_inventory_ref_exists(PDO $pdo, string $ref): bool {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM inventaires WHERE reference = ?");
+    $stmt->execute([$ref]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 function role_badge_color(string $role): string {
     return [ROLE_DIRECTEUR=>'dark', ROLE_ADMIN=>'primary', ROLE_MAGASINIER=>'warning', ROLE_VENDEUR=>'info'][$role] ?? 'secondary';
 }
@@ -569,8 +619,13 @@ function log_json(string $niveau, string $message, array $contexte = []): void {
     if (!is_dir($dossier)) {
         @mkdir($dossier, 0755, true);
     }
+    $logfile = $dossier . '/app.log';
+    // Rotation si le fichier dépasse 10 Mo
+    if (is_file($logfile) && filesize($logfile) > 10 * 1024 * 1024) {
+        @rename($logfile, $logfile . '.' . date('Y-m-d_His'));
+    }
     @file_put_contents(
-        $dossier . '/app.log',
+        $logfile,
         json_encode($entree, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
         FILE_APPEND | LOCK_EX
     );

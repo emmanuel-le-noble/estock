@@ -56,6 +56,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'Ce code-barres existe déjà.',
         $form_url
     );
+
+    if (!empty($data['code_barre']) && !valider_ean13($data['code_barre'])) {
+        flash_error('Le code-barres n\'est pas un EAN-13 valide.');
+        redirect($form_url);
+    }
     
     $id          = $data['id'];
     $quantite    = $data['quantite_stock'];

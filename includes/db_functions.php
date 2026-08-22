@@ -1101,6 +1101,7 @@ function db_login_attempt_count(PDO $pdo, string $ip): int {
         $stmt->execute([$ip]);
         return (int)$stmt->fetchColumn();
     } catch (PDOException $e) {
+        error_log('[SECURITE] Table login_attempts absente — rate limiting désactivé. Créez la table pour activer la protection brute-force.');
         return 0;
     }
 }
@@ -1882,42 +1883,33 @@ function db_permissions_count_for_role(PDO $pdo, string $role_nom): int {
  */
 function db_lot_upsert(PDO $pdo, int $article_id, int $magasin_id, string $numero_lot, 
                        int $quantite, ?string $date_peremption = null): int {
-    // Vérifier si le lot existe déjà
-    $stmt = $pdo->prepare(
-        'SELECT id FROM article_lots WHERE article_id = :aid AND magasin_id = :mid AND numero_lot = :lot'
-    );
-    $stmt->execute([':aid' => $article_id, ':mid' => $magasin_id, ':lot' => $numero_lot]);
-    $existing = $stmt->fetch();
-    
-    if ($existing) {
-        // Incrémenter la quantité (et mettre à jour la DLC si fournie)
-        if ($date_peremption !== null) {
-            $update = $pdo->prepare(
-                'UPDATE article_lots SET quantite = quantite + :qte, date_peremption = :dlc WHERE id = :id'
-            );
-            $update->execute([':qte' => $quantite, ':dlc' => $date_peremption, ':id' => $existing['id']]);
-        } else {
-            $update = $pdo->prepare(
-                'UPDATE article_lots SET quantite = quantite + :qte WHERE id = :id'
-            );
-            $update->execute([':qte' => $quantite, ':id' => $existing['id']]);
-        }
-        return (int)$existing['id'];
-    } else {
-        // Créer un nouveau lot
-        $insert = $pdo->prepare(
+    if ($date_peremption !== null) {
+        $stmt = $pdo->prepare(
             'INSERT INTO article_lots (article_id, magasin_id, numero_lot, quantite, date_peremption)
-             VALUES (:aid, :mid, :lot, :qte, :dlc)'
+             VALUES (:aid, :mid, :lot, :qte, :dlc)
+             ON DUPLICATE KEY UPDATE 
+                 quantite = quantite + :qte,
+                 date_peremption = :dlc'
         );
-        $insert->execute([
-            ':aid' => $article_id,
-            ':mid' => $magasin_id,
-            ':lot' => $numero_lot,
-            ':qte' => $quantite,
-            ':dlc' => $date_peremption,
-        ]);
-        return (int)$pdo->lastInsertId();
+        $stmt->execute([':aid' => $article_id, ':mid' => $magasin_id, ':lot' => $numero_lot, ':qte' => $quantite, ':dlc' => $date_peremption]);
+    } else {
+        $stmt = $pdo->prepare(
+            'INSERT INTO article_lots (article_id, magasin_id, numero_lot, quantite, date_peremption)
+             VALUES (:aid, :mid, :lot, :qte, NULL)
+             ON DUPLICATE KEY UPDATE 
+                 quantite = quantite + :qte'
+        );
+        $stmt->execute([':aid' => $article_id, ':mid' => $magasin_id, ':lot' => $numero_lot, ':qte' => $quantite]);
     }
+
+    $lotId = (int)$pdo->lastInsertId();
+    if ($lotId > 0) {
+        return $lotId;
+    }
+
+    $sel = $pdo->prepare('SELECT id FROM article_lots WHERE article_id = :aid AND magasin_id = :mid AND numero_lot = :lot');
+    $sel->execute([':aid' => $article_id, ':mid' => $magasin_id, ':lot' => $numero_lot]);
+    return (int)$sel->fetchColumn();
 }
 
 /**
@@ -1937,7 +1929,7 @@ function db_lot_get_fefo(PDO $pdo, int $article_id, int $magasin_id): ?array {
          ORDER BY 
              CASE WHEN date_peremption IS NULL THEN 1 ELSE 0 END,
              date_peremption ASC
-         LIMIT 1'
+         LIMIT 1 FOR UPDATE'
     );
     $stmt->execute([':aid' => $article_id, ':mid' => $magasin_id]);
     $result = $stmt->fetch();
@@ -2928,9 +2920,7 @@ function db_retours_search_sql(array $filters = []): array {
  * Doit être exécuté dans une transaction.
  */
 function db_retour_creer(PDO $pdo, int $facture_id, array $lignes_retour, string $motif, int $user_id, int $magasin_id): int {
-    $year  = date('Y');
-    $count = (int)$pdo->query("SELECT COUNT(*)+1 FROM retours_factures WHERE YEAR(created_at) = $year")->fetchColumn();
-    $num   = 'RET-' . $year . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+    $num = generate_return_number($pdo);
 
     // Calculer le montant total du retour
     $montantTotal = 0.0;
@@ -4041,7 +4031,9 @@ function db_client_attribuer_points(PDO $pdo, int $client_id, int $facture_id, f
  * (points convertis en devise) et consomme les points en transaction.
  */
 function db_client_utiliser_points(PDO $pdo, int $client_id, int $points_a_utiliser): float {
-    $client = db_client_get_by_id($pdo, $client_id);
+    $stmt = $pdo->prepare("SELECT * FROM clients WHERE id = ? FOR UPDATE");
+    $stmt->execute([$client_id]);
+    $client = $stmt->fetch();
     if (!$client) return 0.0;
     $min = (int)param('fidelite_min_points_usage', '10');
     $valeur_point = (float)param('fidelite_valeur_point', '1');

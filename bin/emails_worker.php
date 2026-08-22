@@ -92,24 +92,26 @@ if ($purge) {
 //  TRAITEMENT DU LOT (verrouillage FOR UPDATE anti double-envoi)
 // ============================================================
 $max_tentatives = max(1, param_int('emails_tentatives_max', 5));
-$sql = "SELECT id, destinataire, type, sujet, corps_html, nb_tentatives
-        FROM emails_queue
-        WHERE statut = 'EN_ATTENTE' AND prochaine_tentative <= NOW()
-        ORDER BY date_creation ASC
-        LIMIT ? FOR UPDATE";
-$stmt = $pdo->prepare($sql);
-$stmt->execute([$limit]);
-$lots = $stmt->fetchAll();
-
-if (empty($lots)) {
-    worker_log("Aucun e-mail en attente.");
-    exit(0);
-}
-
-worker_log(count($lots) . " e-mail(s) à traiter.");
 
 try {
     $pdo->beginTransaction();
+
+    $sql = "SELECT id, destinataire, type, sujet, corps_html, nb_tentatives
+            FROM emails_queue
+            WHERE statut = 'EN_ATTENTE' AND prochaine_tentative <= NOW()
+            ORDER BY date_creation ASC
+            LIMIT ? FOR UPDATE";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$limit]);
+    $lots = $stmt->fetchAll();
+
+    if (empty($lots)) {
+        $pdo->rollBack();
+        worker_log("Aucun e-mail en attente.");
+        exit(0);
+    }
+
+    worker_log(count($lots) . " e-mail(s) à traiter.");
 
     foreach ($lots as $mail) {
         $id      = (int)$mail['id'];

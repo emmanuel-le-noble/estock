@@ -28,9 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'nouveau') {
 
     db_transaction(
         function(PDO $pdo) use ($data, $userId, &$newId) {
-            $year  = date('Y');
-            $count = (int)$pdo->query("SELECT COUNT(*)+1 FROM inventaires WHERE YEAR(created_at) = $year")->fetchColumn();
-            $ref   = 'INV-' . $year . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+            $ref   = generate_inventory_ref($pdo);
             $newId = db_inventaire_insert($pdo, [
                 'reference'      => $ref,
                 'magasin_id'     => (int)$data['magasin_id'],
