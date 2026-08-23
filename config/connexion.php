@@ -195,6 +195,29 @@ if (php_sapi_name() !== 'cli' && isset($_SESSION['user'])) {
     $_SESSION['last_activity'] = $now;
 }
 
+// ============================================================
+//  VERIFICATION INSTALLATION
+//  Redirige vers install.php si aucun admin/magasin n'existe
+//  (sauf si on est deja sur install.php ou en CLI)
+// ============================================================
+if (php_sapi_name() !== 'cli' && !$__is_cli) {
+    $currentScript = basename($_SERVER['PHP_SELF'] ?? '');
+    if ($currentScript !== 'install.php') {
+        try {
+            $checkAdmin = $pdo->query("SELECT COUNT(*) FROM utilisateurs WHERE role IN ('Directeur','Admin') AND actif = 1")->fetchColumn();
+            $checkMag   = $pdo->query("SELECT COUNT(*) FROM magasins WHERE actif = 1")->fetchColumn();
+            if ((int)$checkAdmin === 0 || (int)$checkMag === 0) {
+                header('Location: install.php');
+                exit;
+            }
+        } catch (\Throwable $e) {
+            // Table n'existe pas encore → installation requise
+            header('Location: install.php');
+            exit;
+        }
+    }
+}
+
 // Générer un nonce CSP par requête (plus de réutilisation inter-requests)
 if (php_sapi_name() === 'cli') {
     $_SESSION = [];

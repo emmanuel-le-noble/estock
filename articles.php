@@ -226,6 +226,7 @@ if ($action === 'nouveau' || $action === 'editer') {
     <?php
     include __DIR__ . '/includes/footer.php';
     ?>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script nonce="<?= h(csp_nonce()) ?>">
     (function() {
         var input = document.getElementById('codeBarreInput');

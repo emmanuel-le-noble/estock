@@ -31,18 +31,14 @@ SELECT 'Admin', p.id
 FROM `permissions` p
 WHERE p.cle_permission IN ('clients_consulter','clients_gerer','articles_modifier');
 
--- 4. Index manquants pour les performances
-ALTER TABLE `historique_points`
-  ADD INDEX IF NOT EXISTS `idx_hp_type_operation` (`type_operation`);
+-- 4. Index manquants pour les performances (CREATE INDEX IF NOT EXISTS = MySQL 8.0.29+)
+CREATE INDEX IF NOT EXISTS `idx_hp_type_operation` ON `historique_points` (`type_operation`);
 
-ALTER TABLE `commandes_fournisseur`
-  ADD INDEX IF NOT EXISTS `idx_cf_date_commande` (`date_commande`);
+CREATE INDEX IF NOT EXISTS `idx_cf_date_commande` ON `commandes_fournisseur` (`date_commande`);
 
-ALTER TABLE `consentements_log`
-  ADD INDEX IF NOT EXISTS `idx_cl_client_type` (`client_id`, `type_consentement`);
+CREATE INDEX IF NOT EXISTS `idx_cl_client_type` ON `consentements_log` (`client_id`, `type_consentement`);
 
-ALTER TABLE `article_couts`
-  ADD INDEX IF NOT EXISTS `idx_ac_fifo` (`article_id`, `quantite`, `date_entree`);
+CREATE INDEX IF NOT EXISTS `idx_ac_fifo` ON `article_couts` (`article_id`, `quantite`, `date_entree`);
 
 -- 5. Suppression de la table de test (MyISAM, inutile en production)
 DROP TABLE IF EXISTS `__test_group`;
