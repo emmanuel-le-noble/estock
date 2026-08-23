@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', function () {
         for (var i = 0; i < pending.length; i++) {
             var vente = pending[i];
             try {
-                var res = await fetch(BASE + 'api/caisse/sync', {
+                var res = await fetch(BASE + 'api/index.php?route=caisse/sync', {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
         spinner.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"></div> Recherche...';
         if (zoneAlerte) zoneAlerte.appendChild(spinner);
 
-        fetch(BASE + 'api/scan?code=' + encodeURIComponent(code), {
+        fetch(BASE + 'api/index.php?route=scan&code=' + encodeURIComponent(code), {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
             .then(function (r) {
@@ -627,7 +627,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // ============================================================
     function chercherClients(terme) {
         if (!clientResults || !terme.trim()) { cacherResultats(); return; }
-        fetch(BASE + 'api/clients/search?q=' + encodeURIComponent(terme.trim()))
+        fetch(BASE + 'api/index.php?route=clients/search&q=' + encodeURIComponent(terme.trim()))
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 var liste = (data && data.clients) || [];

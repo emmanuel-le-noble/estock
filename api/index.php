@@ -353,7 +353,7 @@ function handle_scan(): void {
     if (!est_connecte()) {
         json_out(['error' => 'Non autorisé. Connectez-vous.'], 401);
     }
-    if (!peut('caisse_gerer')) {
+    if (!in_array(user_role(), [ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_VENDEUR], true)) {
         json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
     }
 
