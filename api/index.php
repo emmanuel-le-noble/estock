@@ -26,6 +26,11 @@ $path   = trim($path, '/');
 $path   = preg_replace('#^api/#', '', $path);
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Fallback : support du paramètre ?route= pour les serveurs sans mod_rewrite
+if ($path === '' || $path === 'index.php') {
+    $path = $_GET['route'] ?? '';
+}
+
 $segments = array_values(array_filter(explode('/', $path)));
 $resource = $segments[0] ?? '';
 $id       = isset($segments[1]) ? (int)$segments[1] : 0;
@@ -761,7 +766,7 @@ function handle_generer_code_barre(): void {
     if (!est_connecte()) {
         json_out(['error' => 'Non autorisé.'], 401);
     }
-    if (!peut('articles_modifier')) {
+    if (!in_array(user_role(), [ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER], true)) {
         json_out(['error' => 'Accès refusé. Droits insuffisants.'], 403);
     }
     try {

@@ -272,7 +272,7 @@ if ($action === 'nouveau' || $action === 'editer') {
         
         if (btn) {
             btn.addEventListener('click', function() {
-                fetch(BASE + 'api/generer_code_barre', {
+                fetch(BASE + 'api/index.php?route=generer_code_barre', {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 })
                 .then(function(r) { return r.json(); })

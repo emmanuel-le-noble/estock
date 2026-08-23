@@ -281,6 +281,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
                                 SELECT 'Admin', p.id FROM permissions p
                                 WHERE p.cle_permission IN ('clients_consulter','clients_gerer','articles_modifier')");
+
+                            $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
+                                SELECT 'Magasinier', p.id FROM permissions p
+                                WHERE p.cle_permission = 'articles_modifier'");
                         } catch (\Throwable $e) {
                             // Non-critique
                         }
