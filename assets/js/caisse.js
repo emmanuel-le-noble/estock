@@ -83,10 +83,11 @@ document.addEventListener('DOMContentLoaded', function () {
     //  MODE HORS-LIGNE : Badge de connexion
     // ============================================================
     function creerBadgeConnexion() {
-        let badge = document.getElementById('connectionBadge');
+        let badge = document.getElementById('posConnectionBadge');
         if (!badge) {
             badge = document.createElement('div');
-            badge.id = 'connectionBadge';
+            badge.id = 'posConnectionBadge';
+            badge.style.cssText = 'position:fixed;top:12px;right:12px;z-index:9999;padding:6px 14px;border-radius:20px;font-size:.82rem;font-weight:600;transition:all .3s;cursor:default;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;gap:6px;';
             document.body.appendChild(badge);
         }
         mettreAJourBadge();
@@ -94,23 +95,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function mettreAJourBadge() {
-        const badge = document.getElementById('connectionBadge');
+        const badge = document.getElementById('posConnectionBadge');
         if (!badge) return;
         const enLigne = navigator.onLine;
         const nbPending = getPendingSales().length;
-        badge.className = 'px-3 py-1 rounded-pill fw-bold';
-        badge.style.cssText = 'font-size:.82rem;transition:all .3s;cursor:default;white-space:nowrap;';
         if (enLigne) {
             badge.style.backgroundColor = nbPending > 0 ? '#0d6efd' : '#198754';
             badge.style.color = '#fff';
             badge.innerHTML = nbPending > 0
-                ? '<i class="bi bi-cloud-arrow-up"></i> En ligne — ' + nbPending + ' en attente'
+                ? '<i class="bi bi-cloud-arrow-up"></i> En ligne \u2014 ' + nbPending + ' en attente'
                 : '<i class="bi bi-wifi"></i> En ligne';
         } else {
             badge.style.backgroundColor = '#fd7e14';
             badge.style.color = '#fff';
             badge.innerHTML = '<i class="bi bi-wifi-off"></i> Hors-ligne'
-                + (nbPending > 0 ? ' — ' + nbPending + ' vente(s) en file' : '');
+                + (nbPending > 0 ? ' \u2014 ' + nbPending + ' vente(s) en file' : '');
         }
     }
 

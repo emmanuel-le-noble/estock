@@ -118,6 +118,9 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="<?= BASE_URL ?>manifest.php">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="csrf-token" content="<?= csrf_token() ?>">
     <title><?= h($titre_page) ?> · <?= h($app_nom) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
