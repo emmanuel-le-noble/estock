@@ -134,6 +134,9 @@ include __DIR__ . '/includes/header.php';
         <a href="<?= h('ticket_print.php?facture_id=' . $id) ?>" class="btn btn-outline-dark" target="_blank">
             <i class="bi bi-receipt"></i> Ticket thermique
         </a>
+        <a href="<?= h('facture_a4.php?facture_id=' . $id) ?>" class="btn btn-outline-primary" target="_blank">
+            <i class="bi bi-file-earmark-pdf"></i> Facture A5
+        </a>
         <?php if (peut_facturer() && $f['statut'] === 'Payee'): ?>
             <a href="<?= h('caisse.php') ?>" class="btn btn-success"><i class="bi bi-cart-plus"></i> Nouvelle vente</a>
         <?php endif; ?>

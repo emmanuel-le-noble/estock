@@ -125,6 +125,15 @@ if ((int)($facture['client_id'] ?? 0) > 0) {
 // Rendu Twig
 $loader = new \Twig\Loader\FilesystemLoader(__DIR__ . '/templates');
 $twig = new \Twig\Environment($loader, ['autoescape' => 'html']);
+$twig->addFunction(new \Twig\TwigFunction('param', function (string $key, mixed $default = null) {
+    return param($key, $default);
+}));
+$twig->addFunction(new \Twig\TwigFunction('money', function (mixed $val): string {
+    return money($val);
+}));
+$twig->addFunction(new \Twig\TwigFunction('h', function (?string $s): string {
+    return h($s);
+}));
 
 echo $twig->render('ticket_print.html.twig', [
     'facture'    => $facture,

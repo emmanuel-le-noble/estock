@@ -234,6 +234,13 @@ require_once __DIR__ . '/../includes/security_headers.php';
 // ============================================================
 require_once __DIR__ . '/parametres.php';
 
+// Appliquer le fuseau horaire configuré
+$tz = param('fuseau_horaire', 'Africa/Lome');
+if (!in_array($tz, DateTimeZone::listIdentifiers(), true)) {
+    $tz = 'Africa/Lome';
+}
+date_default_timezone_set($tz);
+
 // [CORRECTION BUG 4 - Internationalisation Middleware]
 if (!isset($_SESSION['langue'])) {
     $_SESSION['langue'] = param('langue', 'fr');

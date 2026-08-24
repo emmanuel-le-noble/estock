@@ -14,6 +14,9 @@ Options -Indexes
     AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
 </IfModule>
 
+# Fichier par défaut
+DirectoryIndex index.php
+
 # Activer le moteur de réécriture (Indispensable pour vos règles)
 RewriteEngine On
 

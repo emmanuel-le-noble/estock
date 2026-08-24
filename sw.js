@@ -1,28 +1,7 @@
-const CACHE_NAME = 'estock-v1';
-const STATIC_ASSETS = [
-    './',
-    './tableau_bord.php',
-    './caisse.php',
-    './articles.php',
-    './stock.php',
-    './mouvements.php',
-    './assets/css/style.css',
-    './assets/js/app.js',
-    './assets/js/caisse.js',
-    './assets/images/logo-eStock.png',
-    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js',
-    'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css'
-];
+const CACHE_NAME = 'estock-v2';
 
 self.addEventListener('install', function (e) {
-    e.waitUntil(
-        caches.open(CACHE_NAME).then(function (cache) {
-            return cache.addAll(STATIC_ASSETS);
-        }).then(function () {
-            return self.skipWaiting();
-        })
-    );
+    self.skipWaiting();
 });
 
 self.addEventListener('activate', function (e) {
@@ -41,6 +20,9 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
     var url = new URL(e.request.url);
 
+    if (e.request.method !== 'GET') return;
+
+    // API : network uniquement, pas de cache
     if (url.pathname.indexOf('/api/') !== -1) {
         e.respondWith(
             fetch(e.request).catch(function () {
@@ -52,10 +34,11 @@ self.addEventListener('fetch', function (e) {
         return;
     }
 
-    e.respondWith(
-        caches.match(e.request).then(function (cached) {
-            var fetched = fetch(e.request).then(function (response) {
-                if (response && response.status === 200) {
+    // Pages dynamiques (PHP) : network-first, cache en fallback uniquement hors-ligne
+    if (url.pathname.endsWith('.php') || url.pathname === '/' || url.search) {
+        e.respondWith(
+            fetch(e.request).then(function (response) {
+                if (response && response.status === 200 && response.type === 'basic') {
                     var clone = response.clone();
                     caches.open(CACHE_NAME).then(function (cache) {
                         cache.put(e.request, clone);
@@ -63,9 +46,27 @@ self.addEventListener('fetch', function (e) {
                 }
                 return response;
             }).catch(function () {
-                return cached;
+                return caches.match(e.request).then(function (cached) {
+                    return cached || new Response('Hors-ligne', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+                });
+            })
+        );
+        return;
+    }
+
+    // Assets statiques (CSS, JS, images, fonts, CDN) : cache-first
+    e.respondWith(
+        caches.match(e.request).then(function (cached) {
+            if (cached) return cached;
+            return fetch(e.request).then(function (response) {
+                if (response && response.status === 200 && response.type === 'basic') {
+                    var clone = response.clone();
+                    caches.open(CACHE_NAME).then(function (cache) {
+                        cache.put(e.request, clone);
+                    });
+                }
+                return response;
             });
-            return cached || fetched;
         })
     );
 });

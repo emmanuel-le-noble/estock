@@ -6,6 +6,12 @@
  *   $titre_page  : titre affiché dans la topbar
  *   $sous_titre  : petit libellé sous le titre
  */
+
+// Empêcher le navigateur de mettre en cache les pages dynamiques
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 $titre_page  = $titre_page  ?? param_app_name();
 $sous_titre  = $sous_titre  ?? '';
 $user = user_courant();
