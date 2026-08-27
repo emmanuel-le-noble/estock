@@ -863,6 +863,8 @@ kbd {
     }
     body * { visibility: hidden; }
     .ticket, .ticket * { visibility: visible; }
+    .invoice-a5, .invoice-a5 * { visibility: visible; }
+    .inv-action-bar { visibility: hidden; }
     .ticket { position: absolute; left: 0; top: 0; width: 100%; border: none; }
     .ticket-thermal {
         max-width: 80mm;

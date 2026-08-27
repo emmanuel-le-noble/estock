@@ -408,6 +408,19 @@ include __DIR__ . '/includes/header.php';
 }
 </style>
 
+<!-- BARRE D'ACTION -->
+<div class="inv-action-bar no-print">
+    <a href="factures.php" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Retour
+    </a>
+    <button onclick="window.print()" class="btn btn-primary" id="btnPrintA5">
+        <i class="bi bi-printer"></i> Imprimer la facture
+    </button>
+    <a href="ticket_print.php?facture_id=<?= $factureId ?>" class="btn btn-outline-dark" target="_blank">
+        <i class="bi bi-receipt"></i> Ticket thermique
+    </a>
+</div>
+
 <div class="invoice-preview-wrap">
     <div class="invoice-a5 <?= $is_annulee ? 'watermark-active' : '' ?>">
 
@@ -599,19 +612,6 @@ include __DIR__ . '/includes/header.php';
         </div>
 
     </div>
-</div>
-
-<!-- BARRE D'ACTION -->
-<div class="inv-action-bar no-print">
-    <a href="factures.php" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> Retour
-    </a>
-    <button onclick="window.print()" class="btn btn-primary" id="btnPrintA5">
-        <i class="bi bi-printer"></i> Imprimer la facture
-    </button>
-    <a href="ticket_print.php?facture_id=<?= $factureId ?>" class="btn btn-outline-dark" target="_blank">
-        <i class="bi bi-receipt"></i> Ticket thermique
-    </a>
 </div>
 
 <script nonce="<?= h(csp_nonce()) ?>">
