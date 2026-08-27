@@ -45,7 +45,9 @@ function _params_ensure_table(): bool {
                     $pdo->exec($sql_content);
                 }
                 return true;
-            } catch (Throwable $ignore) {}
+            } catch (Throwable $ignore) {
+                error_log('[PARAMETRES] Erreur création table paramètres: ' . $ignore->getMessage());
+            }
         }
         return false;
     }

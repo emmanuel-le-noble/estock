@@ -130,8 +130,10 @@ try {
             continue;
         }
 
-        $from = param('smtp_from', 'noreply@estock.local');
-        $shop = param_shop_name();
+        $from = str_replace(["\r", "\n"], '', param('smtp_from', 'noreply@estock.local'));
+        $shop = str_replace(["\r", "\n"], '', param_shop_name());
+        $dest = str_replace(["\r", "\n"], '', $dest);
+        $sujet = str_replace(["\r", "\n"], '', $sujet);
         $headers  = "MIME-Version: 1.0\r\n";
         $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
         $headers .= "From: $shop <$from>\r\n";

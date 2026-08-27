@@ -26,6 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     csrf_guard('articles.php');
     
     // Extraction des données en amont pour éviter l'alerte de variable indéfinie dans le callback
+    // Note : 'taux_tva' n'est plus déclaré ici, il est extrait manuellement plus bas
+    // (voir explication : on doit distinguer "champ vide" de "0 saisi explicitement").
     $data = extract_post_data([
         'id'            => ['type' => 'int'],
         'code_barre'    => ['type' => 'string', 'trim' => true, 'required' => true, 'max' => 64, 'redirect' => ''],
@@ -38,7 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'emplacement'   => ['type' => 'string', 'trim' => true, 'nullable' => true, 'max' => 100, 'redirect' => ''],
         'fournisseur_id'=> ['type' => 'int', 'default' => 0],
         'categorie_id'  => ['type' => 'int', 'default' => 0],
-        'taux_tva'      => ['type' => 'float', 'min' => 0, 'default' => 0],
     ], 'articles.php');
     
     $redirect_form = fn() => ($data['id'] ?? 0) ? generate_signed_url('articles.php', $data['id'], ['action' => 'editer']) : page_url('articles', ['action' => 'nouveau']);
@@ -50,17 +51,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'sku'         => ['label' => 'SKU', 'max' => 64],
         'emplacement' => ['label' => 'Emplacement', 'max' => 100],
     ], $form_url);
-    
+
+    // Taux TVA : on lit la valeur brute du POST pour distinguer :
+    //   - champ laissé vide  -> null (l'article utilisera le taux global de la facture)
+    //   - "0" saisi explicitement -> 0.0 (article exonéré, ne doit PAS hériter du taux global)
+    $tauxTvaRaw = trim((string)($_POST['taux_tva'] ?? ''));
+    if ($tauxTvaRaw !== '') {
+        if (!is_numeric($tauxTvaRaw) || (float)$tauxTvaRaw < 0 || (float)$tauxTvaRaw > 100) {
+            flash_error('Le taux de TVA doit être un nombre entre 0 et 100.');
+            redirect($form_url);
+        }
+        $tauxTvaValue = round((float)$tauxTvaRaw, 4);
+    } else {
+        $tauxTvaValue = null;
+    }
+
+    // Format EAN-13 vérifié avant la requête d'unicité (évite un accès BDD inutile si invalide)
+    if (!valider_ean13($data['code_barre'])) {
+        flash_error('Le code-barres n\'est pas un EAN-13 valide.');
+        redirect($form_url);
+    }
+
     validate_uniqueness(
         fn() => db_article_code_barre_exists($pdo, $data['code_barre'], $data['id']),
         'Ce code-barres existe déjà.',
         $form_url
     );
-
-    if (!empty($data['code_barre']) && !valider_ean13($data['code_barre'])) {
-        flash_error('Le code-barres n\'est pas un EAN-13 valide.');
-        redirect($form_url);
-    }
     
     $id          = $data['id'];
     $quantite    = $data['quantite_stock'];
@@ -75,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'emplacement'    => $data['emplacement'],
         'fournisseur_id' => $data['fournisseur_id'] ?: null,
         'categorie_id'   => $data['categorie_id'] ?: null,
-        'taux_tva'       => ($data['taux_tva'] > 0) ? round($data['taux_tva'], 4) : null,
+        'taux_tva'       => $tauxTvaValue,
     ];
     
     db_transaction(
@@ -236,6 +252,7 @@ if ($action === 'nouveau' || $action === 'editer') {
         var BASE = window.BASE_URL || '';
         
         function renderBarcode(code) {
+            if (!preview) return;
             if (!code || code.length < 12 || typeof JsBarcode === 'undefined') {
                 preview.style.display = 'none';
                 return;
@@ -264,7 +281,7 @@ if ($action === 'nouveau' || $action === 'editer') {
                 var v = this.value.trim();
                 if (v.length >= 12) {
                     renderBarcode(v);
-                } else {
+                } else if (preview) {
                     preview.style.display = 'none';
                 }
             });
@@ -277,7 +294,7 @@ if ($action === 'nouveau' || $action === 'editer') {
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    if (data.code_barre) {
+                    if (data.code_barre && input) {
                         input.value = data.code_barre;
                         renderBarcode(data.code_barre);
                     }
@@ -423,7 +440,7 @@ pagination_links($result['page'], $result['total_pages'], $base_url);
                     var seuil = parseInt(a.seuil_alerte, 10) || 0;
                     var alerteClass = stock <= seuil ? ' alert-stock-low' : '';
                     var badgeClass = stock <= seuil ? 'danger' : 'secondary';
-                    var editUrl = a.edit_url || (BASE + 'articles.php?action=editer&id=' + a.id);
+                    var editUrl = a.edit_url && /^https?:\/\//.test(a.edit_url) ? a.edit_url : (BASE + 'articles.php?action=editer&id=' + a.id);
                     
                     return '<tr class="' + alerteClass + '">'
                         + '<td class="fw-semibold">' + esc(a.nom) + '</td>'

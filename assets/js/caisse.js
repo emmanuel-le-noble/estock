@@ -56,6 +56,17 @@ document.addEventListener('DOMContentLoaded', function () {
     // Le panier : { [article_id]: {article, qte} }
     let panier = {};
 
+    // Tolérance pour les comparaisons de montants (float JS)
+    function montantInsuffisant(paye, attendu) {
+        return paye < attendu - 0.02;
+    }
+
+    // Mutex pour éviter les synchronisations concurrentes
+    var _syncEnCours = false;
+
+    // Flag pour la modale de pesée (évite la race condition sur classList.contains('show'))
+    var _poidsModalOuverte = false;
+
     // ---- Fidélité : client sélectionné + configuration ----
     let clientActuel = null;
     let totalBrut = 0; // total TTC sans remise fidélité
@@ -164,7 +175,9 @@ document.addEventListener('DOMContentLoaded', function () {
     //  SYNCHRONISATION AUTOMATIQUE
     // ============================================================
     async function synchroniserVentes() {
-        if (!navigator.onLine) return;
+        if (!navigator.onLine || _syncEnCours) return;
+        _syncEnCours = true;
+        try {
 
         var queue = getPendingSales();
         var pending = queue.filter(function (s) { return s.statut === 'pending'; });
@@ -178,6 +191,8 @@ document.addEventListener('DOMContentLoaded', function () {
         for (var i = 0; i < pending.length; i++) {
             var vente = pending[i];
             try {
+                // NOTE: La re-validation du stock est effectuée côté serveur
+                // (process_stock_movement dans helpers.php) lors de la synchronisation.
                 var res = await fetch(BASE + 'api/index.php?route=caisse/sync', {
                     method: 'POST',
                     headers: { 
@@ -225,6 +240,10 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (syncFail > 0) {
             alerter('Synchronisation partielle : ' + syncOK + ' OK, ' + syncFail + ' échec(s).', 'warning');
         }
+
+        } finally {
+            _syncEnCours = false;
+        }
     }
 
     // Tenter la sync au chargement si en ligne et des ventes en attente
@@ -238,7 +257,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (scanInput) {
         scanInput.focus();
         document.body.addEventListener('click', function (e) {
-            if (e.target.closest('input, button, select, textarea, a, .modal, table')) return;
+            if (e.target.closest('input, button, select, textarea, a, .modal, .modal-backdrop, table')) return;
             scanInput.focus();
         });
         scanInput.addEventListener('blur', function () {
@@ -347,7 +366,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             '<i class="bi ' + icon + ' fs-4"></i>' +
                             '<div>' +
                             '<strong>DLC PROCH</strong><br>' +
-                            '<small>Lot ' + alerte.numero_lot + ' — expire dans ' + alerte.jours_restants + 'j</small>' +
+                            '<small>Lot ' + escapeHtml(alerte.numero_lot) + ' — expire dans ' + alerte.jours_restants + 'j</small>' +
                             '</div>' +
                             '<button class="btn-close btn-close-white ms-auto" id="btnToastClose"></button>' +
                             '</div>';
@@ -369,7 +388,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             '<div>' +
                             '<strong>PROMOTION VENTE FLASH</strong><br>' +
                             '<small>' + escapeHtml(promo.label) + '</small><br>' +
-                            '<small><s>' + formatMoney(promo.prix_original) + '</s> → <strong>' + formatMoney(promo.prix_remise) + '</strong> (−' + promo.remise_pct + '%)</small>' +
+                            '<small><s>' + formatMoney(promo.prix_original) + '</s> &rarr; <strong>' + formatMoney(promo.prix_remise) + '</strong> (&minus;' + Number(promo.remise_pct) + '%)</small>' +
                             '</div>' +
                             '<button class="btn-close btn-close-white ms-auto" id="btnToastPromoClose"></button>' +
                             '</div>';
@@ -396,7 +415,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (sp) sp.remove();
                 if (scanInput) {
                     scanInput.disabled = false;
-                    if (!(modalePoids && modalePoids.classList.contains('show'))) {
+                    if (!_poidsModalOuverte) {
                         scanInput.focus();
                     }
                 }
@@ -523,6 +542,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             // Reprise du focus scan une fois la modale fermée
             modalePoids.addEventListener('hidden.bs.modal', function () {
+                _poidsModalOuverte = false;
                 if (scanInput) scanInput.focus();
             });
         }
@@ -540,6 +560,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ? bootstrap.Modal.getOrCreateInstance(modalePoids)
             : null;
         if (modalInstance) {
+            _poidsModalOuverte = true;
             modalInstance.show();
             setTimeout(function () { input.focus(); }, 120);
         } else {
@@ -566,14 +587,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!confirm('Supprimer cet article du panier ?')) return;
         delete panier[id];
         rafraichirPanier();
-        scanInput.focus();
+        if (scanInput) scanInput.focus();
     };
 
     var viderPanier = function viderPanier() {
         if (!confirm('Vider tout le panier ?')) return;
         panier = {};
         rafraichirPanier();
-        scanInput.focus();
+        if (scanInput) scanInput.focus();
     };
 
     window.viderPanier = viderPanier;
@@ -588,6 +609,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    if (panierTbody) {
     panierTbody.addEventListener('click', function (e) {
         var btnDecrease = e.target.closest('.btn-decrease');
         var btnIncrease = e.target.closest('.btn-increase');
@@ -604,6 +626,7 @@ document.addEventListener('DOMContentLoaded', function () {
             supprimerLigne(id);
         }
     });
+    } // fin if (panierTbody)
 
     var quickPayContainer = document.getElementById('quickPayContainer');
     if (quickPayContainer) {
@@ -627,7 +650,10 @@ document.addEventListener('DOMContentLoaded', function () {
     function chercherClients(terme) {
         if (!clientResults || !terme.trim()) { cacherResultats(); return; }
         fetch(BASE + 'api/index.php?route=clients/search&q=' + encodeURIComponent(terme.trim()))
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function (data) {
                 var liste = (data && data.clients) || [];
                 if (liste.length === 0) {
@@ -645,7 +671,6 @@ document.addEventListener('DOMContentLoaded', function () {
                             '<span class="badge text-bg-primary">' + (c.points_fidelite || 0) + ' pts</span>' +
                             '</button>';
                     }).join('');
-                    clientResults.style.display = 'block';
                     clientResults.querySelectorAll('button[data-client]').forEach(function (btn) {
                         btn.addEventListener('click', function () {
                             var c = JSON.parse(btn.dataset.client);
@@ -757,7 +782,7 @@ document.addEventListener('DOMContentLoaded', function () {
             lblRemiseFidelite.innerHTML = '<span class="text-danger">Minimum ' + FIDELITE.minPoints + ' points pour une remise.</span>';
             return 0;
         }
-        var remise = Math.round(usage * FIDELITE.valeurPoint) / 100;
+        var remise = Math.round(Math.round(usage * FIDELITE.valeurPoint * 100) / 100) / 100;
         lblRemiseFidelite.innerHTML = usage > 0
             ? '<strong>' + formatMoney(remise) + '</strong> de remise — ' + usage + ' points'
             : 'Saisissez le nombre de points à utiliser.';
@@ -780,14 +805,14 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         if (lignes.length === 0) {
-            panierTbody.innerHTML =
+            if (panierTbody) panierTbody.innerHTML =
                 '<tr><td colspan="5" class="text-center text-muted py-5">' +
                 '<i class="bi bi-cart-x fs-1 d-block"></i>' +
                 'Panier vide — scannez un produit pour commencer.' +
                 '</td></tr>';
-            btnValider.disabled = true;
+            if (btnValider) btnValider.disabled = true;
         } else {
-            panierTbody.innerHTML = lignes.map(function (l) {
+            if (panierTbody) panierTbody.innerHTML = lignes.map(function (l) {
                 var sousTotal = l.article.prix_unitaire * l.qte;
                 var estPoids = !!l.article.vente_au_poids;
                 totalHt += sousTotal;
@@ -838,15 +863,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     '</td>' +
                     '</tr>';
             }).join('');
-            btnValider.disabled = false;
+            if (btnValider) btnValider.disabled = false;
         }
 
         var montantTva = totalTva;
         totalBrut = totalHt + montantTva;
 
-        totalHtEl.textContent    = formatMoney(totalHt);
+        if (totalHtEl) totalHtEl.textContent    = formatMoney(totalHt);
         if (tvaDisplay) tvaDisplay.textContent = formatMoney(montantTva);
-        nbArticlesEl.textContent = nbArticles;
+        if (nbArticlesEl) nbArticlesEl.textContent = nbArticles;
 
         mettreAJourTotaux();
         recalculerPaiement();
@@ -855,9 +880,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // Met à jour le total TTC affiché (brut − remise fidélité) et le champ caché
     function mettreAJourTotaux() {
         var ttc = Math.max(0, totalBrut - calculerRemiseFidelite());
-        totalTtcEl.textContent   = formatMoney(ttc);
-        totalTtcEl.dataset.raw   = ttc.toFixed(2);
-        totalTtcEl.dataset.brut  = totalBrut.toFixed(2);
+        if (totalTtcEl) {
+            totalTtcEl.textContent   = formatMoney(ttc);
+            totalTtcEl.dataset.raw   = ttc.toFixed(2);
+            totalTtcEl.dataset.brut  = totalBrut.toFixed(2);
+        }
         var inpTotalTtc = document.getElementById('inpTotalTtc');
         if (inpTotalTtc) inpTotalTtc.value = ttc.toFixed(2);
         return ttc;
@@ -886,9 +913,9 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.classList.add('active');
             modeActif = btn.dataset.mode;
 
-            zoneEspeces.classList.toggle('d-none', modeActif !== 'Especes');
-            zoneMobile.classList.toggle('d-none', modeActif !== 'Mobile_Money');
-            zoneCarte.classList.toggle('d-none', modeActif !== 'Carte_Bancaire');
+            zoneEspeces && zoneEspeces.classList.toggle('d-none', modeActif !== 'Especes');
+            zoneMobile && zoneMobile.classList.toggle('d-none', modeActif !== 'Mobile_Money');
+            zoneCarte && zoneCarte.classList.toggle('d-none', modeActif !== 'Carte_Bancaire');
 
             if (modeActif === 'Mobile_Money' && montantMobile) {
                 montantMobile.focus();
@@ -905,9 +932,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function recalculerPaiement() {
         var ttc = mettreAJourTotaux();
-        var especes = parseFloat(inpMontantPaye?.value || 0);
-        var mobile = parseFloat(montantMobile?.value || 0);
-        var carte = parseFloat(montantCarte?.value || 0);
+        var especes = parseFloat(inpMontantPaye?.value) || 0;
+        var mobile = parseFloat(montantMobile?.value) || 0;
+        var carte = parseFloat(montantCarte?.value) || 0;
 
         var totalPaye = especes + mobile + carte;
         var reste = ttc - totalPaye;
@@ -941,7 +968,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Activer/désactiver le bouton
         if (btnValider) {
             var panierVide = Object.keys(panier).length === 0;
-            btnValider.disabled = panierVide || totalPaye < ttc || ttc <= 0;
+            btnValider.disabled = panierVide || montantInsuffisant(totalPaye, ttc) || ttc <= 0;
         }
     }
 
@@ -955,12 +982,12 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        var ttc = parseFloat(document.getElementById('inpTotalTtc')?.value || 0);
-        var especes = parseFloat(inpMontantPaye?.value || 0);
-        var mobile = parseFloat(montantMobile?.value || 0);
-        var carte = parseFloat(montantCarte?.value || 0);
+        var ttc = parseFloat(document.getElementById('inpTotalTtc')?.value) || 0;
+        var especes = parseFloat(inpMontantPaye?.value) || 0;
+        var mobile = parseFloat(montantMobile?.value) || 0;
+        var carte = parseFloat(montantCarte?.value) || 0;
         var totalPaye = especes + mobile + carte;
-        if (totalPaye < ttc) {
+        if (isNaN(totalPaye) || montantInsuffisant(totalPaye, ttc)) {
             e.preventDefault();
             alerter('Le montant payé est insuffisant (' + formatMoney(totalPaye) + ' / ' + formatMoney(ttc) + ').', 'danger');
             return;
@@ -1085,14 +1112,13 @@ document.addEventListener('DOMContentLoaded', function () {
         wrapper.innerHTML = escapeHtml(message) +
             ' <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
         if (zoneAlerte) zoneAlerte.appendChild(wrapper);
-        if (type === 'success' || type === 'info') {
-            setTimeout(function () {
-                if (wrapper.parentNode) {
-                    wrapper.classList.remove('show');
-                    setTimeout(function () { wrapper.remove(); }, 200);
-                }
-            }, 4000);
-        }
+        var delay = (type === 'success' || type === 'info') ? 4000 : 8000;
+        setTimeout(function () {
+            if (wrapper.parentNode) {
+                wrapper.classList.remove('show');
+                setTimeout(function () { wrapper.remove(); }, 200);
+            }
+        }, delay);
     }
 
     function formatMoney(n) {

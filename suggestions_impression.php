@@ -10,8 +10,10 @@ exiger_role(ROLE_DIRECTEUR, ROLE_MAGASINIER);
 $u = user_courant();
 $magasin_id = user_magasin_id();
 $articles = db_articles_low_stock_with_supplier($pdo, 100, $magasin_id);
-$groupes  = generate_restock_list_by_supplier(is_array($articles) ? $articles : []);
-$nb_total = is_array($articles) ? count($articles) : 0;
+$articles = is_array($articles) ? $articles : [];
+$groupes  = generate_restock_list_by_supplier($articles);
+$groupes  = is_array($groupes) ? $groupes : [];
+$nb_total = count($articles);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -23,51 +25,51 @@ $nb_total = is_array($articles) ? count($articles) : 0;
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        
-        body { 
-            background-color: #f3f4f6; 
-            color: #1f2937; 
-            font-family: 'poppins', sans-serif;
-            font-size: 13px; 
+
+        body {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
-        
-        .page-a4 { 
-            width: 29.7cm; 
-            min-height: 21cm; 
-            padding: 2cm; 
-            margin: 2rem auto; 
+
+        .page-a4 {
+            width: 29.7cm;
+            min-height: 21cm;
+            padding: 2cm;
+            margin: 2rem auto;
             background: #fff;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             border-radius: 8px;
         }
-        
-        .print-header { 
-            border-bottom: 2px solid #f3f4f6; 
-            padding-bottom: 20px; 
-            margin-bottom: 30px; 
+
+        .print-header {
+            border-bottom: 2px solid #f3f4f6;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
         }
-        
+
         .shop-name {
             font-size: 1.6rem;
             font-weight: 700;
             letter-spacing: -0.03em;
             color: #111827;
         }
-        
+
         .doc-title {
             font-size: 1.4rem;
             font-weight: 700;
             letter-spacing: -0.02em;
             color: #dc2626;
         }
-        
-        .supplier-section { 
-            page-break-inside: avoid; 
-            margin-bottom: 35px; 
+
+        .supplier-section {
+            page-break-inside: avoid;
+            margin-bottom: 35px;
         }
-        
+
         .supplier-header {
             background-color: #f9fafb;
             border-left: 4px solid #4f46e5;
@@ -76,15 +78,15 @@ $nb_total = is_array($articles) ? count($articles) : 0;
             color: #374151;
             border-radius: 0 6px 6px 0;
         }
-        
+
         .table {
             margin-top: 10px;
             border-color: #e5e7eb;
         }
-        
-        .table th { 
-            background-color: #f3f4f6 !important; 
-            color: #4b5563 !important; 
+
+        .table th {
+            background-color: #f3f4f6 !important;
+            color: #4b5563 !important;
             font-weight: 600;
             text-transform: uppercase;
             font-size: 11px;
@@ -95,17 +97,17 @@ $nb_total = is_array($articles) ? count($articles) : 0;
         .table td {
             padding: 10px 12px;
         }
-        
+
         .badge-stock {
             padding: 4px 8px;
             font-weight: 600;
             border-radius: 4px;
             font-size: 11px;
         }
-        
+
         .badge-danger-soft { background-color: #ffeeef; color: #dc2626; }
         .badge-warning-soft { background-color: #fffbeb; color: #d97706; }
-        
+
         @media print {
             body { background: #fff; margin: 0; padding: 0; }
             .page-a4 { width: auto; min-height: auto; padding: 0; margin: 0; box-shadow: none; border-radius: 0; }
@@ -166,15 +168,16 @@ $nb_total = is_array($articles) ? count($articles) : 0;
         </div>
     <?php else: ?>
         <?php foreach ($groupes as $g): ?>
+            <?php $nb_refs = count($g['articles'] ?? []); ?>
             <div class="supplier-section">
                 <!-- Bloc Fournisseur -->
                 <div class="supplier-header d-flex justify-content-between align-items-center">
                     <span>
-                        <i class="bi bi-truck me-2 text-primary"></i> 
+                        <i class="bi bi-truck me-2 text-primary"></i>
                         <?= h($g['fournisseur_nom'] ?? 'Sans fournisseur désigné') ?>
                     </span>
                     <span class="text-muted small fw-normal">
-                        <?= count($g['articles']) ?> référence<?= count($g['articles']) > 1 ? 's' : '' ?>
+                        <?= $nb_refs ?> référence<?= $nb_refs > 1 ? 's' : '' ?>
                     </span>
                 </div>
 
@@ -203,7 +206,8 @@ $nb_total = is_array($articles) ? count($articles) : 0;
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($g['articles'] as $a): ?>
+                        <?php foreach (($g['articles'] ?? []) as $a): ?>
+                            <?php $qte = (int)($a['quantite_stock'] ?? 0); ?>
                             <tr>
                                 <td>
                                     <span class="fw-semibold text-dark"><?= h($a['nom'] ?? '') ?></span>
@@ -211,11 +215,11 @@ $nb_total = is_array($articles) ? count($articles) : 0;
                                 <td><code class="text-secondary"><?= h($a['code_barre'] ?? '—') ?></code></td>
                                 <td class="text-muted"><?= h($a['emplacement'] ?? '—') ?></td>
                                 <td class="text-center">
-                                    <span class="badge-stock <?= $a['quantite_stock'] == 0 ? 'badge-danger-soft' : 'badge-warning-soft' ?>">
-                                        <?= $a['quantite_stock'] == 0 ? 'Rupture' : $a['quantite_stock'] . ' unité' . ($a['quantite_stock'] > 1 ? 's' : '') ?>
+                                    <span class="badge-stock <?= $qte === 0 ? 'badge-danger-soft' : 'badge-warning-soft' ?>">
+                                        <?= $qte === 0 ? 'Rupture' : $qte . ' unité' . ($qte > 1 ? 's' : '') ?>
                                     </span>
                                 </td>
-                                <td class="text-center text-secondary fw-medium"><?= $a['seuil_alerte'] ?></td>
+                                <td class="text-center text-secondary fw-medium"><?= h($a['seuil_alerte'] ?? '—') ?></td>
                                 <td class="text-end fw-medium"><?= money($a['prix_vente'] ?? 0) ?></td>
                             </tr>
                         <?php endforeach; ?>
@@ -227,8 +231,18 @@ $nb_total = is_array($articles) ? count($articles) : 0;
 </div>
 
 <script nonce="<?= h(csp_nonce()) ?>">
-    document.getElementById('btnPrint').addEventListener('click', function () { window.print(); });
-    document.getElementById('btnClose').addEventListener('click', function () { window.close(); });
+    (function() {
+        var btnPrint = document.getElementById('btnPrint');
+        var btnClose = document.getElementById('btnClose');
+        if (btnPrint) btnPrint.addEventListener('click', function () { window.print(); });
+        if (btnClose) btnClose.addEventListener('click', function () {
+            window.close();
+            // Fallback si la fenêtre n'a pas été ouverte via window.open()
+            setTimeout(function () {
+                if (!window.closed) window.history.back();
+            }, 150);
+        });
+    })();
 </script>
 
 </body>

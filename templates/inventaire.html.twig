@@ -270,6 +270,11 @@
     const searchInput  = document.getElementById('articleSearch');
     const suggestions  = document.getElementById('articleSuggestions');
 
+    function escapeHtml(str) {
+        if (str == null) return '';
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
     function selectArticle(art) {
         articleId.value = art.id;
         scanInput.value = art.nom + ' [' + art.code_barre + ']';
@@ -298,7 +303,7 @@
             a.nom.toLowerCase().includes(q) || (a.code_barre && a.code_barre.includes(q))
         ).slice(0, 15);
         suggestions.innerHTML = found.map(a =>
-            `<button type="button" class="list-group-item list-group-item-action py-1" data-id="${a.id}">${a.nom} <code>${a.code_barre}</code></button>`
+            '<button type="button" class="list-group-item list-group-item-action py-1" data-id="' + a.id + '">' + escapeHtml(a.nom) + ' <code>' + escapeHtml(a.code_barre) + '</code></button>'
         ).join('');
         suggestions.querySelectorAll('button').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -334,7 +339,7 @@
                     // Rafraîchir le tableau après 600ms
                     setTimeout(() => location.reload(), 1200);
                 } else {
-                    saisieMsg.innerHTML = `<span class="text-danger">${data.msg}</span>`;
+                    saisieMsg.innerHTML = '<span class="text-danger">' + escapeHtml(data.msg) + '</span>';
                 }
             })
             .catch(() => { saisieMsg.innerHTML = '<span class="text-danger">Erreur réseau.</span>'; })

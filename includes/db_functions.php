@@ -423,7 +423,7 @@ function db_articles_achat_recommandes(PDO $pdo, int $magasin_id, int $jours_cou
         $seuil = (int)($a['seuil_alerte'] ?? 0);
         $vendus = (int)($ventes_par_article[$id]['quantite_vendue'] ?? 0);
         $nb_ventes = (int)($ventes_par_article[$id]['nb_ventes'] ?? 0);
-        $vitesse = $vendus / $jours_etude;
+        $vitesse = $jours_etude > 0 ? $vendus / $jours_etude : 0;
 
         $a['quantite_vendue_30j'] = $vendus;
         $a['nb_ventes_30j'] = $nb_ventes;
@@ -1088,7 +1088,7 @@ function db_login_attempt_insert(PDO $pdo, string $ip, string $login): void {
         $stmt = $pdo->prepare("INSERT INTO login_attempts (ip_address, login) VALUES (?, ?)");
         $stmt->execute([$ip, $login]);
     } catch (PDOException $e) {
-        // Table absente — on ignore
+        error_log('[RATE-LIMIT] Tentative login non enregistree (table absente?): ' . $e->getMessage());
     }
 }
 
@@ -1113,7 +1113,7 @@ function db_login_attempt_clear(PDO $pdo, string $ip, string $login): void {
     try {
         $pdo->prepare("DELETE FROM login_attempts WHERE ip_address = ? AND login = ?")->execute([$ip, $login]);
     } catch (PDOException $e) {
-        // Table absente — on ignore
+        error_log('[RATE-LIMIT] Tentatives non supprimees (table absente?): ' . $e->getMessage());
     }
 }
 
@@ -2925,7 +2925,7 @@ function db_retour_creer(PDO $pdo, int $facture_id, array $lignes_retour, string
     // Calculer le montant total du retour
     $montantTotal = 0.0;
     foreach ($lignes_retour as $l) {
-        $montantTotal += (float)$l['prix_unitaire'] * (int)$l['quantite'];
+        $montantTotal += round((float)$l['prix_unitaire'] * (int)$l['quantite'], 2);
     }
 
     $retourId = db_retour_insert($pdo, [
@@ -3549,8 +3549,9 @@ function db_archive_get_by_periode(PDO $pdo, string $debut, string $fin, int $ma
  * JournalCode = VT (ventes), CompteNum 411/7070/4457 + modes de paiement.
  */
 function db_journal_ventes(PDO $pdo, string $debut, string $fin, int $magasin_id = 0): array {
-    $sql = "SELECT f.*, u.nom AS vendeur_nom FROM factures f
+    $sql = "SELECT f.*, u.nom AS vendeur_nom, cl.nom AS client_nom FROM factures f
             LEFT JOIN utilisateurs u ON u.id = f.utilisateur_id
+            LEFT JOIN clients cl ON cl.id = f.client_id
             WHERE DATE(f.date_facture) BETWEEN ? AND ? AND f.statut IN ('Payee','Annulee')";
     $params = [$debut, $fin];
     if ($magasin_id > 0) {
@@ -3731,7 +3732,7 @@ function db_journal_achats(PDO $pdo, string $debut, string $fin, int $magasin_id
         $lignes = db_commande_fournisseur_lignes_get($pdo, (int)$c['id']);
         $total = 0.0;
         foreach ($lignes as $l) {
-            $total += (float)($l['prix_unitaire'] ?? 0) * (float)($l['qte_recue'] ?? 0);
+            $total += round((float)($l['prix_achat_unitaire'] ?? 0) * (float)($l['quantite_recue'] ?? 0), 2);
         }
         $total = round($total * (float)($c['taux_change'] ?? 1), 2);
         if ($total <= 0) continue;
@@ -3932,7 +3933,7 @@ function db_client_anonymiser(PDO $pdo, int $id, ?string $motif = null): bool {
     $tag = 'ANON-' . dechex(crc32($client['email'] ?? $client['nom'] ?? (string)$id));
     $st = $pdo->prepare(
         "UPDATE clients SET
-            nom = ?, raison_sociale = NULL, siret = NULL, adresse = NULL,
+            nom = ?, raison_sociale = NULL, nif = NULL, rccm = NULL, siret = NULL, adresse = NULL,
             telephone = NULL, email = NULL, date_naissance = NULL,
             code_fidelite = NULL, points_fidelite = 0,
             consentement_fidelite = 0, date_consentement = NULL,
@@ -4041,7 +4042,7 @@ function db_client_utiliser_points(PDO $pdo, int $client_id, int $points_a_utili
     $usage = min($dispo, max(0, $points_a_utiliser));
     if ($usage < $min) return 0.0;
 
-    $remise = round($usage * $valeur_point / 100, 2);
+    $remise = round(round($usage * $valeur_point, 2) / 100, 2);
     if ($usage > 0) {
         $pdo->beginTransaction();
         try {

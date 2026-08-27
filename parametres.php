@@ -127,7 +127,7 @@ $sections = [
             <ol class="mb-1 ps-3 mt-1">
                 <li><strong>Mode d\'envoi</strong> — « File d\'attente » (recommandé) : les e-mails sont mis en file puis expédiés par le worker
                     <code>bin/emails_worker.php</code>, à planifier en tâche cron toutes les minutes
-                    (ex. <code>* * * * * php C:/wamp64/www/eSotck/bin/emails_worker.php</code>).
+                    (ex. <code>* * * * * php C:/wamp64/www/eStock/bin/emails_worker.php</code>).
                     « Envoi direct » : envoi immédiat via la fonction <code>mail()</code> de PHP (bloquant).</li>
                 <li><strong>Adresse expéditrice</strong> — une adresse réelle du domaine de la boutique (ex. <code>noreply@votre-domaine.com</code>).</li>
                 <li><strong>URL publique</strong> — l\'adresse d\'accès du site vu par les clients (indispensable pour les liens de désinscription
@@ -137,7 +137,7 @@ $sections = [
                     <code>php.ini</code> (<code>sendmail_path</code> / SMTP) ou déployez le site chez un hébergeur.</li>
             </ol>
             <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#aideCronEmail">Voir le réglage cron type</button>
-            <pre class="collapse border rounded bg-light p-2 mt-2 mb-0 small" id="aideCronEmail"><code>* * * * * php C:/wamp64/www/eSotck/bin/emails_worker.php &gt;&gt; /tmp/emails_worker.log 2&gt;&amp;1</code></pre>',
+            <pre class="collapse border rounded bg-light p-2 mt-2 mb-0 small" id="aideCronEmail"><code>* * * * * php C:/wamp64/www/eStock/bin/emails_worker.php &gt;&gt; /tmp/emails_worker.log 2&gt;&amp;1</code></pre>',
     ],
 ];
 
@@ -156,6 +156,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
         flash_error('Token de sécurité invalide.');
         redirect('parametres.php');
     }
+
+    // --- Étape 1 : calcul et validation de TOUTES les valeurs avant tout enregistrement ---
+    // (évite une sauvegarde partielle si un champ obligatoire est vide/invalide en cours de boucle)
+    $valeurs_calculees = [];
+    $erreurs = [];
+
     foreach ($champs as $cle => $champ) {
         $type = $champ['type'] ?? 'text';
 
@@ -185,8 +191,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
             if ($valeur === '') $valeur = (string)($champ['defaut'] ?? 'XOF');
         }
 
-        param_save($cle, $valeur);
+        // Champs obligatoires : non vérifié auparavant côté serveur (le HTML "required"
+        // ne protège pas contre un POST envoyé directement, hors formulaire).
+        if (!empty($champ['required']) && $valeur === '') {
+            $erreurs[] = $champ['label'] . ' est obligatoire.';
+        }
 
+        // Format e-mail : rejeter une valeur non vide mais invalide plutôt que de
+        // l'enregistrer telle quelle (utilisée ensuite pour l'expédition de mails).
+        if ($type === 'email' && $valeur !== '' && !filter_var($valeur, FILTER_VALIDATE_EMAIL)) {
+            $erreurs[] = $champ['label'] . ' doit être une adresse e-mail valide.';
+        }
+
+        // Respect de maxlength côté serveur (défense en profondeur contre un POST direct).
+        if (isset($champ['maxlength']) && mb_strlen($valeur) > (int)$champ['maxlength']) {
+            $valeur = mb_substr($valeur, 0, (int)$champ['maxlength']);
+        }
+
+        // Un séparateur décimal vide casse l'affichage monétaire (ex: "100050" au lieu
+        // de "1000,50"). Le séparateur des milliers, lui, peut légitimement être vide.
+        if ($cle === 'separateur_decimal' && $valeur === '') {
+            $valeur = ',';
+        }
+
+        $valeurs_calculees[$cle] = $valeur;
+    }
+
+    if (!empty($erreurs)) {
+        flash_error(implode(' ', $erreurs));
+        redirect('parametres.php');
+    }
+
+    // --- Étape 2 : enregistrement, une fois toutes les valeurs validées ---
+    foreach ($valeurs_calculees as $cle => $valeur) {
+        param_save($cle, $valeur);
         if ($cle === 'langue') {
             $_SESSION['langue'] = $valeur;
         }
@@ -239,8 +277,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
         'actif'               => isset($_POST['actif']) ? 1 : 0,
     ];
 
-    if ($promo_data['nom'] === '' || $promo_data['pourcentage_remise'] <= 0) {
-        flash_error('Le nom et le pourcentage de remise sont obligatoires.');
+    // Validation complète : le nom, le pourcentage ET le champ spécifique à la
+    // condition choisie (sans ça, une règle "Péremption" sans jours limite serait
+    // enregistrée mais ne se déclencherait jamais, silencieusement).
+    $erreurs_promo = [];
+    if ($promo_data['nom'] === '') {
+        $erreurs_promo[] = 'Le nom de la règle est obligatoire.';
+    }
+    if ($promo_data['pourcentage_remise'] <= 0 || $promo_data['pourcentage_remise'] > 100) {
+        $erreurs_promo[] = 'Le pourcentage de remise doit être compris entre 0 et 100.';
+    }
+    if ($promo_data['condition_type'] === 'PEREMPTION_PROCHE') {
+        if ($promo_data['jours_limite'] === null || $promo_data['jours_limite'] <= 0) {
+            $erreurs_promo[] = 'Le nombre de jours limite est obligatoire pour une règle de péremption.';
+        }
+    } elseif ($promo_data['condition_type'] === 'SURSTOCK') {
+        if ($promo_data['seuil_stock'] === null || $promo_data['seuil_stock'] <= 0) {
+            $erreurs_promo[] = 'Le seuil de stock est obligatoire pour une règle de surstock.';
+        }
+    }
+
+    if (!empty($erreurs_promo)) {
+        flash_error(implode(' ', $erreurs_promo));
         redirect('parametres.php?tab=promotions');
     }
 
@@ -655,6 +713,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var grpSeuil = document.getElementById('grpSeuil');
 
     function toggleConditionFields() {
+        if (!promoType || !grpJours || !grpSeuil) return;
         if (promoType.value === 'PEREMPTION_PROCHE') {
             grpJours.style.display = '';
             grpSeuil.style.display = 'none';
@@ -663,31 +722,39 @@ document.addEventListener('DOMContentLoaded', function() {
             grpSeuil.style.display = '';
         }
     }
-    promoType.addEventListener('change', toggleConditionFields);
-    toggleConditionFields();
+    if (promoType) {
+        promoType.addEventListener('change', toggleConditionFields);
+        toggleConditionFields();
+    }
 
     document.querySelectorAll('.btn-edit-promo').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            document.getElementById('promoModalTitle').textContent = 'Modifier la règle';
-            document.getElementById('promoId').value = btn.dataset.id;
-            document.getElementById('promoNom').value = btn.dataset.nom;
-            document.getElementById('promoType').value = btn.dataset.type;
-            document.getElementById('promoJours').value = btn.dataset.jours;
-            document.getElementById('promoSeuil').value = btn.dataset.seuil;
-            document.getElementById('promoRemise').value = btn.dataset.remise;
-            document.getElementById('promoActif').checked = btn.dataset.actif === '1';
+            var el;
+            el = document.getElementById('promoModalTitle'); if (el) el.textContent = 'Modifier la règle';
+            el = document.getElementById('promoId'); if (el) el.value = btn.dataset.id;
+            el = document.getElementById('promoNom'); if (el) el.value = btn.dataset.nom;
+            el = document.getElementById('promoType'); if (el) el.value = btn.dataset.type;
+            el = document.getElementById('promoJours'); if (el) el.value = btn.dataset.jours;
+            el = document.getElementById('promoSeuil'); if (el) el.value = btn.dataset.seuil;
+            el = document.getElementById('promoRemise'); if (el) el.value = btn.dataset.remise;
+            el = document.getElementById('promoActif'); if (el) el.checked = btn.dataset.actif === '1';
             toggleConditionFields();
-            new bootstrap.Modal(document.getElementById('modalPromotion')).show();
+            var modal = document.getElementById('modalPromotion');
+            if (modal) new bootstrap.Modal(modal).show();
         });
     });
 
-    document.getElementById('btnAjouterPromo').addEventListener('click', function() {
-        document.getElementById('promoModalTitle').textContent = 'Nouvelle règle';
-        document.getElementById('promoId').value = '';
-        document.getElementById('formPromotion').reset();
-        document.getElementById('promoActif').checked = true;
-        toggleConditionFields();
-    });
+    var btnAjouter = document.getElementById('btnAjouterPromo');
+    if (btnAjouter) {
+        btnAjouter.addEventListener('click', function() {
+            var el;
+            el = document.getElementById('promoModalTitle'); if (el) el.textContent = 'Nouvelle règle';
+            el = document.getElementById('promoId'); if (el) el.value = '';
+            el = document.getElementById('formPromotion'); if (el) el.reset();
+            el = document.getElementById('promoActif'); if (el) el.checked = true;
+            toggleConditionFields();
+        });
+    }
 });
 </script>
 <?php endif; // fin onglet promotions ?>

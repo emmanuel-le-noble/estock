@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ticket {{ facture.numero_facture }}</title>
-    <link rel="icon" type="image/x-icon" href="{{ base_url }}assets/images/logo-eStock.ico">
+    <link rel="icon" type="image/x-icon" href="{{ base_url|trim('/', 'right') }}/assets/images/logo-eStock.ico">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -70,7 +70,7 @@
         </tr>
         <tr>
             <td>Date</td>
-            <td class="text-right">{{ facture.date_facture is defined ? facture.date_facture|date('d/m/Y H:i') : '' }}</td>
+            <td class="text-right">{{ facture.date_facture is defined and facture.date_facture ? facture.date_facture|date('d/m/Y H:i') : '' }}</td>
         </tr>
         <tr>
             <td>Vendeur</td>
@@ -98,16 +98,19 @@
         </thead>
         <tbody>
         {% for ligne in lignes %}
+            {% set nom_article = ligne.article_nom|default('') %}
+            {% set qte = ligne.quantite|default(0) %}
+            {% set pu = ligne.prix_unitaire|default(0) %}
             <tr>
                 <td>
-                    {{ ligne.article_nom|default('')|slice(0, 24) }}
+                    {{ nom_article|length > 24 ? nom_article|slice(0, 23) ~ '…' : nom_article }}
                     {% if ligne.remise_pct is defined and ligne.remise_pct %}
                         <br><span class="fs-sm">  -{{ ligne.remise_pct }}%</span>
                     {% endif %}
                 </td>
-                <td class="text-center">{{ ligne.quantite }}</td>
-                <td class="text-right">{{ ligne.prix_unitaire|number_format(decimals, '.', ' ') }}</td>
-                <td class="text-right fw-bold">{{ (ligne.prix_unitaire * ligne.quantite)|number_format(decimals, '.', ' ') }}</td>
+                <td class="text-center">{{ qte }}</td>
+                <td class="text-right">{{ pu|number_format(decimals|default(0), '.', ' ') }}</td>
+                <td class="text-right fw-bold">{{ (pu * qte)|number_format(decimals|default(0), '.', ' ') }}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -119,20 +122,20 @@
     <table>
         <tr>
             <td>Total HT</td>
-            <td class="text-right">{{ facture.total_ht|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+            <td class="text-right">{{ facture.total_ht|number_format(decimals|default(0), '.', ' ') }} {{ devise|default('') }}</td>
         </tr>
         {# --- TVA : ventilation multi-taux ou taux unique --- #}
-        {% if tva_resume is defined and tva_resume|length > 1 %}
+        {% if tva_resume is defined and tva_resume|length >= 1 %}
             {% for tv in tva_resume %}
             <tr>
-                <td>TVA {{ tv.taux|number_format(2, ',', ' ') }}%</td>
-                <td class="text-right">{{ tv.montant_tva|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+                <td>TVA {{ tv.taux|number_format(decimals|default(0), '.', ' ') }}%</td>
+                <td class="text-right">{{ tv.montant_tva|number_format(decimals|default(0), '.', ' ') }} {{ devise|default('') }}</td>
             </tr>
             {% endfor %}
-        {% elseif tva_taux > 0 %}
+        {% elseif tva_taux is defined and tva_taux > 0 %}
         <tr>
             <td>TVA ({{ tva_taux }}%)</td>
-            <td class="text-right">{{ (facture.total_ttc - facture.total_ht)|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+            <td class="text-right">{{ (facture.total_ttc - facture.total_ht)|number_format(decimals|default(0), '.', ' ') }} {{ devise|default('') }}</td>
         </tr>
         {% elseif regime_tpu is defined and regime_tpu %}
         <tr>
@@ -141,12 +144,12 @@
         {% endif %}
         <tr>
             <td class="fw-bold fs-lg">TOTAL TTC</td>
-            <td class="text-right fw-bold fs-lg">{{ facture.total_ttc|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+            <td class="text-right fw-bold fs-lg">{{ facture.total_ttc|number_format(decimals|default(0), '.', ' ') }} {{ devise|default('') }}</td>
         </tr>
         {% if facture.points_utilises is defined and facture.points_utilises > 0 %}
         <tr>
             <td>Dont remise fidélité (−{{ facture.points_utilises }} pts)</td>
-            <td class="text-right">{{ facture.remise_fidelite|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+            <td class="text-right">{{ facture.remise_fidelite|default(0)|number_format(decimals|default(0), '.', ' ') }} {{ devise|default('') }}</td>
         </tr>
         {% endif %}
     </table>
@@ -170,23 +173,23 @@
         {% for p in paiements %}
         <tr>
             <td>{{ p.mode_paiement|default('') }}</td>
-            <td class="text-right">{{ p.montant|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+            <td class="text-right">{{ p.montant|default(0)|number_format(decimals|default(0), '.', ' ') }} {{ devise|default('') }}</td>
         </tr>
         {% endfor %}
     {% else %}
         <tr>
             <td>Especes</td>
-            <td class="text-right">{{ facture.montant_paye|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+            <td class="text-right">{{ facture.montant_paye|default(0)|number_format(decimals|default(0), '.', ' ') }} {{ devise|default('') }}</td>
         </tr>
     {% endif %}
         <tr>
-            <td class="fw-bold">Montant paye</td>
-            <td class="text-right fw-bold">{{ facture.montant_paye|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+            <td class="fw-bold">Montant payé</td>
+            <td class="text-right fw-bold">{{ facture.montant_paye|default(0)|number_format(decimals|default(0), '.', ' ') }} {{ devise|default('') }}</td>
         </tr>
         {% if facture.monnaie_rendue is defined and facture.monnaie_rendue > 0 %}
         <tr>
             <td class="fw-bold">Monnaie rendue</td>
-            <td class="text-right fw-bold">{{ facture.monnaie_rendue|number_format(decimals, '.', ' ') }} {{ devise }}</td>
+            <td class="text-right fw-bold">{{ facture.monnaie_rendue|number_format(decimals|default(0), '.', ' ') }} {{ devise|default('') }}</td>
         </tr>
         {% endif %}
     </table>
@@ -206,19 +209,38 @@
 
 {# Script JsBarcode pour code-barres facture (impression) #}
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+{# Donnée transmise via un bloc JSON dédié : évite que l'éditeur (VSCode) confonde {{ }} avec un objet JS #}
+<script type="application/json" id="ticket-data">{"numeroFacture": {{ facture.numero_facture|json_encode|raw }}}</script>
+
 <script nonce="{{ csp_nonce_val|default('') }}">
-    try {
-        JsBarcode('#barcodeFacture', '{{ facture.numero_facture|e('js') }}', {
-            format: 'CODE128',
-            width: 1.2,
-            height: 30,
-            displayValue: true,
-            fontSize: 10,
-            margin: 2
-        });
-    } catch(e) {}
-    window.addEventListener('load', function() {
-        setTimeout(function() { window.print(); }, 400);
+    var numeroFacture = JSON.parse(document.getElementById('ticket-data').textContent).numeroFacture;
+
+    function genererCodeBarre() {
+        try {
+            if (typeof JsBarcode === 'undefined') {
+                return false;
+            }
+            JsBarcode('#barcodeFacture', numeroFacture, {
+                format: 'CODE128',
+                width: 1.2,
+                height: 30,
+                displayValue: true,
+                fontSize: 10,
+                margin: 2
+            });
+            return true;
+        } catch (e) {
+            console.warn('Code-barres non généré :', e);
+            return false;
+        }
+    }
+
+    window.addEventListener('load', function () {
+        // On tente le code-barres immédiatement, puis on lance l'impression
+        // sans attendre indéfiniment si la lib CDN n'a pas pu charger (mode hors-ligne).
+        genererCodeBarre();
+        setTimeout(function () { window.print(); }, 400);
     });
 </script>
 </body>

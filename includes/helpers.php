@@ -67,12 +67,12 @@ function extract_post_data(array $schema, string $global_redirect = ''): array {
                 break;
 
             case 'bool':
-                $val = !empty($raw) || $raw === '1';
+                $val = ($raw === '1' || $raw === 'true' || $raw === 'on');
                 break;
 
             case 'string':
             default:
-                $val = trim((string)($raw ?? $default ?? ''));
+                $val = (string)($raw ?? $default ?? '');
                 if (!empty($def['trim']) && $raw !== null) {
                     $val = trim($raw);
                 }
@@ -176,17 +176,31 @@ function validate_uniqueness(callable $check_fn, string $message, string $redire
  */
 function db_transaction(callable $callback, string $success_msg, string $error_msg, string $redirect_url): mixed {
     global $pdo;
+    $isNested = $pdo->inTransaction();
+    $savepoint = $isNested ? 'sp_' . bin2hex(random_bytes(4)) : null;
     try {
-        $pdo->beginTransaction();
+        if ($isNested) {
+            $pdo->exec("SAVEPOINT $savepoint");
+        } else {
+            $pdo->beginTransaction();
+        }
         $result = $callback($pdo);
-        $pdo->commit();
+        if ($isNested) {
+            $pdo->exec("RELEASE SAVEPOINT $savepoint");
+        } else {
+            $pdo->commit();
+        }
         if ($success_msg !== '') {
             flash_success($success_msg);
         }
         return $result;
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
-            $pdo->rollBack();
+            if ($isNested) {
+                $pdo->exec("ROLLBACK TO SAVEPOINT $savepoint");
+            } else {
+                $pdo->rollBack();
+            }
         }
         error_log('Erreur transaction: ' . $e->getMessage());
         if ($error_msg !== '') {
@@ -215,18 +229,19 @@ function process_stock_movement(PDO $pdo, int $article_id, string $type, int $qu
         throw new RuntimeException('Article introuvable.');
     }
     
-    // 2. Vérification du stock (Déjà géré et validé en amont)
-    if ($type !== 'Entree' && $quantite > (int)$art['quantite_stock']) {
+    // 2. Vérification du stock : uniquement pour les sorties réelles
+    $est_sortie = in_array($type, ['Sortie', 'Vente', 'Transfert'], true);
+    if ($est_sortie && $quantite > (int)$art['quantite_stock']) {
         throw new RuntimeException('Stock insuffisant pour cette sortie (' . (int)$art['quantite_stock'] . ' dispo).');
     }
     
-    // 3. ENTRÉE : On crée un lot UNIQUEMENT si l'utilisateur a fourni un numéro de lot (article périssable)
-    if ($type === 'Entree' && !empty($numero_lot) && $magasin_id > 0) {
+    // 3. ENTRÉE ou RETOUR_STOCK : On crée un lot UNIQUEMENT si l'utilisateur a fourni un numéro de lot (article périssable)
+    if (in_array($type, ['Entree', 'Retour_stock'], true) && !empty($numero_lot) && $magasin_id > 0) {
         db_lot_upsert($pdo, $article_id, $magasin_id, $numero_lot, $quantite, $date_peremption);
     }
     
-    // 4. SORTIE ou VENTE : Gestion hybride (Périssable VS Non Périssable)
-    if (($type === 'Sortie' || $type === 'Vente') && $magasin_id > 0) {
+    // 4. SORTIE, VENTE ou TRANSFERT : Gestion hybride (Périssable VS Non Périssable)
+    if (in_array($type, ['Sortie', 'Vente', 'Transfert'], true) && $magasin_id > 0) {
         // On récupère les lots existants pour cet article
         $lots_dispo = db_lots_by_article($pdo, $article_id, $magasin_id);
         $total_lots = !empty($lots_dispo) ? array_sum(array_column($lots_dispo, 'quantite')) : 0;
@@ -246,19 +261,20 @@ function process_stock_movement(PDO $pdo, int $article_id, string $type, int $qu
     // pondéré AVANT la mise à jour des quantités (la formule utilise le stock
     // d'avant-entrée). Les sorties/ventes consomment les couches FIFO
     // (valorisées au CUMP dans les statistiques).
-    if ($type === 'Entree' && $quantite > 0) {
+    if (in_array($type, ['Entree', 'Retour_stock'], true) && $quantite > 0) {
         $cout = ($cout_unitaire !== null && $cout_unitaire >= 0)
             ? $cout_unitaire
             : (float)($art['prix_achat'] ?? 0);
         if ($cout >= 0) {
             db_article_cump_entree($pdo, $article_id, $quantite, $cout, $motif, $magasin_id);
         }
-    } elseif ($type === 'Sortie' || $type === 'Vente') {
+    } elseif ($est_sortie) {
         db_article_couts_consommer($pdo, $article_id, $quantite);
     }
 
     // 5bis. Mise à jour du stock par magasin (liaison classique du projet)
-    $delta = ($type === 'Entree') ? $quantite : -$quantite;
+    // Entrées et retours augmentent le stock ; sorties, ventes et transferts le diminuent.
+    $delta = in_array($type, ['Entree', 'Retour_stock'], true) ? $quantite : -$quantite;
     db_article_update_stock($pdo, $article_id, $delta, $magasin_id);
 
     // 6. Enregistrement systématique dans l'historique des mouvements
@@ -269,34 +285,11 @@ function process_stock_movement(PDO $pdo, int $article_id, string $type, int $qu
 }
 
 /**
- * Ajuste la quantité globale en stock d'un article spécifique.
- * Evite que le stock devienne négatif en cas de sortie supérieure au stock disponible.
- *
- * @param PDO $pdo Instance de connexion
- * @param int $articleId ID de l'article
- * @param string $type 'Entree' ou 'Sortie'
- * @param int $quantite Quantité à ajouter ou soustraire
- * @return bool
- */
-function db_article_update_stock_global(PDO $pdo, int $articleId, string $type, int $quantite): bool 
-{
-    if ($type === 'Entree') {
-        $sql = "UPDATE articles SET quantite_stock = quantite_stock + ? WHERE id = ?";
-    } elseif ($type === 'Sortie') {
-        $sql = "UPDATE articles SET quantite_stock = GREATEST(0, quantite_stock - ?) WHERE id = ?";
-    } else {
-        return false;
-    }
-    
-    $stmt = $pdo->prepare($sql);
-    return $stmt->execute([$quantite, $articleId]);
-}
-
-/**
  * Calculer le sous-total d'une ligne de facture.
+ * Arrondi à 2 décimales pour éviter les erreurs d'arrondi cumulées (float PHP).
  */
 function calc_line_subtotal(float $prix_unitaire, int $quantite): float {
-    return $prix_unitaire * $quantite;
+    return round($prix_unitaire * $quantite, 2);
 }
 
 /**
@@ -307,6 +300,9 @@ function calc_line_subtotal(float $prix_unitaire, int $quantite): float {
  * Lève RuntimeException si la demande est inférieure au seuil minimal.
  */
 function db_loyalite_verrouiller(PDO $pdo, int $client_id, int $points_demandes, float $total_ttc): array {
+    if (!$pdo->inTransaction()) {
+        throw new RuntimeException('db_loyalite_verrouiller doit être appelée dans une transaction.');
+    }
     $points_demandes = max(0, (int)$points_demandes);
     $min  = max(1, (int)param('fidelite_min_points_usage', '10'));
     $val  = (float)param('fidelite_valeur_point', '1');
@@ -327,7 +323,7 @@ function db_loyalite_verrouiller(PDO $pdo, int $client_id, int $points_demandes,
 
     return [
         'points' => $usage,
-        'remise' => round($usage * $val / 100, 2),
+        'remise' => round(round($usage * $val, 2) / 100, 2),
     ];
 }
 
@@ -427,9 +423,9 @@ function url_sign(string $base_url, int $id, array $extra = []): string {
     return generate_signed_url($base_url, $id, $extra);
 }
 
-function verify_url_signature(int $id, string $token, array $extra = []): bool {
+function verify_url_signature(int $id, string $token, array $extra = [], ?int $ts = null): bool {
     if ($token === '' || $id <= 0) return false;
-    $ts = (int)($_GET['ts'] ?? 0);
+    $ts = $ts ?? (int)($_GET['ts'] ?? 0);
     if ($ts <= 0 || (time() - $ts) > 86400) return false; // Expiration 24h
     $payload = (string)$id;
     ksort($extra);
@@ -578,14 +574,15 @@ function suivre_activite(string $action, ?string $details = null): void {
     try {
         $user = $_SESSION['user'] ?? null;
         $stmt = $pdo->prepare(
-            'INSERT INTO logs_activite (utilisateur_id, action, details, ip_address)
-             VALUES (:uid, :action, :details, :ip)'
+            'INSERT INTO logs_activite (utilisateur_id, action, details, ip_address, date_action)
+             VALUES (:uid, :action, :details, :ip, :date)'
         );
         $stmt->execute([
             ':uid'     => $user['id'] ?? null,
             ':action'  => $action,
             ':details' => $details,
             ':ip'      => $_SERVER['REMOTE_ADDR'] ?? null,
+            ':date'    => date('Y-m-d H:i:s'),
         ]);
     } catch (\Throwable $e) {
         error_log('Audit log error: ' . $e->getMessage());
@@ -917,6 +914,12 @@ function envoyer_email_notification(string $to, string $sujet, string $message_h
     $from = param('smtp_from', 'noreply@estock.local');
     $shop = param_shop_name();
 
+    // Sanitiser le sujet, l'adresse destinataire et l'expéditeur contre l'injection d'en-têtes
+    $sujet = str_replace(["\r", "\n"], '', $sujet);
+    $to = str_replace(["\r", "\n"], '', $to);
+    $from = str_replace(["\r", "\n"], '', $from);
+    $shop = str_replace(["\r", "\n"], '', $shop);
+
     $headers  = "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
     $headers .= "From: $shop <$from>\r\n";
@@ -976,9 +979,20 @@ function notifier_stock_faible_email(PDO $pdo): bool {
 
 /**
  * Récupérer l'adresse IP réelle du client avec gestion des reverse-proxies / CDN.
+ *
+ * Les en-têtes proxy (X-Forwarded-For, etc.) ne sont utilisés que si
+ * l'application est configurée pour fonctionner derrière un reverse proxy
+ * (paramètre 'behind_proxy' = 1). Sinon, seul REMOTE_ADDR est utilisé,
+ * ce qui empêche l'usurpation d'IP par un attaquant accédant directement
+ * au serveur.
  */
 function obtenir_adresse_ip_client(): string {
-    $ipKeys = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_CLIENT_IP', 'REMOTE_ADDR'];
+    // En mode direct (pas de proxy), uniquement REMOTE_ADDR
+    if ((int)param('behind_proxy', 0) !== 1) {
+        return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    }
+    // Derrière un reverse proxy : priorité à Cloudflare puis X-Forwarded-For
+    $ipKeys = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_CLIENT_IP'];
     foreach ($ipKeys as $key) {
         if (!empty($_SERVER[$key])) {
             foreach (explode(',', $_SERVER[$key]) as $ip) {

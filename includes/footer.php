@@ -17,8 +17,13 @@ if ('serviceWorker' in navigator) {
                 });
             }
         });
-    }).catch(function(){});
+    }).catch(function(err){
+        console.warn('Service Worker registration failed:', err);
+    });
 }
+window.addEventListener('unhandledrejection', function(e) {
+    console.error('Unhandled promise rejection:', e.reason);
+});
 </script>
 </body>
 </html>

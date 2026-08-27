@@ -154,7 +154,7 @@
                 });
             });
             var saved = localStorage.getItem('eStock_doc_tab');
-            if (saved) {
+            if (saved && /^#[a-zA-Z0-9_-]+$/.test(saved)) {
                 var btn = document.querySelector('.nav-tabs button[data-bs-target="' + saved + '"]');
                 if (btn) { bootstrap.Tab.getOrCreateInstance(btn).show(); }
             }

@@ -40,6 +40,12 @@ function _load_dotenv(string $path): void {
 _load_dotenv(__DIR__ . '/../.env');
 
 // ============================================================
+//  0ter. FUSEAU HORAIRE (priorité : .env > BDD > défaut Africa/Lome)
+// ============================================================
+$_app_tz = getenv('APP_TIMEZONE') ?: 'Africa/Lome';
+// Sera confirmé/ajusté après chargement des paramètres BDD (voir plus bas)
+
+// ============================================================
 //  1. PARAMÈTRES DE CONNEXION  (à adapter à votre WampServer)
 // ============================================================
 
@@ -234,12 +240,16 @@ require_once __DIR__ . '/../includes/security_headers.php';
 // ============================================================
 require_once __DIR__ . '/parametres.php';
 
-// Appliquer le fuseau horaire configuré
-$tz = param('fuseau_horaire', 'Africa/Lome');
+// Appliquer le fuseau horaire configuré (priorité BDD > .env > défaut)
+$tz_db = param('fuseau_horaire', '');
+$tz = $tz_db !== '' ? $tz_db : $_app_tz;
 if (!in_array($tz, DateTimeZone::listIdentifiers(), true)) {
     $tz = 'Africa/Lome';
 }
 date_default_timezone_set($tz);
+
+// Forcer aussi via ini_set (redondant mais sûr)
+ini_set('date.timezone', $tz);
 
 // [CORRECTION BUG 4 - Internationalisation Middleware]
 if (!isset($_SESSION['langue'])) {
@@ -636,7 +646,7 @@ $loader = new \Twig\Loader\FilesystemLoader(__DIR__ . '/../templates');
 $twig = new \Twig\Environment($loader, [
     'cache'       => false,
     'auto_reload' => true,
-    'strict_variables' => false,
+    'strict_variables' => $__is_production,
 ]);
 
 $twig->addFunction(new \Twig\TwigFunction('money', 'money'));

@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const row = e.target.closest('tr');
             const paInput = row.querySelector('.input-pa');
             if (paInput && (!paInput.value || paInput.value == 0)) {
-                paInput.value = parseFloat(pa).toFixed(2);
+                paInput.value = (parseFloat(pa) || 0).toFixed(2);
             }
         }
     });

@@ -102,10 +102,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // ---- ETAPE 2 : Configuration DB ----
         if ($etape === 2) {
             $db_host = trim($_POST['db_host'] ?? '127.0.0.1');
-            $db_name = trim($_POST['db_name'] ?? 'estock_db');
+            $db_name = preg_replace('/[^a-zA-Z0-9_]/', '', trim($_POST['db_name'] ?? 'estock_db'));
             $db_user = trim($_POST['db_user'] ?? 'root');
             $db_pass = $_POST['db_pass'] ?? '';
             $db_charset = 'utf8mb4';
+
+            if ($db_name === '') {
+                $erreur = "Nom de base de données invalide.";
+            }
 
             // Tester la connexion
             try {
@@ -115,11 +119,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
 
                 // Creer la base si elle n'existe pas
-                $testPdo->exec("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET $db_charset COLLATE ${db_charset}_unicode_ci");
+                $testPdo->exec("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET $db_charset COLLATE {$db_charset}_unicode_ci");
                 $testPdo->exec("USE `$db_name`");
 
                 // Verifier si les tables existent déjà
-                $tableCount = (int)$testPdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$db_name'")->fetchColumn();
+                $stmtCount = $testPdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?");
+                $stmtCount->execute([$db_name]);
+                $tableCount = (int)$stmtCount->fetchColumn();
 
                 if ($tableCount === 0) {
                     // Importer le schema SQL
@@ -142,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 try {
                                     $testPdo->exec($cleaned);
                                 } catch (\Throwable $e) {
-                                    // Ignorer les erreurs non-critiques (triggers, etc.)
+                                    error_log('[INSTALL] SQL non-critique ignoré: ' . $e->getMessage());
                                 }
                             }
                         }
@@ -163,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     try {
                                         $testPdo->exec($cleaned);
                                     } catch (\Throwable $e) {
-                                        // Ignorer les erreurs non-critiques
+                                        error_log('[INSTALL] Migration non-critique ignorée: ' . $e->getMessage());
                                     }
                                 }
                             }

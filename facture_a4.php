@@ -126,7 +126,7 @@ include __DIR__ . '/includes/header.php';
     background: #fff;
     border-radius: 10px;
     box-shadow: 0 8px 32px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.06);
-    padding: 22mm 18mm 16mm;
+    padding: 14mm 10mm 8mm;
     position: relative;
     overflow: hidden;
     font-family: 'Poppins', sans-serif;
@@ -615,9 +615,10 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <script nonce="<?= h(csp_nonce()) ?>">
-document.getElementById('btnPrintA5').addEventListener('click', function() {
-    window.print();
-});
+(function() {
+    var btn = document.getElementById('btnPrintA5');
+    if (btn) btn.addEventListener('click', function() { window.print(); });
+})();
 </script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>

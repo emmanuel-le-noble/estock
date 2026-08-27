@@ -55,11 +55,11 @@ foreach ($lignes as $l) {
 }
 $totalRemises = round($totalRemises, 2);
 
-// Calcul TVA multi-taux à partir des lignes
+// Calcul TVA multi-taux à partir des lignes (source unique de vérité pour l'affichage)
 $tauxTvaResume = [];
 foreach ($lignes as $l) {
     $htLigne = calc_line_subtotal((float)$l['prix_unitaire'], (int)$l['quantite']);
-    $tauxLigne = ($l['taux_tva'] !== null && $l['taux_tva'] !== '') ? (float)$l['taux_tva'] : (float)$f['tva_taux'];
+    $tauxLigne = ($l['taux_tva'] !== null && $l['taux_tva'] !== '') ? (float)$l['taux_tva'] : (float)($f['tva_taux'] ?? 0);
     $tvaLigne  = $htLigne * ($tauxLigne / 100);
     $tauxKey   = number_format($tauxLigne, 2);
     if (!isset($tauxTvaResume[$tauxKey])) {
@@ -69,8 +69,12 @@ foreach ($lignes as $l) {
     $tauxTvaResume[$tauxKey]['montant_tva']  += $tvaLigne;
 }
 $multiTaux = count($tauxTvaResume) > 1;
+// Y a-t-il au moins un taux de TVA non nul à afficher ?
+$totalTvaAffichable = array_sum(array_column($tauxTvaResume, 'montant_tva'));
 
-$impression = isset($_GET['print']);
+// L'impression auto ne doit se déclencher que si ?print=1 (ou toute valeur "vraie"),
+// pas simplement si le paramètre est présent (évite le déclenchement avec ?print=0).
+$impression = $print_param !== '' && $print_param !== '0';
 
 $nom_boutique = param_shop_name();
 $adresse_boutique = trim(param('adresse_boutique', ''));
@@ -97,7 +101,7 @@ include __DIR__ . '/includes/header.php';
 ?>
 
 <div class="no-print mb-3">
-    <?php if ($f['statut'] === 'Annulee'): ?>
+    <?php if (($f['statut'] ?? '') === 'Annulee'): ?>
     <div class="alert alert-warning">
         <i class="bi bi-exclamation-triangle"></i> Cette facture a été annulée.
     </div>
@@ -137,7 +141,7 @@ include __DIR__ . '/includes/header.php';
         <a href="<?= h('facture_a4.php?facture_id=' . $id) ?>" class="btn btn-outline-primary" target="_blank">
             <i class="bi bi-file-earmark-pdf"></i> Facture A5
         </a>
-        <?php if (peut_facturer() && $f['statut'] === 'Payee'): ?>
+        <?php if (peut_facturer() && ($f['statut'] ?? '') === 'Payee'): ?>
             <a href="<?= h('caisse.php') ?>" class="btn btn-success"><i class="bi bi-cart-plus"></i> Nouvelle vente</a>
         <?php endif; ?>
     </div>
@@ -176,7 +180,7 @@ include __DIR__ . '/includes/header.php';
                 <th align="left">Article</th>
                 <th align="center">Qté</th>
                 <?php if ($totalRemises > 0): ?>
-                <th align="right"><s>P.U.</s></th>
+                <th align="right"><s>Prix init.</s></th>
                 <th align="center">Rem.</th>
                 <?php endif; ?>
                 <th align="right">P.U.</th>
@@ -207,26 +211,31 @@ include __DIR__ . '/includes/header.php';
     <table>
         <tr>
             <td>Total HT</td>
-            <td align="right"><?= h(money((float)$f['total_ht'])) ?></td>
+            <td align="right"><?= h(money((float)($f['total_ht'] ?? 0))) ?></td>
         </tr>
-        <?php if ($multiTaux): ?>
-        <!-- Ventilation TVA multi-taux -->
-        <?php foreach ($tauxTvaResume as $tv): ?>
-        <tr>
-            <td>TVA <?= h(number_format($tv['taux'], 2, ',', '')) ?>% (base <?= h(money($tv['base_ht'])) ?>)</td>
-            <td align="right"><?= h(money($tv['montant_tva'])) ?></td>
-        </tr>
-        <?php endforeach; ?>
-        <?php elseif ((float)$f['tva_taux'] > 0 && !empty($tauxTvaResume)): ?>
-        <tr>
-            <td>TVA (<?= h(number_format((float)$f['tva_taux'], 2, ',', ' ')) ?>%)</td>
-            <td align="right"><?= h(money((float)$f['total_ttc'] - (float)$f['total_ht'])) ?></td>
-        </tr>
+
+        <?php
+            // Ventilation TVA : un seul bloc, quel que soit le nombre de taux distincts.
+            // On se base toujours sur les montants calculés ligne par ligne (tauxTvaResume)
+            // pour éviter tout écart d'arrondi avec le total global de la facture.
+        ?>
+        <?php if ($totalTvaAffichable > 0): ?>
+            <?php foreach ($tauxTvaResume as $tv): ?>
+                <?php if ($tv['taux'] > 0): ?>
+                <tr>
+                    <td>
+                        TVA <?= h(number_format($tv['taux'], 2, ',', '')) ?>%<?php if ($multiTaux): ?> (base <?= h(money($tv['base_ht'])) ?>)<?php endif; ?>
+                    </td>
+                    <td align="right"><?= h(money($tv['montant_tva'])) ?></td>
+                </tr>
+                <?php endif; ?>
+            <?php endforeach; ?>
         <?php elseif ($regime_tpu): ?>
         <tr>
             <td colspan="2" align="center" style="font-weight:bold;">TVA non applicable (TPU)</td>
         </tr>
         <?php endif; ?>
+
         <?php if ($totalRemises > 0): ?>
         <tr>
             <td style="color:#059669">Total Remises</td>
@@ -235,7 +244,7 @@ include __DIR__ . '/includes/header.php';
         <?php endif; ?>
         <tr>
             <td><strong>TOTAL TTC</strong></td>
-            <td align="right"><strong><?= h(money((float)$f['total_ttc'])) ?></strong></td>
+            <td align="right"><strong><?= h(money((float)($f['total_ttc'] ?? 0))) ?></strong></td>
         </tr>
     </table>
 
@@ -253,11 +262,11 @@ include __DIR__ . '/includes/header.php';
     <?php endif; ?>
         <tr>
             <td>Reçu</td>
-            <td align="right"><?= h(money((float)$f['montant_paye'])) ?></td>
+            <td align="right"><?= h(money((float)($f['montant_paye'] ?? 0))) ?></td>
         </tr>
         <tr>
             <td>Rendu</td>
-            <td align="right"><?= h(money((float)$f['monnaie_rendue'])) ?></td>
+            <td align="right"><?= h(money((float)($f['monnaie_rendue'] ?? 0))) ?></td>
         </tr>
     </table>
 
@@ -280,7 +289,10 @@ include __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <script nonce="<?= h(csp_nonce()) ?>">
-    document.getElementById('btnPrintFacture').addEventListener('click', function () { window.print(); });
+    (function() {
+        var btn = document.getElementById('btnPrintFacture');
+        if (btn) btn.addEventListener('click', function () { window.print(); });
+    })();
 </script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>
