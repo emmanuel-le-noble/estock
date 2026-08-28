@@ -279,7 +279,6 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
         </header>
 
         <main class="app-content" id="appMain">
-        <?php afficher_flash(); ?>
 <?php else: ?>
 <main class="app-content">
 <?php endif; ?>

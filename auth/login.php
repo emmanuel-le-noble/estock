@@ -171,6 +171,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </div>
 
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1090;" id="flashToastContainer"></div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script nonce="<?= h(csp_nonce()) ?>">
+(function(){
+    var msgs = <?= json_encode($flash_captured ?? [], JSON_UNESCAPED_UNICODE) ?>;
+    if (!msgs || !msgs.length) return;
+    var icons = {success:'check-circle-fill', danger:'exclamation-triangle-fill', warning:'exclamation-triangle-fill', info:'info-circle-fill'};
+    var container = document.getElementById('flashToastContainer');
+    msgs.forEach(function(f){
+        var toastEl = document.createElement('div');
+        toastEl.className = 'toast align-items-center text-bg-' + (f.type === 'danger' ? 'danger' : f.type) + ' border-0';
+        toastEl.setAttribute('role','alert');
+        toastEl.innerHTML =
+            '<div class="d-flex">' +
+              '<div class="toast-body"><i class="bi bi-' + (icons[f.type]||'bell') + ' me-2"></i>' + f.message + '</div>' +
+              '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' +
+            '</div>';
+        container.appendChild(toastEl);
+        var toast = new bootstrap.Toast(toastEl, {delay: 5000});
+        toast.show();
+        toastEl.addEventListener('hidden.bs.toast', function(){ toastEl.remove(); });
+    });
+})();
+</script>
 <script nonce="<?= h(csp_nonce()) ?>">
 document.addEventListener('DOMContentLoaded', function() {
     const btnToggle = document.getElementById('btnToggleMdp');

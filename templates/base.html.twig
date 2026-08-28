@@ -224,14 +224,6 @@
         </header>
 
         <main class="app-content" id="appMain">
-        {# ---- Flash messages ---- #}
-        {% for f in flash_messages|default([]) %}
-            {% set icons = {success:'check-circle', danger:'exclamation-triangle', warning:'exclamation-triangle', info:'info-circle'} %}
-            <div class="alert alert-{{ f.type }} alert-dismissible fade show" role="alert">
-                <i class="bi bi-{{ icons[f.type]|default('bell') }}"></i> {{ f.message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        {% endfor %}
 
 {% else %}
 <main class="app-content">
@@ -253,5 +245,32 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 {% block scripts_extra %}{% endblock %}
+
+{# ---- Toast container pour les messages flash ---- #}
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1090;" id="flashToastContainer"></div>
+<script nonce="{{ csp_nonce_val }}">
+(function(){
+    var msgs = {{ flash_messages|json_encode|raw }};
+    if (!msgs || !msgs.length) return;
+    var icons = {success:'check-circle-fill', danger:'exclamation-triangle-fill', warning:'exclamation-triangle-fill', info:'info-circle-fill'};
+    var container = document.getElementById('flashToastContainer');
+    msgs.forEach(function(f){
+        var toastEl = document.createElement('div');
+        toastEl.className = 'toast align-items-center text-bg-' + (f.type === 'danger' ? 'danger' : f.type) + ' border-0';
+        toastEl.setAttribute('role','alert');
+        toastEl.setAttribute('aria-live','assertive');
+        toastEl.setAttribute('aria-atomic','true');
+        toastEl.innerHTML =
+            '<div class="d-flex">' +
+              '<div class="toast-body"><i class="bi bi-' + (icons[f.type]||'bell') + ' me-2"></i>' + f.message + '</div>' +
+              '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>' +
+            '</div>';
+        container.appendChild(toastEl);
+        var toast = new bootstrap.Toast(toastEl, {delay: 5000});
+        toast.show();
+        toastEl.addEventListener('hidden.bs.toast', function(){ toastEl.remove(); });
+    });
+})();
+</script>
 </body>
 </html>

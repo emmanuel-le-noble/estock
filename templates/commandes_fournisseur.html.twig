@@ -16,6 +16,16 @@
         <p class="text-muted small mb-0">Gestion du cycle d'approvisionnement et réceptions de stock</p>
     </div>
     <div class="d-flex gap-2">
+        {% if vue == 'liste' %}
+            <a href="exports.php?type=commandes_fournisseur&statut={{ filters.statut|default('') }}&fournisseur_id={{ filters.fournisseur_id|default('') }}&date_debut={{ filters.date_debut|default('') }}&date_fin={{ filters.date_fin|default('') }}" class="btn btn-outline-success" target="_blank">
+                <i class="bi bi-filetype-csv"></i> Export CSV
+            </a>
+        {% endif %}
+        {% if vue == 'detail' and print_url|default('') %}
+            <a href="{{ print_url }}" class="btn btn-outline-dark" target="_blank">
+                <i class="bi bi-printer"></i> Imprimer / PDF
+            </a>
+        {% endif %}
         {% if vue != 'liste' %}
             <a href="commandes_fournisseur.php" class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-left"></i> Retour à la liste

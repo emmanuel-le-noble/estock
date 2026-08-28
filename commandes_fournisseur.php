@@ -374,7 +374,8 @@ if ($action === 'voir' && $id_get > 0) {
         'lignes'        => $lignes,
         'vue'           => 'detail',
         'can_manage'    => $can_manage,
-        'can_valider'   => $can_valider
+        'can_valider'   => $can_valider,
+        'print_url'     => generate_signed_url('commande_fournisseur_print.php', $id_get, ['action' => 'imprimer'])
     ]);
     exit;
 }

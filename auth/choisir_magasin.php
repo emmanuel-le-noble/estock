@@ -112,7 +112,13 @@ $magasin_courant = (int)($_SESSION['magasin_actif'] ?? 0);
             <h1 class="fw-bold" style="letter-spacing:-.02em;">Choisir un magasin</h1>
             <p class="text-muted mb-4">Sélectionnez le magasin à suivre pour cette session.</p>
 
-            <?php afficher_flash(); ?>
+            <?php
+            $flashMessages = $_SESSION['flash'] ?? [];
+            unset($_SESSION['flash']);
+            if (!empty($flashMessages)):
+            ?>
+            <div id="choisirFlashData" style="display:none;" data-flash="<?= h(json_encode($flashMessages, JSON_UNESCAPED_UNICODE)) ?>"></div>
+            <?php endif; ?>
 
             <?php if (empty($magasins)): ?>
                 <div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> Aucun magasin actif n'est disponible. Créez un magasin dans <strong>Magasins</strong> puis reconnectez-vous.</div>
@@ -163,6 +169,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+</script>
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1090;" id="flashToastContainer"></div>
+<script nonce="<?= h(csp_nonce()) ?>">
+(function(){
+    var el = document.getElementById('choisirFlashData');
+    if (!el) return;
+    var msgs;
+    try { msgs = JSON.parse(el.dataset.flash); } catch(e) { return; }
+    if (!msgs || !msgs.length) return;
+    var icons = {success:'check-circle-fill', danger:'exclamation-triangle-fill', warning:'exclamation-triangle-fill', info:'info-circle-fill'};
+    var container = document.getElementById('flashToastContainer');
+    msgs.forEach(function(f){
+        var toastEl = document.createElement('div');
+        toastEl.className = 'toast align-items-center text-bg-' + (f.type === 'danger' ? 'danger' : f.type) + ' border-0';
+        toastEl.setAttribute('role','alert');
+        toastEl.innerHTML =
+            '<div class="d-flex">' +
+              '<div class="toast-body"><i class="bi bi-' + (icons[f.type]||'bell') + ' me-2"></i>' + f.message + '</div>' +
+              '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' +
+            '</div>';
+        container.appendChild(toastEl);
+        var toast = new bootstrap.Toast(toastEl, {delay: 5000});
+        toast.show();
+        toastEl.addEventListener('hidden.bs.toast', function(){ toastEl.remove(); });
+    });
+})();
 </script>
 </body>
 </html>

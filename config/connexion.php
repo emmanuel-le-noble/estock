@@ -683,7 +683,10 @@ $twig->addGlobal('can_manage_stock', peut_gerer_stock());
 $twig->addGlobal('can_bill', peut_facturer());
 $twig->addGlobal('can_admin', peut_administrer());
 $twig->addGlobal('csp_nonce_val', csp_nonce());
-$twig->addGlobal('flash_messages', $_SESSION['flash'] ?? []);
+// Capturer les flash messages une seule fois (pour Twig + footer PHP)
+$flash_captured = $_SESSION['flash'] ?? [];
+$twig->addGlobal('flash_messages', $flash_captured);
+unset($_SESSION['flash']);
 $twig->addGlobal('csrf_token', csrf_token());
 $twig->addGlobal('page_courante', $_GET['_page'] ?? str_replace('.php', '', basename($_SERVER['PHP_SELF'])));
 

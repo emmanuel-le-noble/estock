@@ -137,6 +137,35 @@ switch ($type) {
         }
         break;
 
+    // ---- EXPORT COMMANDES FOURNISSEURS ----
+    case 'commandes_fournisseur':
+        fputcsv($output, ['N° Commande', 'Fournisseur', 'Magasin', 'Statut', 'Nb Articles', 'Total HT', 'Date Commande', 'Créé par'], ';', '"', "\\");
+        $built = db_commandes_fournisseur_search_sql([
+            'statut'         => $_GET['statut'] ?? '',
+            'fournisseur_id' => $_GET['fournisseur_id'] ?? '',
+            'magasin_id'     => $magasin_id,
+            'date_debut'     => $_GET['date_debut'] ?? '',
+            'date_fin'       => $_GET['date_fin'] ?? '',
+        ]);
+        $stmt  = $pdo->prepare($built['sql']);
+        $stmt->execute($built['params']);
+        $rows  = $stmt->fetchAll();
+
+        foreach ($rows as $r) {
+            fputcsv($output, [
+                $r['id'],
+                $r['fournisseur_nom'] ?? '',
+                $r['magasin_nom'] ?? '',
+                str_replace('_', ' ', $r['statut']),
+                (int)$r['nb_lignes'],
+                number_format((float)$r['total_ht'], 2, ',', ''),
+                $r['date_commande'],
+                $r['utilisateur_nom'] ?? '',
+            ], ';', '"', "\\");
+        }
+        suivre_activite('EXPORT_CSV', 'Export de la liste des commandes fournisseurs');
+        break;
+
     default:
         fputcsv($output, ['Type d\'export invalide.'], ';', '"', "\\");
         break;
