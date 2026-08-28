@@ -107,12 +107,14 @@ $ticket_entete = trim(param('ticket_entete', ''));
 $ticket_remarque = trim(param('ticket_remarque', ''));
 
 $titre_page = 'Facture ' . $_numero;
+include __DIR__ . '/includes/letterhead.php';
 include __DIR__ . '/includes/header.php';
 ?>
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/print-documents.css">
 <style>
-/* === A5 INVOICE CARD === */
+/* === A5 INVOICE CARD — Palette rouge/orange/vert === */
 .invoice-preview-wrap {
     display: flex;
     justify-content: center;
@@ -126,24 +128,15 @@ include __DIR__ . '/includes/header.php';
     background: #fff;
     border-radius: 10px;
     box-shadow: 0 8px 32px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.06);
-    padding: 14mm 10mm 8mm;
+    padding: 0 0 8mm;
     position: relative;
     overflow: hidden;
     font-family: 'Poppins', sans-serif;
     font-size: 9.5pt;
-    color: #1e293b;
+    color: #1a1a1a;
     line-height: 1.4;
-}
-
-/* Bandeau coloré en haut */
-.invoice-a5::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 5px;
-    background: linear-gradient(90deg, var(--brand, #2563eb), var(--brand-2, #1d4ed8));
+    display: flex;
+    flex-direction: column;
 }
 
 /* Filigrane ANNULÉE */
@@ -155,178 +148,24 @@ include __DIR__ . '/includes/header.php';
     transform: translate(-50%, -50%) rotate(-30deg);
     font-size: 54pt;
     font-weight: 900;
-    color: rgba(220,38,38,.07);
+    color: rgba(213,43,30,.06);
     text-transform: uppercase;
     letter-spacing: 6px;
     pointer-events: none;
     z-index: 0;
 }
 
-/* --- En-tête --- */
-.inv-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 14px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid var(--brand, #2563eb);
-    position: relative;
-    z-index: 1;
-}
-.inv-brand { flex: 1; }
-.inv-brand-name {
-    font-size: 16pt;
-    font-weight: 800;
-    color: #0f172a;
-    margin-bottom: 2px;
-    letter-spacing: -0.3px;
-}
-.inv-brand-meta { font-size: 9pt; color: #64748b; line-height: 1.5; }
-.inv-brand-meta span { display: block; }
-.inv-brand-meta b { color: #475569; font-weight: 600; }
-
-.inv-title-block { text-align: right; }
-.inv-title-label {
-    font-size: 12pt;
-    font-weight: 700;
-    color: var(--brand, #2563eb);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-bottom: 3px;
-}
-.inv-num { font-size: 11pt; font-weight: 700; color: #0f172a; }
-.inv-date { font-size: 9.5pt; color: #64748b; margin-top: 1px; }
-.inv-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 8.5pt;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 4px;
-}
-.inv-badge.paid { background: #dcfce7; color: #166534; }
-.inv-badge.unpaid { background: #fef3c7; color: #92400e; }
-.inv-badge.cancelled { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-
-/* --- Parties --- */
-.inv-parties {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 12px;
-    position: relative;
-    z-index: 1;
-}
-.inv-party {
-    flex: 1;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 5px;
-    padding: 8px 10px;
-}
-.inv-party-label {
-    font-size: 8pt;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--brand, #2563eb);
-    margin-bottom: 4px;
-    padding-bottom: 2px;
-    border-bottom: 1px solid #e2e8f0;
-}
-.inv-party-name { font-weight: 700; font-size: 10.5pt; color: #0f172a; margin-bottom: 1px; }
-.inv-party-detail { font-size: 9pt; color: #64748b; line-height: 1.45; }
-.inv-party-detail span { display: block; }
-
-/* --- Tableau --- */
-.inv-table-wrap { margin-bottom: 10px; position: relative; z-index: 1; }
-.inv-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 9.5pt;
-}
-.inv-table thead th {
-    background: var(--brand-2, #1e3a5f);
-    color: #fff;
-    font-weight: 600;
-    padding: 5px 6px;
-    text-align: left;
-    font-size: 8.5pt;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-}
-.inv-table thead th:first-child { border-radius: 3px 0 0 0; }
-.inv-table thead th:last-child { border-radius: 0 3px 0 0; text-align: right; }
-.inv-table thead th.r { text-align: right; }
-.inv-table thead th.c { text-align: center; }
-
-.inv-table tbody tr { border-bottom: 1px solid #f1f5f9; }
-.inv-table tbody tr:nth-child(even) { background: #f8fafc; }
-.inv-table tbody tr:last-child { border-bottom: 2px solid var(--brand-2, #1e3a5f); }
-.inv-table tbody td { padding: 4px 6px; vertical-align: top; }
-.inv-table tbody td.r { text-align: right; }
-.inv-table tbody td.c { text-align: center; }
-.inv-table .a-name { font-weight: 600; color: #0f172a; }
-.inv-table .a-ref { font-size: 8.5pt; color: #94a3b8; }
-.inv-table .remise-chip {
-    display: inline-block;
-    background: #fef3c7;
-    color: #92400e;
-    font-size: 8pt;
-    font-weight: 700;
-    padding: 1px 4px;
-    border-radius: 2px;
-}
-.inv-table .old-p { color: #94a3b8; text-decoration: line-through; font-size: 8.5pt; }
-
-/* --- Totaux --- */
-.inv-totals-wrap {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 10px;
-    position: relative;
-    z-index: 1;
-}
-.inv-totals {
-    width: 210px;
-    border: 1px solid #e2e8f0;
-    border-radius: 5px;
-    overflow: hidden;
-}
-.inv-t-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 3px 8px;
-    font-size: 9.5pt;
-}
-.inv-t-row:nth-child(even) { background: #f8fafc; }
-.inv-t-row .tl { color: #64748b; }
-.inv-t-row .tv { font-weight: 600; text-align: right; }
-.inv-t-row.grand {
-    background: var(--brand-2, #1e3a5f);
-    color: #fff;
-    padding: 5px 8px;
-    font-size: 10pt;
-    font-weight: 700;
-}
-.inv-t-row.grand .tl { color: #cbd5e1; }
-.inv-t-row.grand .tv { color: #fff; }
-.inv-t-row.remise { color: #16a34a; }
-.inv-t-row.remise .tv { color: #16a34a; }
-.inv-t-row.tva-note { font-style: italic; font-size: 8.5pt; color: #94a3b8; background: none; }
-
-/* --- Paiements --- */
-.inv-pay-section { margin-bottom: 10px; position: relative; z-index: 1; }
+/* Paiements */
+.inv-pay-section { margin-bottom: 10px; padding: 0 16px; position: relative; z-index: 2; }
 .inv-pay-title {
     font-size: 8.5pt;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: var(--brand, #2563eb);
+    color: var(--doc-red, #D52B1E);
     margin-bottom: 4px;
     padding-bottom: 2px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--doc-gray, #e0e0e0);
 }
 .inv-pay-grid { display: flex; gap: 6px; flex-wrap: wrap; }
 .inv-pay-card {
@@ -338,41 +177,23 @@ include __DIR__ . '/includes/header.php';
 .inv-pay-mode { font-size: 8pt; color: #166534; font-weight: 700; text-transform: uppercase; }
 .inv-pay-amount { font-size: 8.5pt; font-weight: 700; color: #15803d; }
 
-/* --- Footer --- */
-.inv-footer {
-    margin-top: auto;
-    padding-top: 8px;
-    border-top: 1.5px solid #e2e8f0;
-    position: relative;
-    z-index: 1;
-}
-.inv-footer-grid {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-}
-.inv-footer-col { flex: 1; }
-.inv-footer-col .fl {
+/* Remise chips */
+.remise-chip {
+    display: inline-block;
+    background: #fef3c7;
+    color: #92400e;
     font-size: 8pt;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--brand, #2563eb);
-    margin-bottom: 2px;
+    padding: 1px 4px;
+    border-radius: 2px;
 }
-.inv-footer-col .ft { font-size: 8.5pt; color: #64748b; line-height: 1.45; }
-.inv-footer-col .ft span { display: block; }
-.inv-legal {
-    margin-top: 6px;
-    padding: 5px 8px;
-    background: #f1f5f9;
-    border-radius: 3px;
-    font-size: 8pt;
-    color: #94a3b8;
-    text-align: center;
-    line-height: 1.4;
-}
-.inv-legal b { color: #475569; }
+.old-p { color: #94a3b8; text-decoration: line-through; font-size: 8.5pt; }
+
+/* TVA note */
+.tva-note { font-style: italic; font-size: 8.5pt; color: #94a3b8; background: none; }
+
+/* Content padding */
+.inv-content { padding: 0 16px; flex: 1; display: flex; flex-direction: column; position: relative; z-index: 2; }
 
 /* --- Action bar --- */
 .inv-action-bar {
@@ -397,14 +218,11 @@ include __DIR__ . '/includes/header.php';
         min-height: auto;
         border-radius: 0;
         box-shadow: none;
-        padding: 12mm 14mm;
+        padding: 0;
         border: none;
     }
-    .invoice-a5::before { background: var(--brand, #2563eb) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .inv-table thead th { background: var(--brand-2, #1e3a5f) !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .inv-t-row.grand { background: var(--brand-2, #1e3a5f) !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .inv-badge { border: 1px solid currentColor; }
-    @page { size: A5; margin: 10mm; }
+    @page { size: A5; margin: 8mm; }
 }
 </style>
 
@@ -424,192 +242,158 @@ include __DIR__ . '/includes/header.php';
 <div class="invoice-preview-wrap">
     <div class="invoice-a5 <?= $is_annulee ? 'watermark-active' : '' ?>">
 
-        <!-- EN-TÊTE -->
-        <div class="inv-header">
-            <div class="inv-brand">
-                <div class="inv-brand-name"><?= h($nom_boutique) ?></div>
-                <div class="inv-brand-meta">
-                    <?php if ($adresse_boutique): ?><span><?= h($adresse_boutique) ?></span><?php endif; ?>
-                    <?php if ($localisation): ?><span><?= h($localisation) ?></span><?php endif; ?>
-                    <?php if ($telephone): ?><span><b>Tél :</b> <?= h($telephone) ?></span><?php endif; ?>
-                    <?php if ($email): ?><span><b>E-mail :</b> <?= h($email) ?></span><?php endif; ?>
-                    <?php if ($nif): ?><span><b>NIF :</b> <?= h($nif) ?></span><?php endif; ?>
-                    <?php if ($rccm): ?><span><b>RCCM :</b> <?= h($rccm) ?></span><?php endif; ?>
-                </div>
-            </div>
-            <div class="inv-title-block">
-                <div class="inv-title-label">Facture</div>
-                <div class="inv-num">N° <?= h($_numero) ?></div>
-                <div class="inv-date"><?= h($date_facture) ?></div>
-                <?php if ($is_annulee): ?>
-                    <span class="inv-badge cancelled">Annulée</span>
-                <?php elseif ((float)$f['montant_paye'] >= (float)$f['total_ttc']): ?>
-                    <span class="inv-badge paid">Payée</span>
-                <?php else: ?>
-                    <span class="inv-badge unpaid">En attente</span>
-                <?php endif; ?>
-            </div>
-        </div>
+        <!-- EN-TÊTE (logo + nom entreprise) -->
+        <?= letterhead_header() ?>
 
-        <!-- CLIENT / VENDEUR -->
-        <div class="inv-parties">
-            <div class="inv-party">
-                <div class="inv-party-label">Client</div>
-                <?php if ($hasClient): ?>
-                    <div class="inv-party-name"><?= h($clientRaison ?: $clientNom) ?></div>
-                    <div class="inv-party-detail">
-                        <?php if ($clientRaison && $clientNom): ?><span><?= h($clientNom) ?></span><?php endif; ?>
-                        <?php if ($clientNif): ?><span>NIF : <?= h($clientNif) ?></span><?php endif; ?>
-                        <?php if ($clientAdresse): ?><span><?= h($clientAdresse) ?></span><?php endif; ?>
-                        <?php if ($clientTel): ?><span>Tél : <?= h($clientTel) ?></span><?php endif; ?>
+        <!-- BANDEAU CHEVRON VERT -->
+        <?= letterhead_chevron_top() ?>
+
+        <!-- TITRE DU DOCUMENT -->
+        <?= letterhead_doc_title('Facture', h($_numero), h($date_facture),
+            $is_annulee ? 'cancelled' : ((float)$f['montant_paye'] >= (float)$f['total_ttc'] ? 'paid' : 'unpaid'),
+            $is_annulee ? 'Annulée' : ((float)$f['montant_paye'] >= (float)$f['total_ttc'] ? 'Payée' : 'En attente')
+        ) ?>
+
+        <!-- CONTENU -->
+        <div class="inv-content">
+
+            <!-- CLIENT / VENDEUR -->
+            <div class="doc-parties">
+                <div class="doc-party">
+                    <div class="doc-party-label">Client</div>
+                    <?php if ($hasClient): ?>
+                        <div class="doc-party-name"><?= h($clientRaison ?: $clientNom) ?></div>
+                        <div class="doc-party-detail">
+                            <?php if ($clientRaison && $clientNom): ?><span><?= h($clientNom) ?></span><?php endif; ?>
+                            <?php if ($clientNif): ?><span>NIF : <?= h($clientNif) ?></span><?php endif; ?>
+                            <?php if ($clientAdresse): ?><span><?= h($clientAdresse) ?></span><?php endif; ?>
+                            <?php if ($clientTel): ?><span>Tél : <?= h($clientTel) ?></span><?php endif; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="doc-party-name">Client de passage</div>
+                    <?php endif; ?>
+                </div>
+                <div class="doc-party">
+                    <div class="doc-party-label">Vendeur</div>
+                    <div class="doc-party-name"><?= h($vendeurNom) ?></div>
+                    <div class="doc-party-detail">
+                        <span>Magasin : <?= h(user_magasin_nom($pdo)) ?></span>
                     </div>
-                <?php else: ?>
-                    <div class="inv-party-name">Client de passage</div>
-                <?php endif; ?>
-            </div>
-            <div class="inv-party">
-                <div class="inv-party-label">Vendeur</div>
-                <div class="inv-party-name"><?= h($vendeurNom) ?></div>
-                <div class="inv-party-detail">
-                    <span>Magasin : <?= h(user_magasin_nom($pdo)) ?></span>
                 </div>
             </div>
-        </div>
 
-        <!-- LIGNES -->
-        <div class="inv-table-wrap">
-            <table class="inv-table">
-                <thead>
-                    <tr>
-                        <th style="width:4%">#</th>
-                        <th style="width:38%">Article</th>
-                        <th class="c" style="width:7%">Qté</th>
-                        <?php if ($totalRemises > 0): ?>
-                        <th class="r" style="width:14%"><s>P.U. orig.</s></th>
-                        <th class="c" style="width:8%">Rem.</th>
-                        <?php endif; ?>
-                        <th class="r" style="width:14%">P.U.</th>
-                        <th class="r" style="width:15%">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php $idx = 0; foreach ($lignes as $l):
-                        $idx++;
-                        $st = calc_line_subtotal((float)$l['prix_unitaire'], (int)$l['quantite']);
-                        $hasRemise = !empty($l['prix_original']) && !empty($l['remise_pct']) && (float)$l['remise_pct'] > 0;
-                    ?>
-                    <tr>
-                        <td class="c" style="color:#94a3b8;"><?= $idx ?></td>
-                        <td>
-                            <div class="a-name"><?= h($l['article_nom']) ?></div>
-                            <?php if (!empty($l['article_code'])): ?><div class="a-ref">Réf : <?= h($l['article_code']) ?></div><?php endif; ?>
-                        </td>
-                        <td class="c"><?= (int)$l['quantite'] ?></td>
-                        <?php if ($totalRemises > 0): ?>
-                        <td class="r"><?= $hasRemise ? '<span class="old-p">' . h(money((float)$l['prix_original'])) . '</span>' : '—' ?></td>
-                        <td class="c"><?= $hasRemise ? '<span class="remise-chip">-' . h(number_format((float)$l['remise_pct'], 0, ',', '')) . '%</span>' : '—' ?></td>
-                        <?php endif; ?>
-                        <td class="r"><?= h(money((float)$l['prix_unitaire'])) ?></td>
-                        <td class="r" style="font-weight:600;"><?= h(money((float)$st)) ?></td>
-                    </tr>
+            <!-- LIGNES -->
+            <div class="doc-table-wrap">
+                <table class="doc-table">
+                    <thead>
+                        <tr>
+                            <th style="width:4%">#</th>
+                            <th style="width:38%">Article</th>
+                            <th class="c" style="width:7%">Qté</th>
+                            <?php if ($totalRemises > 0): ?>
+                            <th class="r" style="width:14%"><s>P.U. orig.</s></th>
+                            <th class="c" style="width:8%">Rem.</th>
+                            <?php endif; ?>
+                            <th class="r" style="width:14%">P.U.</th>
+                            <th class="r" style="width:15%">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php $idx = 0; foreach ($lignes as $l):
+                            $idx++;
+                            $st = calc_line_subtotal((float)$l['prix_unitaire'], (int)$l['quantite']);
+                            $hasRemise = !empty($l['prix_original']) && !empty($l['remise_pct']) && (float)$l['remise_pct'] > 0;
+                        ?>
+                        <tr>
+                            <td class="c" style="color:#94a3b8;"><?= $idx ?></td>
+                            <td>
+                                <div class="a-name"><?= h($l['article_nom']) ?></div>
+                                <?php if (!empty($l['article_code'])): ?><div class="a-ref">Réf : <?= h($l['article_code']) ?></div><?php endif; ?>
+                            </td>
+                            <td class="c"><?= (int)$l['quantite'] ?></td>
+                            <?php if ($totalRemises > 0): ?>
+                            <td class="r"><?= $hasRemise ? '<span class="old-p">' . h(money((float)$l['prix_original'])) . '</span>' : '—' ?></td>
+                            <td class="c"><?= $hasRemise ? '<span class="remise-chip">-' . h(number_format((float)$l['remise_pct'], 0, ',', '')) . '%</span>' : '—' ?></td>
+                            <?php endif; ?>
+                            <td class="r"><?= h(money((float)$l['prix_unitaire'])) ?></td>
+                            <td class="r" style="font-weight:600;"><?= h(money((float)$st)) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- TOTAUX -->
+            <div class="doc-totals-wrap">
+                <div class="doc-totals">
+                    <div class="doc-t-row">
+                        <span class="tl">Total HT</span>
+                        <span class="tv"><?= h(money((float)$f['total_ht'])) ?></span>
+                    </div>
+                    <?php if ($multiTaux): ?>
+                        <?php foreach ($tauxTvaResume as $tv): ?>
+                    <div class="doc-t-row">
+                        <span class="tl">TVA <?= h(number_format($tv['taux'], 2, ',', '')) ?>%</span>
+                        <span class="tv"><?= h(money($tv['montant_tva'])) ?></span>
+                    </div>
+                        <?php endforeach; ?>
+                    <?php elseif ((float)$f['tva_taux'] > 0 && !empty($tauxTvaResume)): ?>
+                    <div class="doc-t-row">
+                        <span class="tl">TVA <?= h(number_format((float)$f['tva_taux'], 2, ',', ' ')) ?>%</span>
+                        <span class="tv"><?= h(money((float)$f['total_ttc'] - (float)$f['total_ht'])) ?></span>
+                    </div>
+                    <?php elseif ($regime_tpu): ?>
+                    <div class="doc-t-row tva-note">
+                        <span class="tl">TVA non applicable (TPU)</span>
+                        <span class="tv"></span>
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($totalRemises > 0): ?>
+                    <div class="doc-t-row remise">
+                        <span class="tl">Remises</span>
+                        <span class="tv">-<?= h(money($totalRemises)) ?></span>
+                    </div>
+                    <?php endif; ?>
+                    <div class="doc-t-row grand">
+                        <span class="tl">TOTAL TTC</span>
+                        <span class="tv"><?= h(money((float)$f['total_ttc'])) ?></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAIEMENTS -->
+            <?php if (!empty($paiements) || (float)$f['montant_paye'] > 0): ?>
+            <div class="inv-pay-section">
+                <div class="inv-pay-title">Paiements</div>
+                <div class="inv-pay-grid">
+                    <?php foreach ($paiements as $p): ?>
+                    <div class="inv-pay-card">
+                        <div class="inv-pay-mode"><?= h(ucfirst(str_replace('_', ' ', $p['mode_paiement'] ?? ''))) ?></div>
+                        <div class="inv-pay-amount"><?= h(money((float)$p['montant'])) ?></div>
+                    </div>
                     <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- TOTAUX -->
-        <div class="inv-totals-wrap">
-            <div class="inv-totals">
-                <div class="inv-t-row">
-                    <span class="tl">Total HT</span>
-                    <span class="tv"><?= h(money((float)$f['total_ht'])) ?></span>
+                    <?php if (empty($paiements)): ?>
+                    <div class="inv-pay-card">
+                        <div class="inv-pay-mode">Paiement</div>
+                        <div class="inv-pay-amount"><?= h(money((float)$f['montant_paye'])) ?></div>
+                    </div>
+                    <?php endif; ?>
                 </div>
-                <?php if ($multiTaux): ?>
-                    <?php foreach ($tauxTvaResume as $tv): ?>
-                <div class="inv-t-row">
-                    <span class="tl">TVA <?= h(number_format($tv['taux'], 2, ',', '')) ?>%</span>
-                    <span class="tv"><?= h(money($tv['montant_tva'])) ?></span>
-                </div>
-                    <?php endforeach; ?>
-                <?php elseif ((float)$f['tva_taux'] > 0 && !empty($tauxTvaResume)): ?>
-                <div class="inv-t-row">
-                    <span class="tl">TVA <?= h(number_format((float)$f['tva_taux'], 2, ',', ' ')) ?>%</span>
-                    <span class="tv"><?= h(money((float)$f['total_ttc'] - (float)$f['total_ht'])) ?></span>
-                </div>
-                <?php elseif ($regime_tpu): ?>
-                <div class="inv-t-row tva-note">
-                    <span class="tl">TVA non applicable (TPU)</span>
-                    <span class="tv"></span>
+                <?php if ((float)$f['monnaie_rendue'] > 0): ?>
+                <div style="margin-top:4px;font-size:9pt;color:#666;">
+                    Monnaie rendue : <strong style="color:#1a1a1a;"><?= h(money((float)$f['monnaie_rendue'])) ?></strong>
                 </div>
                 <?php endif; ?>
-                <?php if ($totalRemises > 0): ?>
-                <div class="inv-t-row remise">
-                    <span class="tl">Remises</span>
-                    <span class="tv">-<?= h(money($totalRemises)) ?></span>
-                </div>
-                <?php endif; ?>
-                <div class="inv-t-row grand">
-                    <span class="tl">TOTAL TTC</span>
-                    <span class="tv"><?= h(money((float)$f['total_ttc'])) ?></span>
-                </div>
-            </div>
-        </div>
-
-        <!-- PAIEMENTS -->
-        <?php if (!empty($paiements) || (float)$f['montant_paye'] > 0): ?>
-        <div class="inv-pay-section">
-            <div class="inv-pay-title">Paiements</div>
-            <div class="inv-pay-grid">
-                <?php foreach ($paiements as $p): ?>
-                <div class="inv-pay-card">
-                    <div class="inv-pay-mode"><?= h(ucfirst(str_replace('_', ' ', $p['mode_paiement'] ?? ''))) ?></div>
-                    <div class="inv-pay-amount"><?= h(money((float)$p['montant'])) ?></div>
-                </div>
-                <?php endforeach; ?>
-                <?php if (empty($paiements)): ?>
-                <div class="inv-pay-card">
-                    <div class="inv-pay-mode">Paiement</div>
-                    <div class="inv-pay-amount"><?= h(money((float)$f['montant_paye'])) ?></div>
-                </div>
-                <?php endif; ?>
-            </div>
-            <?php if ((float)$f['monnaie_rendue'] > 0): ?>
-            <div style="margin-top:4px;font-size:9pt;color:#64748b;">
-                Monnaie rendue : <strong style="color:#0f172a;"><?= h(money((float)$f['monnaie_rendue'])) ?></strong>
             </div>
             <?php endif; ?>
-        </div>
-        <?php endif; ?>
+
+        </div><!-- /.inv-content -->
 
         <!-- PIED DE PAGE -->
-        <div class="inv-footer">
-            <div class="inv-footer-grid">
-                <div class="inv-footer-col">
-                    <?php if ($ticket_entete): ?>
-                    <div class="fl">Message</div>
-                    <div class="ft"><?= h($ticket_entete) ?></div>
-                    <?php endif; ?>
-                    <?php if ($ticket_remarque): ?>
-                    <div class="ft" style="margin-top:2px;font-style:italic;"><?= h($ticket_remarque) ?></div>
-                    <?php endif; ?>
-                </div>
-                <div class="inv-footer-col" style="text-align:right;">
-                    <div class="fl">Coordonnées</div>
-                    <div class="ft">
-                        <?php if ($site): ?><span><?= h($site) ?></span><?php endif; ?>
-                        <?php if ($telephone): ?><span>Tél : <?= h($telephone) ?></span><?php endif; ?>
-                        <?php if ($email): ?><span><?= h($email) ?></span><?php endif; ?>
-                    </div>
-                </div>
-            </div>
-            <?php if ($nif || $rccm): ?>
-            <div class="inv-legal">
-                <b><?= h($nom_boutique) ?></b>
-                — NIF : <?= h($nif) ?> · RCCM : <?= h($rccm) ?>
-                — Facture conforme à la législation fiscale en vigueur.
-            </div>
-            <?php endif; ?>
-        </div>
+        <?= letterhead_footer() ?>
+
+        <!-- BANDEAU CHEVRON ROUGE (BAS) -->
+        <?= letterhead_chevron_bottom() ?>
 
     </div>
 </div>

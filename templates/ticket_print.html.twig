@@ -7,6 +7,11 @@
     <title>Ticket {{ facture.numero_facture }}</title>
     <link rel="icon" type="image/x-icon" href="{{ base_url|trim('/', 'right') }}/assets/images/logo-eStock.ico">
     <style>
+        :root {
+            --doc-red: #D52B1E;
+            --doc-green: #8DC63F;
+            --doc-orange: #F57C00;
+        }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Courier New', Courier, monospace;
@@ -23,6 +28,32 @@
         .shop-info { text-align: center; font-size: 11px; margin-bottom: 3mm; }
         .ticket-hr { border-top: 1px dashed #000; margin: 2.5mm 0; }
         .ticket-hr-thick { border-top: 2px solid #000; margin: 2.5mm 0; }
+        .chevron-top {
+            height: 6px;
+            background: linear-gradient(135deg, var(--doc-green) 50%, transparent 50%);
+            margin-bottom: 2mm;
+        }
+        .chevron-bottom {
+            height: 6px;
+            background: linear-gradient(-45deg, var(--doc-red) 50%, transparent 50%);
+            margin-top: 2mm;
+        }
+        .doc-title {
+            text-align: center;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--doc-red);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 2mm;
+        }
+        .legal-info {
+            text-align: center;
+            font-size: 9px;
+            color: #666;
+            margin-top: 2mm;
+            line-height: 1.3;
+        }
         table { width: 100%; border-collapse: collapse; }
         td, th { padding: 0.8mm 0; }
         .text-right { text-align: right; }
@@ -60,12 +91,16 @@
     <div class="shop-info">NIF: {{ nif_boutique }}{% if rccm_boutique is defined and rccm_boutique %} · RCCM: {{ rccm_boutique }}{% endif %}</div>
     {% endif %}
 
+    {# --- Bandeau chevron vert (sous l'en-tête) --- #}
+    <div class="chevron-top"></div>
+
     <div class="ticket-hr-thick"></div>
 
     {# --- Infos facture --- #}
+    <div class="doc-title">Facture</div>
     <table>
         <tr>
-            <td class="fw-bold">Facture</td>
+            <td class="fw-bold">Numéro</td>
             <td class="text-right">{{ facture.numero_facture }}</td>
         </tr>
         <tr>
@@ -202,8 +237,18 @@
         {{ "now"|date('d/m/Y') }}
     </div>
 
+    {# --- Infos légales --- #}
+    {% if nif_boutique is defined and nif_boutique %}
+    <div class="legal-info">
+        {{ param('app_nom', 'eStock') }} — NIF: {{ nif_boutique }}{% if rccm_boutique is defined and rccm_boutique %} · RCCM: {{ rccm_boutique }}{% endif %}
+    </div>
+    {% endif %}
+
     {# --- Code-barres facture (optionnel) --- #}
     <div class="text-center mt-1" id="barcodeFacture"></div>
+
+    {# --- Bandeau chevron rouge (bas) --- #}
+    <div class="chevron-bottom"></div>
 
 </div>
 
@@ -237,8 +282,6 @@
     }
 
     window.addEventListener('load', function () {
-        // On tente le code-barres immédiatement, puis on lance l'impression
-        // sans attendre indéfiniment si la lib CDN n'a pas pu charger (mode hors-ligne).
         genererCodeBarre();
         setTimeout(function () { window.print(); }, 400);
     });

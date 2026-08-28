@@ -6,6 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carte de fidélité</title>
     <style>
+        :root {
+            --doc-red: #D52B1E;
+            --doc-red-dark: #B71C1C;
+            --doc-orange: #F57C00;
+            --doc-green: #8DC63F;
+        }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Courier New', Courier, monospace;
@@ -17,7 +23,7 @@
         .carte {
             width: 85mm;
             height: 55mm;
-            background: linear-gradient(135deg, #312e81, #6366f1);
+            background: linear-gradient(135deg, var(--doc-red) 0%, var(--doc-orange) 100%);
             color: #fff;
             border-radius: 4mm;
             padding: 6mm;
@@ -26,6 +32,15 @@
             justify-content: space-between;
             position: relative;
             overflow: hidden;
+        }
+        .carte::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--doc-green);
         }
         .carte::after {
             content: '';
@@ -37,6 +52,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
+            z-index: 1;
         }
         .nom-boutique { font-size: 15px; font-weight: 700; letter-spacing: .5px; }
         .badge-fidelite {
@@ -46,9 +63,10 @@
             border: 1px solid rgba(255,255,255,.5);
             padding: 1mm 2.5mm;
             border-radius: 1mm;
+            background: rgba(255,255,255,.15);
         }
-        .client-nom { font-size: 14px; font-weight: 700; margin-top: 2mm; }
-        .client-id { font-size: 10px; opacity: .85; }
+        .client-nom { font-size: 14px; font-weight: 700; margin-top: 2mm; position: relative; z-index: 1; }
+        .client-id { font-size: 10px; opacity: .85; position: relative; z-index: 1; }
         .code-barre {
             background: #fff;
             padding: 2.5mm;
@@ -56,6 +74,8 @@
             text-align: center;
             display: flex;
             justify-content: center;
+            position: relative;
+            z-index: 1;
         }
         .code-barre svg, .code-barre canvas { max-width: 62mm; }
         .solde {
@@ -63,6 +83,8 @@
             justify-content: space-between;
             align-items: center;
             font-size: 11px;
+            position: relative;
+            z-index: 1;
         }
         .solde strong { font-size: 15px; }
         .no-print { text-align: center; margin-top: 14px; }
@@ -78,7 +100,7 @@
     <div class="carte">
         <div class="entete">
             <span class="nom-boutique">{{ nom_boutique|e }}</span>
-            <span class="badge-fidelite"><i>★</i> Fidélité</span>
+            <span class="badge-fidelite">★ Fidélité</span>
         </div>
         <div>
             <div class="client-nom">{{ nom_client ?: '—' }}</div>
@@ -95,7 +117,7 @@
         </div>
     </div>
     <div class="no-print">
-        <button class="btn" onclick="window.print()" style="padding:8px 18px;background:#6366f1;color:#fff;border:0;border-radius:6px;cursor:pointer;">
+        <button class="btn" onclick="window.print()" style="padding:8px 18px;background:var(--doc-red);color:#fff;border:0;border-radius:6px;cursor:pointer;font-weight:600;">
             Imprimer la carte
         </button>
     </div>

@@ -2,7 +2,7 @@
     </div><!-- /.app-main -->
 </div><!-- /.app-shell -->
 
-{# Toast container pour les messages flash #}
+<!-- Toast container pour les messages flash -->
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1090;" id="flashToastContainer"></div>
 
 <?php $flashMessages = $flash_captured ?? []; ?>

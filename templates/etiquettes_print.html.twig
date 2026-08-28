@@ -5,6 +5,11 @@
     <title>Impression d'étiquettes rayon</title>
     <link rel="icon" type="image/x-icon" href="{{ base_url }}assets/images/logo-eStock.ico">
     <style>
+        :root {
+            --doc-red: #D52B1E;
+            --doc-green: #8DC63F;
+            --doc-orange: #F57C00;
+        }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background: #fff; color: #000; }
 
@@ -38,11 +43,28 @@
             overflow: hidden;
             background: #fff;
             page-break-inside: avoid;
+            position: relative;
         }
 
-        .label-shop { font-size: 8px; font-weight: bold; text-transform: uppercase; color: #555; }
+        .label-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(135deg, var(--doc-green) 50%, transparent 50%);
+        }
+
+        .label-shop {
+            font-size: 8px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: var(--doc-red);
+            margin-top: 2px;
+        }
         .label-title { font-size: 11px; font-weight: bold; line-height: 1.1; margin: 1mm 0; max-height: 22px; overflow: hidden; }
-        .label-price { font-size: 14px; font-weight: 900; color: #000; }
+        .label-price { font-size: 14px; font-weight: 900; color: var(--doc-red); }
         .label-barcode { margin-top: auto; }
         .label-barcode svg { max-width: 100%; height: auto; }
 
@@ -55,8 +77,8 @@
 <body>
 
 <div class="no-print" style="padding: 10px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
-    <button id="btnPrint" style="padding: 8px 16px; background: #0d6efd; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-        🖨️ Imprimer les étiquettes ({{ articles|length }})
+    <button id="btnPrint" style="padding: 8px 16px; background: var(--doc-red); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+        Imprimer les étiquettes ({{ articles|length }})
     </button>
     <button id="btnClose" style="padding: 8px 16px; background: #6c757d; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
         Fermer
@@ -87,7 +109,6 @@
         var code = svg.getAttribute('data-code');
         if (code && code.trim() !== '') {
             try {
-                // Utilisation de CODE128 pour garantir la compatibilité universelle et éviter les erreurs de checksum
                 JsBarcode(svg, code, {
                     format: "CODE128",
                     width: 1.1,
