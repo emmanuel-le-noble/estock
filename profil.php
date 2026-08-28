@@ -85,7 +85,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
     redirect('profil.php');
 }
 
+// --- Traitement POST : délier le compte Google ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'unlink_google') {
+    csrf_guard('profil.php');
+
+    // Vérifier que l'utilisateur a bien un mot de passe (sinon il serait bloqué sans accès)
+    $stmt = $pdo->prepare('SELECT mot_de_passe FROM utilisateurs WHERE id = :id');
+    $stmt->execute([':id' => $user_id]);
+    $row = $stmt->fetch();
+
+    if (!$row || empty($row['mot_de_passe']) || $row['mot_de_passe'] === password_hash('', PASSWORD_DEFAULT)) {
+        flash_error('Vous devez d\'abord définir un mot de passe avant de délier votre compte Google.');
+        redirect('profil.php');
+    }
+
+    db_user_unlink_google($pdo, $user_id);
+    suivre_activite('GOOGLE_UNLINK', 'Compte Google délié');
+    flash_success('Compte Google délié avec succès.');
+    redirect('profil.php');
+}
+
 // --- Affichage ---
+$userData = db_user_get_by_id($pdo, $user_id);
 echo $twig->render('profil.html.twig', [
     'titre_page' => 'Mon Profil',
+    'google_oauth_actif' => param_bool('google_oauth_actif', false),
+    'has_google' => !empty($userData['google_id']),
+    'google_email' => $userData['google_email'] ?? '',
 ]);

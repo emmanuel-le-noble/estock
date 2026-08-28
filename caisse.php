@@ -53,6 +53,13 @@ window.BASE_URL = <?= json_encode(BASE_URL, JSON_UNESCAPED_SLASHES | JSON_HEX_TA
 window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;
 </script>
 
+<?php
+// Articles actifs pour le select (id, nom, code_barre, prix_vente, quantite_stock)
+$_articles_pos = db_articles_search_stock($pdo, '', 1000, $magasin_id);
+$_articles_pos_json = json_encode($_articles_pos, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+unset($_articles_pos);
+?>
+
 <?php if ($caisse_fermee): ?>
 <div class="alert alert-warning d-flex align-items-center mb-3" role="alert">
     <i class="bi bi-lock-fill fs-4 me-2"></i>
@@ -91,6 +98,15 @@ window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;
                            placeholder="<?= $caisse_fermee ? 'Caisse clôturée — scan désactivé' : 'Scannez ou saisissez un code-barres puis Entrée...' ?>"
                            autocomplete="off"
                            <?= $caisse_fermee ? 'disabled' : '' ?>>
+                </div>
+                <div class="mt-2">
+                    <label for="selectArticle" class="form-label small fw-semibold mb-1">
+                        <i class="bi bi-list-ul text-primary"></i> OU sélectionnez un article
+                    </label>
+                    <select id="selectArticle" class="form-select"
+                            <?= $caisse_fermee ? 'disabled' : '' ?>>
+                        <option value="">— Choisir un article à vendre —</option>
+                    </select>
                 </div>
                 <div class="form-text">
                     <i class="bi bi-keyboard"></i> Raccourcis : <kbd>F2</kbd> Vider le panier · <kbd>F8</kbd> Valider
@@ -295,5 +311,38 @@ window.CAISSE_FERMEE = <?= $caisse_fermee ? 'true' : 'false' ?>;
     </div>
 </div>
 
+<script nonce="<?= h(csp_nonce()) ?>">
+(function() {
+    var articles = <?= $_articles_pos_json ?>;
+    var select = document.getElementById('selectArticle');
+    if (!select || !articles || !articles.length) return;
+
+    // Trier par nom
+    articles.sort(function(a, b) { return (a.nom || '').localeCompare(b.nom || '', 'fr'); });
+
+    // Remplir le select
+    articles.forEach(function(art) {
+        var opt = document.createElement('option');
+        opt.value = art.code_barre || '';
+        var stock = parseInt(art.quantite_stock, 10) || 0;
+        opt.textContent = art.nom + ' — ' + stock + ' en stock';
+        if (stock <= 0) opt.disabled = true;
+        select.appendChild(opt);
+    });
+
+    // Quand on choisit un article → appeler la même logique que le scan
+    select.addEventListener('change', function() {
+        var code = this.value;
+        if (!code) return;
+        // Simuler un scan en déclenchant l'événement sur scanInput
+        var scanInput = document.getElementById('scanInput');
+        if (scanInput) {
+            scanInput.value = code;
+            scanInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+        }
+        this.value = '';
+    });
+})();
+</script>
 <script nonce="<?= h(csp_nonce()) ?>" src="<?= BASE_URL ?>assets/js/caisse.js"></script>
 <?php include __DIR__ . '/includes/footer.php'; ?>

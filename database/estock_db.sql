@@ -911,13 +911,18 @@ CREATE TABLE IF NOT EXISTS `utilisateurs` (
   `mot_de_passe` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `totp_secret` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `totp_actif` tinyint(1) NOT NULL DEFAULT '0',
+  `google_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `google_email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `google_avatar` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `role` enum('Directeur','Admin','Magasinier','Vendeur') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Vendeur',
   `magasin_id` int DEFAULT NULL,
   `actif` tinyint(1) NOT NULL DEFAULT '1',
   `date_creation` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `login` (`login`),
-  KEY `idx_user_magasin` (`magasin_id`)
+  KEY `idx_user_magasin` (`magasin_id`),
+  KEY `idx_user_google_id` (`google_id`),
+  UNIQUE KEY `idx_user_google_email` (`google_email`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --

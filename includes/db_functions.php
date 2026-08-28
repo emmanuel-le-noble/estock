@@ -738,6 +738,58 @@ function db_user_change_password(PDO $pdo, int $user_id, string $mdp_hash): void
 }
 
 // ============================================================
+//  GOOGLE OAuth
+// ============================================================
+
+/**
+ * Chercher un utilisateur par son email Google (pour lier un compte existant).
+ */
+function db_user_get_by_google_email(PDO $pdo, string $google_email): ?array {
+    $stmt = $pdo->prepare('SELECT id, nom, login, role, magasin_id, actif, google_id FROM utilisateurs WHERE google_email = ? AND actif = 1 LIMIT 1');
+    $stmt->execute([$google_email]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * Lier un compte Google à un utilisateur existant.
+ */
+function db_user_link_google(PDO $pdo, int $user_id, string $google_id, string $google_email, ?string $google_avatar): void {
+    $stmt = $pdo->prepare('UPDATE utilisateurs SET google_id = :gid, google_email = :gemail, google_avatar = :gavatar WHERE id = :id');
+    $stmt->execute([':gid' => $google_id, ':gemail' => $google_email, ':gavatar' => $google_avatar, ':id' => $user_id]);
+}
+
+/**
+ * Créer un nouveau compte utilisateur à partir des informations Google.
+ * Retourne le nouvel ID.
+ */
+function db_user_create_from_google(PDO $pdo, string $nom, string $google_id, string $google_email, ?string $google_avatar): int {
+    $login = 'google_' . $google_id;
+    $stmt = $pdo->prepare('
+        INSERT INTO utilisateurs (nom, login, mot_de_passe, google_id, google_email, google_avatar, role, actif)
+        VALUES (:nom, :login, :mdp, :gid, :gemail, :gavatar, :role, 1)
+    ');
+    $stmt->execute([
+        ':nom' => $nom,
+        ':login' => $login,
+        ':mdp' => password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT),
+        ':gid' => $google_id,
+        ':gemail' => $google_email,
+        ':gavatar' => $google_avatar,
+        ':role' => ROLE_VENDEUR,
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+/**
+ * Délier le compte Google d'un utilisateur.
+ */
+function db_user_unlink_google(PDO $pdo, int $user_id): void {
+    $stmt = $pdo->prepare('UPDATE utilisateurs SET google_id = NULL, google_email = NULL, google_avatar = NULL WHERE id = :id');
+    $stmt->execute([':id' => $user_id]);
+}
+
+// ============================================================
 //  FACTURES
 // ============================================================
 

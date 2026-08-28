@@ -80,7 +80,21 @@ document.addEventListener('DOMContentLoaded', function () {
     navSections.forEach(function (section) {
         var key = section.getAttribute('data-section') || '';
         var hasActive = !!section.querySelector('.nav-link.active');
-        var open = hasActive ? true : (collapsedMap[key] !== true);
+        // Prioriser l'état PHP (classe open déjà dans le HTML) :
+        // si la section a déjà la classe open côté serveur, la conserver
+        // sauf si l'utilisateur l'a explicitement pliée (stocké en localStorage).
+        var serverOpen = section.classList.contains('open');
+        var open;
+        if (hasActive) {
+            // La page active est dans cette section → toujours ouverte
+            open = true;
+        } else if (collapsedMap.hasOwnProperty(key)) {
+            // L'utilisateur a explicitement plié/déplié cette section → respecter
+            open = collapsedMap[key] !== true;
+        } else {
+            // Pas d'historique localStorage → respecter l'état PHP
+            open = serverOpen;
+        }
         section.classList.toggle('open', open);
 
         var head = section.querySelector('.nav-section-head');

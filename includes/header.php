@@ -90,6 +90,9 @@ if (est_connecte()) {
             $sec_ventes['items'][] = ['slug' => 'promotions', 'label' => 'Promotions & Remises', 'icon' => 'bi-percent', 'color' => 'clr-sky'];
         }
         $sec_ventes['items'][] = ['slug' => 'cloture', 'label' => 'Clôture de Caisse', 'icon' => 'bi-lock-fill', 'color' => 'clr-sky'];
+        if (peut('clients_consulter')) {
+            $sec_ventes['items'][] = ['slug' => 'clients', 'label' => 'Clients & fidélité', 'icon' => 'bi-people', 'color' => 'clr-sky'];
+        }
     }
 
     $sec_admin = ['key' => 'admin', 'titre' => 'Administration', 'icon' => 'bi-gear', 'items' => []];
@@ -99,9 +102,12 @@ if (est_connecte()) {
         $sec_admin['items'][] = ['slug' => 'magasins', 'label' => 'Magasins', 'icon' => 'bi-shop', 'color' => 'clr-violet'];
         $sec_admin['items'][] = ['slug' => 'parametres', 'label' => 'Paramètres', 'icon' => 'bi-gear', 'color' => 'clr-violet'];
     }
-    if (peut('audit_consulter')) {
-        $sec_admin['items'][] = ['slug' => 'audit', 'label' => "Journal d'activité", 'icon' => 'bi-clock-history', 'color' => 'clr-slate'];
-    }
+        if (peut('audit_consulter')) {
+            $sec_admin['items'][] = ['slug' => 'audit', 'label' => "Journal d'activité", 'icon' => 'bi-clock-history', 'color' => 'clr-slate'];
+        }
+        if (peut('audit_consulter')) {
+            $sec_admin['items'][] = ['slug' => 'conformite', 'label' => 'Traçabilité des ventes', 'icon' => 'bi-shield-check', 'color' => 'clr-slate'];
+        }
 
     foreach ([$sec_pilotage, $sec_stock, $sec_ventes, $sec_admin] as $sec) {
         if (!empty($sec['items'])) {
@@ -149,16 +155,27 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
     <!-- ============ SIDEBAR ============ -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <img src="<?= BASE_URL ?>assets/images/logo-eStock-2.png" alt="Logo <?= h($app_nom) ?>" class="logo-img">
+            <img src="<?= BASE_URL ?>assets/images/logo-eStock-3.png" alt="Logo <?= h($app_nom) ?>" class="logo-img">
             <span class="brand-text"><?= h($app_nom) ?></span>
         </div>
 
         <nav class="sidebar-nav">
-            <?php foreach ($nav_sections as $sec):
+            <?php
+            // Déterminer si au moins une section contient la page courante
+            $any_active = false;
+            foreach ($nav_sections as $sec) {
+                if (in_array($page_courante, array_column($sec['items'], 'slug'), true)) {
+                    $any_active = true;
+                    break;
+                }
+            }
+            foreach ($nav_sections as $sec):
                 $page_actuelle_dans = in_array($page_courante, array_column($sec['items'], 'slug'), true);
+                // Si aucune section n'est active (ex: tableau_bord), ouvrir toutes les sections
+                $should_open = $page_actuelle_dans || !$any_active;
             ?>
-            <div class="nav-section <?= $page_actuelle_dans ? 'open' : '' ?>" data-section="<?= h($sec['key']) ?>">
-                <button type="button" class="nav-section-head" aria-expanded="<?= $page_actuelle_dans ? 'true' : 'false' ?>">
+            <div class="nav-section <?= $should_open ? 'open' : '' ?>" data-section="<?= h($sec['key']) ?>">
+                <button type="button" class="nav-section-head" aria-expanded="<?= $should_open ? 'true' : 'false' ?>">
                     <span class="nav-section-title"><i class="bi <?= h($sec['icon']) ?>"></i> <?= h($sec['titre']) ?></span>
                     <i class="bi bi-chevron-down nav-section-chevron"></i>
                 </button>

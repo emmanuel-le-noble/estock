@@ -16,6 +16,36 @@
             </div>
         </div>
 
+        {# ---- Connexion Google ---- #}
+        {% if google_oauth_actif %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-google"></i> Connexion Google</h5>
+            </div>
+            <div class="card-body">
+                {% if has_google %}
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="fw-semibold text-success"><i class="bi bi-check-circle-fill"></i> Compte Google lié</div>
+                            <div class="text-muted small">{{ google_email }}</div>
+                        </div>
+                        <form method="post" action="profil.php" onsubmit="return confirm('Délier votre compte Google ? Vous ne pourrez plus vous connecter via Google.')">
+                            <input type="hidden" name="action" value="unlink_google">
+                            {{ csrf_field() }}
+                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                <i class="bi bi-link-45deg"></i> Délier
+                            </button>
+                        </form>
+                    </div>
+                {% else %}
+                    <div class="text-muted small">
+                        <i class="bi bi-info-circle"></i> Aucun compte Google lié. Connectez-vous avec Google depuis la page de connexion pour lier automatiquement votre compte.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         {# ---- Formulaire changement de mot de passe ---- #}
         <div class="card shadow-sm">
             <div class="card-header bg-white">

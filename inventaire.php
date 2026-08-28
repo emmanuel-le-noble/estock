@@ -132,7 +132,7 @@ if ($action === 'detail') {
     if (!$inv || (int)$inv['magasin_id'] !== $magasin_id) { flash_error('Inventaire introuvable.'); redirect('inventaire.php'); }
 
     $lignes    = db_inventaire_lignes_get($pdo, $get_id);
-    $articles  = db_articles_list_active($pdo, 1000);
+    $articles  = db_articles_search_stock($pdo, '', 1000, $magasin_id);
     $magasins  = function_exists('db_magasins_list') ? db_magasins_list($pdo) : [];
 
     echo $twig->render('inventaire.html.twig', [

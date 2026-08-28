@@ -358,8 +358,15 @@ document.addEventListener('DOMContentLoaded', function () {
                         const bgColor = '#fd7e14';
                         const icon = 'bi-exclamation-triangle';
 
+                        // Limiter les toasts visibles (max 3)
+                        var toastsExistant = document.querySelectorAll('body > .position-fixed.toast-limit');
+                        while (toastsExistant.length >= 3) {
+                            toastsExistant[0].remove();
+                            toastsExistant = document.querySelectorAll('body > .position-fixed.toast-limit');
+                        }
+
                         const toast = document.createElement('div');
-                        toast.className = 'position-fixed top-0 end-0 m-3 p-3 text-white rounded shadow';
+                        toast.className = 'position-fixed top-0 end-0 m-3 p-3 text-white rounded shadow toast-limit';
                         toast.style.cssText = 'z-index: 9999; background: ' + bgColor + '; max-width: 350px; animation: slideIn 0.3s ease;';
                         toast.innerHTML =
                             '<div class="d-flex align-items-center gap-2">' +
@@ -379,8 +386,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Notification de promotion
                     if (data.article.promotion) {
                         var promo = data.article.promotion;
+
+                        // Limiter les toasts visibles (max 3)
+                        var toastsPromo = document.querySelectorAll('body > .position-fixed.toast-limit');
+                        while (toastsPromo.length >= 3) {
+                            toastsPromo[0].remove();
+                            toastsPromo = document.querySelectorAll('body > .position-fixed.toast-limit');
+                        }
+
                         var toastPromo = document.createElement('div');
-                        toastPromo.className = 'position-fixed top-0 end-0 m-3 p-3 text-white rounded shadow';
+                        toastPromo.className = 'position-fixed top-0 end-0 m-3 p-3 text-white rounded shadow toast-limit';
                         toastPromo.style.cssText = 'z-index: 9999; background: linear-gradient(135deg, #6366f1, #8b5cf6); max-width: 350px; animation: slideIn 0.3s ease;';
                         toastPromo.innerHTML =
                             '<div class="d-flex align-items-center gap-2">' +
@@ -1111,12 +1126,20 @@ document.addEventListener('DOMContentLoaded', function () {
         wrapper.className = 'alert alert-' + type + ' alert-dismissible fade show py-2';
         wrapper.innerHTML = escapeHtml(message) +
             ' <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-        if (zoneAlerte) zoneAlerte.appendChild(wrapper);
+        if (zoneAlerte) {
+            // Limiter à 5 alertes visibles : supprimer les plus anciennes
+            var existing = zoneAlerte.querySelectorAll('.alert');
+            while (existing.length >= 5) {
+                existing[0].remove();
+                existing = zoneAlerte.querySelectorAll('.alert');
+            }
+            zoneAlerte.appendChild(wrapper);
+        }
         var delay = (type === 'success' || type === 'info') ? 4000 : 8000;
         setTimeout(function () {
             if (wrapper.parentNode) {
                 wrapper.classList.remove('show');
-                setTimeout(function () { wrapper.remove(); }, 200);
+                setTimeout(function () { if (wrapper.parentNode) wrapper.remove(); }, 300);
             }
         }, delay);
     }

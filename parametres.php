@@ -139,6 +139,28 @@ $sections = [
             <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#aideCronEmail">Voir le réglage cron type</button>
             <pre class="collapse border rounded bg-light p-2 mt-2 mb-0 small" id="aideCronEmail"><code>* * * * * php C:/wamp64/www/eStock/bin/emails_worker.php &gt;&gt; /tmp/emails_worker.log 2&gt;&amp;1</code></pre>',
     ],
+    'google_oauth' => [
+        'titre' => 'Connexion Google',
+        'icone' => 'bi-google',
+        'champs' => [
+            ['cle'=>'google_oauth_actif', 'label'=>'Activer la connexion avec compte Google', 'type'=>'checkbox', 'defaut'=>'0'],
+            ['cle'=>'google_client_id', 'label'=>'Client ID Google', 'type'=>'text', 'defaut'=>'', 'required'=>false],
+            ['cle'=>'google_client_secret', 'label'=>'Client Secret Google', 'type'=>'secret', 'defaut'=>'', 'required'=>false],
+        ],
+        'aide' => '<strong>Configurer la connexion Google :</strong>
+            <ol class="mb-1 ps-3 mt-1">
+                <li>Allez sur <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console → Credentials</a>.</li>
+                <li>Créez un <strong>OAuth 2.0 Client ID</strong> (type : Web application).</li>
+                <li>Ajoutez l\'<strong>URI de redirection autorisé</strong> : <code>' . h((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/eSotck/auth/google_callback.php') . '</code></li>
+                <li>Copiez le <strong>Client ID</strong> et le <strong>Client Secret</strong> dans les champs ci-dessus.</li>
+                <li>Activez l\'option « Activer la connexion avec compte Google ».</li>
+            </ol>
+            <div class="alert alert-info small mt-2 mb-0">
+                <i class="bi bi-info-circle"></i> Lorsqu\'un utilisateur se connecte avec Google pour la première fois :
+                si son email correspond à un compte existant, le compte est lié automatiquement.
+                Sinon, un nouveau compte est créé avec le rôle <strong>Vendeur</strong>.
+            </div>',
+    ],
 ];
 
 $champs = [];
@@ -169,6 +191,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
             $valeur = isset($_POST[$cle]) ? '1' : '0';
         } else {
             $valeur = trim((string)($_POST[$cle] ?? ''));
+        }
+
+        // Préserver l'ancienne valeur du client_secret si le champ est laissé vide
+        if ($cle === 'google_client_secret' && $valeur === '') {
+            $valeur = param('google_client_secret', '');
         }
 
         if ($type === 'select') {
@@ -489,7 +516,9 @@ if ($tab_courant === 'droits' && peut('utilisateurs_gerer')):
                                         <?php else: ?>
                                             <label class="form-label" for="<?= h($cle) ?>"><?= h($champ['label']) ?></label>
                                             <input id="<?= h($cle) ?>" name="<?= h($cle) ?>" class="form-control"
-                                                   type="<?= h($type) ?>" value="<?= h($valeur) ?>"
+                                                   type="<?= h($type === 'secret' ? 'password' : $type) ?>"
+                                                   value="<?= h($valeur) ?>"
+                                                   placeholder="<?= $type === 'secret' ? 'Laisser vide pour conserver' : '' ?>"
                                                    <?= !empty($champ['required']) ? 'required' : '' ?>
                                                    <?= isset($champ['maxlength']) ? 'maxlength="' . (int)$champ['maxlength'] . '"' : '' ?>
                                                    <?= isset($champ['min']) ? 'min="' . h($champ['min']) . '"' : '' ?>
