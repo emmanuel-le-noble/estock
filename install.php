@@ -28,7 +28,7 @@ if (is_file($envFile)) {
         try {
             require_once __DIR__ . '/config/connexion.php';
             if (function_exists('db_user_get_by_login') && function_exists('db_magasins_list_all')) {
-                $admins = $pdo->query("SELECT COUNT(*) FROM utilisateurs WHERE role IN ('Directeur','Admin') AND actif = 1")->fetchColumn();
+                $admins = $pdo->query("SELECT COUNT(*) FROM utilisateurs WHERE role IN ('chef équipe','Admin') AND actif = 1")->fetchColumn();
                 $magasins = $pdo->query("SELECT COUNT(*) FROM magasins WHERE actif = 1")->fetchColumn();
                 if ($admins > 0 && $magasins > 0) {
                     $installed = true;
@@ -268,7 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         // Creer l'admin
                         $mdpHash = password_hash($mdp, PASSWORD_DEFAULT);
-                        $stmtUser = $pdo->prepare("INSERT INTO utilisateurs (nom, login, mot_de_passe, role, actif, magasin_id) VALUES (?, ?, ?, 'Directeur', 1, ?)");
+                        $stmtUser = $pdo->prepare("INSERT INTO utilisateurs (nom, login, mot_de_passe, role, actif, magasin_id) VALUES (?, ?, ?, 'chef équipe', 1, ?)");
                         $stmtUser->execute([$nom, $login, $mdpHash, $magasinId]);
 
                         // Inserer les permissions manquantes (migration)
@@ -281,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 ('articles_modifier', 'Modifier les articles via l''API', 'Articles')");
 
                             $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
-                                SELECT 'Directeur', p.id FROM permissions p
+                                SELECT 'chef équipe', p.id FROM permissions p
                                 WHERE p.cle_permission IN ('clients_consulter','clients_gerer','conformite_archives','conformite_export_syscohada','articles_modifier')");
 
                             $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
@@ -316,7 +316,7 @@ $etape_titles = [
     1 => 'Prerequis',
     2 => 'Base de donnees',
     3 => 'Magasin',
-    4 => 'Compte Directeur',
+    4 => 'Compte chef équipe',
     5 => 'Termine',
 ];
 
@@ -432,7 +432,7 @@ $tous_ok = !in_array(false, array_column($prerequis, 1), true);
             <p>Cet assistant vous guide pour configurer eStock : base de donnees, magasin et compte administrateur.</p>
             <div class="feat"><i class="bi bi-database-check"></i> Installation automatique de la base</div>
             <div class="feat"><i class="bi bi-shop"></i> Configuration de votre premier magasin</div>
-            <div class="feat"><i class="bi bi-person-check"></i> Creation du compte Directeur</div>
+            <div class="feat"><i class="bi bi-person-check"></i> Creation du compte chef équipe</div>
         </div>
         <div class="footnote">&copy; <?= date('Y') ?> eStock &mdash; Assistant d'installation</div>
     </aside>
@@ -570,7 +570,7 @@ $tous_ok = !in_array(false, array_column($prerequis, 1), true);
             <!-- ETAPE 4 : Compte Directeur -->
             <!-- ============================================================ -->
             <?php elseif ($etape === 4): ?>
-            <h2 class="install-title">Compte Directeur</h2>
+            <h2 class="install-title">Compte chef équipe</h2>
             <p class="install-sub">Creez le compte administrateur principal.</p>
 
             <form method="post">

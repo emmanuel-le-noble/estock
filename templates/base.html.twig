@@ -83,7 +83,7 @@
                     {'slug': 'peremptions', 'label': 'Péremptions', 'icon': 'bi-calendar-week', 'color': 'clr-emerald', 'badge': nb_alertes_peremption|default(0)},
                     {'slug': 'suggestions_achat', 'label': "Suggestions d'achat", 'icon': 'bi-bag-check', 'color': 'clr-emerald', 'badge': nb_alertes_topbar|default(0)}
                 ]) %}
-                {% if current_role in ['Directeur', 'Admin', 'Magasinier'] %}
+                {% if current_role in ['chef équipe', 'Admin', 'Magasinier'] %}
                     {% set items_stock = items_stock|merge([
                         {'slug': 'etiquettes', 'label': 'Étiquettes rayon', 'icon': 'bi-tag', 'color': 'clr-emerald'},
                         {'slug': 'transferts', 'label': 'Transferts', 'icon': 'bi-arrow-repeat', 'color': 'clr-emerald'}

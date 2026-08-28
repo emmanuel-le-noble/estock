@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Panneau droit formulaire -->
     <div class="login-form-side">
         <div class="card login-card">
-            <h1 class="login-title">Bon retour 👋</h1>
+            <h1 class="login-title">Bon retour</h1>
             <p class="login-sub">Connectez-vous pour accéder à votre espace.</p>
 
             <?php if ($erreur): ?>

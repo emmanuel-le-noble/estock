@@ -203,7 +203,7 @@
                                 <i class="bi bi-send"></i> Soumettre pour validation
                             </button>
                         </form>
-                        <div class="small text-muted mb-2"><i class="bi bi-info-circle"></i> La commande sera bloquée jusqu'à la validation du Directeur.</div>
+                        <div class="small text-muted mb-2"><i class="bi bi-info-circle"></i> La commande sera bloquée jusqu'à la validation du chef équipe.</div>
 
                         <a href="{{ generate_signed_url('commandes_fournisseur.php', commande.id, {'action': 'editer_form'}) }}" class="btn btn-outline-primary w-100 mb-2">
                             <i class="bi bi-pencil"></i> Modifier le brouillon
@@ -229,7 +229,7 @@
                         </form>
                     {% elseif commande.statut == 'En_Attente' and not can_valider %}
                         <div class="alert alert-dark small mb-2">
-                            <i class="bi bi-hourglass-split"></i> En attente de validation par le Directeur.
+                            <i class="bi bi-hourglass-split"></i> En attente de validation par le chef équipe.
                         </div>
                     {% endif %}
 

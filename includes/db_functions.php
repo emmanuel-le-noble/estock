@@ -1836,7 +1836,7 @@ function db_permissions_all_grouped(PDO $pdo): array {
  */
 function db_permissions_get_roles(PDO $pdo): array {
     $stmt = $pdo->query(
-        "SELECT DISTINCT role_nom FROM role_permissions ORDER BY FIELD(role_nom, 'Directeur', 'Admin', 'Magasinier', 'Vendeur')"
+        "SELECT DISTINCT role_nom FROM role_permissions ORDER BY FIELD(role_nom, 'chef équipe', 'Admin', 'Magasinier', 'Vendeur')"
     );
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }

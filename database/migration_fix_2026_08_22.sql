@@ -21,7 +21,7 @@ INSERT IGNORE INTO `permissions` (`cle_permission`, `description`, `categorie`) 
 -- 3. Ajout des permissions aux roles existants
 -- Directeur : toutes les permissions
 INSERT IGNORE INTO `role_permissions` (`role_nom`, `permission_id`)
-SELECT 'Directeur', p.id
+SELECT 'chef équipe', p.id
 FROM `permissions` p
 WHERE p.cle_permission IN ('clients_consulter','clients_gerer','conformite_archives','conformite_export_syscohada','articles_modifier');
 

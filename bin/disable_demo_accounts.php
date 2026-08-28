@@ -16,7 +16,7 @@ try {
     // Ne jamais désactiver le dernier Directeur accessible.
     $stmt = $pdo->query(
         "SELECT COUNT(*) FROM utilisateurs
-         WHERE actif = 1 AND role = 'Directeur'
+         WHERE actif = 1 AND role = 'chef équipe'
            AND login NOT IN ('admin', 'magasin', 'vendeur')"
     );
     if ((int)$stmt->fetchColumn() === 0) {

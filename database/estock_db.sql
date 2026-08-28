@@ -914,7 +914,7 @@ CREATE TABLE IF NOT EXISTS `utilisateurs` (
   `google_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `google_email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `google_avatar` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `role` enum('Directeur','Admin','Magasinier','Vendeur') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Vendeur',
+  `role` enum('chef équipe','Admin','Magasinier','Vendeur') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Vendeur',
   `magasin_id` int DEFAULT NULL,
   `actif` tinyint(1) NOT NULL DEFAULT '1',
   `date_creation` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
