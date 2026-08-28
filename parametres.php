@@ -151,7 +151,7 @@ $sections = [
             <ol class="mb-1 ps-3 mt-1">
                 <li>Allez sur <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console → Credentials</a>.</li>
                 <li>Créez un <strong>OAuth 2.0 Client ID</strong> (type : Web application).</li>
-                <li>Ajoutez l\'<strong>URI de redirection autorisé</strong> : <code>' . h((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/eSotck/auth/google_callback.php') . '</code></li>
+                <li>Ajoutez l\'<strong>URI de redirection autorisé</strong> : <code>' . h(BASE_URL . 'auth/google_callback.php') . '</code></li>
                 <li>Copiez le <strong>Client ID</strong> et le <strong>Client Secret</strong> dans les champs ci-dessus.</li>
                 <li>Activez l\'option « Activer la connexion avec compte Google ».</li>
             </ol>

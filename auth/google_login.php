@@ -19,9 +19,7 @@ if (!$oauthActif || $clientId === '' || $clientSecret === '') {
     redirect('login.php');
 }
 
-// Construire l'URL de redirection
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$redirectUri = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/eSotck/auth/google_callback.php';
+$redirectUri = BASE_URL . 'auth/google_callback.php';
 
 // Générer un state CSRF pour sécuriser le flow
 $state = bin2hex(random_bytes(32));

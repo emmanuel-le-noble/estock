@@ -47,9 +47,7 @@ if ($code === '') {
     redirect('../auth/login.php');
 }
 
-// --- Échange du code contre un token ---
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$redirectUri = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/eSotck/auth/google_callback.php';
+$redirectUri = BASE_URL . 'auth/google_callback.php';
 
 $tokenData = json_decode(_google_fetch('https://oauth2.googleapis.com/token', [
     'code'          => $code,
