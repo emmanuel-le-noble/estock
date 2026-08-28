@@ -19,8 +19,8 @@ echo json_encode([
     'orientation'      => 'any',
     'categories'       => ['business', 'finance'],
     'icons' => [
-        ['src' => $base . 'assets/images/logo-eStock-2.PNG', 'sizes' => '192x192', 'type' => 'image/png'],
-        ['src' => $base . 'assets/images/logo-eStock-2.PNG', 'sizes' => '512x512', 'type' => 'image/png'],
-        ['src' => $base . 'assets/images/logo-eStock-2.PNG', 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
+        ['src' => $base . 'assets/images/logo-eStock-2.png', 'sizes' => '192x192', 'type' => 'image/png'],
+        ['src' => $base . 'assets/images/logo-eStock-2.png', 'sizes' => '512x512', 'type' => 'image/png'],
+        ['src' => $base . 'assets/images/logo-eStock-2.png', 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
