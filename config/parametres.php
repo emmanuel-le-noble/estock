@@ -117,6 +117,15 @@ function param_shop_name(): string {
     return param('nom_boutique', param_app_name());
 }
 
+/** Logo de la boutique téléversé, limité aux fichiers générés par l'application. */
+function param_shop_logo(): string {
+    $path = param('logo_boutique', '');
+    if (!preg_match('#^assets/uploads/brand/shop-logo-[a-f0-9]{24}\.(?:png|jpg|webp)$#', $path)) {
+        return '';
+    }
+    return is_file(__DIR__ . '/../' . $path) ? $path : '';
+}
+
 /**
  * Locale de formatage côté navigateur.
  */

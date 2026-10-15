@@ -36,7 +36,7 @@ function letterhead_vars(): array {
  */
 function letterhead_header(): string {
     $v = letterhead_vars();
-    $logo_path = 'assets/images/logo-eStock-2.png';
+    $logo_path = param_shop_logo() ?: 'assets/images/estock-logo.svg';
     $desc = $v['slogan'] ?: $v['description'];
 
     return <<<HTML

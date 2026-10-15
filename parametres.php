@@ -182,6 +182,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
         redirect('parametres.php');
     }
 
+    $logo_upload = $_FILES['logo_boutique_file'] ?? null;
+    $logo_a_supprimer = isset($_POST['supprimer_logo_boutique']);
+    $logo_upload_valide = null;
+    $logo_precedent = param_shop_logo();
+    if ($logo_upload && is_array($logo_upload) && (int)($logo_upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $upload_error = $logo_upload['error'] ?? UPLOAD_ERR_NO_FILE;
+        if (!is_int($upload_error)) {
+            flash_error('Les informations du fichier logo sont invalides.');
+            redirect('parametres.php');
+        }
+        if ($upload_error !== UPLOAD_ERR_OK) {
+            flash_error($upload_error === UPLOAD_ERR_INI_SIZE || $upload_error === UPLOAD_ERR_FORM_SIZE
+                ? 'Le logo dépasse la taille maximale autorisée de 3 Mo.'
+                : 'Le téléversement du logo a échoué. Veuillez réessayer.');
+            redirect('parametres.php');
+        }
+        if ($logo_a_supprimer) {
+            flash_error('Choisissez soit un nouveau logo, soit la suppression du logo actuel.');
+            redirect('parametres.php');
+        }
+        $tmp_logo = (string)($logo_upload['tmp_name'] ?? '');
+        $taille_logo = (int)($logo_upload['size'] ?? 0);
+        $fichier_recu = $tmp_logo !== '' && is_uploaded_file($tmp_logo);
+        $image_info = $fichier_recu ? @getimagesize($tmp_logo) : false;
+        $finfo = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
+        $mime_logo = $finfo && $fichier_recu ? finfo_file($finfo, $tmp_logo) : '';
+        if ($finfo) finfo_close($finfo);
+        $formats_logo = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'];
+        if ($taille_logo <= 0 || $taille_logo > 3 * 1024 * 1024 || !$image_info
+            || !isset($formats_logo[$mime_logo]) || ($image_info['mime'] ?? '') !== $mime_logo
+            || (int)$image_info[0] > 5000 || (int)$image_info[1] > 5000) {
+            flash_error('Format de logo invalide. Utilisez une image PNG, JPG ou WebP de 3 Mo maximum (5000 × 5000 px).');
+            redirect('parametres.php');
+        }
+        $logo_upload_valide = ['tmp_name' => $tmp_logo, 'extension' => $formats_logo[$mime_logo]];
+    }
+
     // --- Étape 1 : calcul et validation de TOUTES les valeurs avant tout enregistrement ---
     // (évite une sauvegarde partielle si un champ obligatoire est vide/invalide en cours de boucle)
     $valeurs_calculees = [];
@@ -252,12 +289,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
         redirect('parametres.php');
     }
 
+    $logo_nouveau = null;
+    if ($logo_upload_valide !== null) {
+        $logo_dir = __DIR__ . '/assets/uploads/brand';
+        if (!is_dir($logo_dir) && !@mkdir($logo_dir, 0755, true) && !is_dir($logo_dir)) {
+            flash_error('Le dossier de logos ne peut pas être créé. Vérifiez les permissions du serveur.');
+            redirect('parametres.php');
+        }
+        $logo_nouveau = 'assets/uploads/brand/shop-logo-' . bin2hex(random_bytes(12)) . '.' . $logo_upload_valide['extension'];
+        if (!move_uploaded_file($logo_upload_valide['tmp_name'], __DIR__ . '/' . $logo_nouveau)) {
+            flash_error('Le logo n’a pas pu être enregistré. Vérifiez les permissions du dossier.');
+            redirect('parametres.php');
+        }
+        $valeurs_calculees['logo_boutique'] = $logo_nouveau;
+    } elseif ($logo_a_supprimer) {
+        $valeurs_calculees['logo_boutique'] = '';
+    }
+
     // --- Étape 2 : enregistrement, une fois toutes les valeurs validées ---
     foreach ($valeurs_calculees as $cle => $valeur) {
-        param_save($cle, $valeur);
+        $param_enregistre = param_save($cle, $valeur);
+        if ($cle === 'logo_boutique' && !$param_enregistre) {
+            if ($logo_nouveau !== null) @unlink(__DIR__ . '/' . $logo_nouveau);
+            flash_error('Le logo a été reçu, mais son réglage n’a pas pu être enregistré.');
+            redirect('parametres.php');
+        }
         if ($cle === 'langue') {
             $_SESSION['langue'] = $valeur;
         }
+    }
+
+    if (($logo_nouveau !== null || $logo_a_supprimer) && $logo_precedent !== '' && $logo_precedent !== $logo_nouveau) {
+        @unlink(__DIR__ . '/' . $logo_precedent);
     }
 
     params_flush_cache();
@@ -479,7 +542,7 @@ if ($tab_courant === 'droits' && peut('utilisateurs_gerer')):
         </div>
     </div>
 
-    <form method="post" autocomplete="off">
+    <form method="post" enctype="multipart/form-data" autocomplete="off">
         <?= csrf_field() ?>
         <div class="row g-3">
             <?php foreach ($sections as $section): ?>
@@ -489,6 +552,26 @@ if ($tab_courant === 'droits' && peut('utilisateurs_gerer')):
                             <h5 class="mb-0"><i class="bi <?= h($section['icone']) ?>"></i> <?= h($section['titre']) ?></h5>
                         </div>
                         <div class="card-body">
+                            <?php if ($section['titre'] === 'Boutique / magasin'):
+                                $logo_boutique = param_shop_logo();
+                            ?>
+                                <div class="logo-upload-panel mb-4">
+                                    <div class="logo-upload-preview">
+                                        <img src="<?= h(BASE_URL . ($logo_boutique ?: 'assets/images/estock-mark.svg')) ?>" alt="Aperçu du logo de la boutique">
+                                    </div>
+                                    <div class="logo-upload-controls">
+                                        <label class="form-label mb-1" for="logo_boutique_file">Logo de la boutique</label>
+                                        <div class="small text-muted mb-2" id="logo_boutique_aide">PNG, JPG ou WebP · 3 Mo maximum · carré ou horizontal</div>
+                                        <input class="form-control form-control-sm" type="file" id="logo_boutique_file" name="logo_boutique_file" accept="image/png,image/jpeg,image/webp" aria-describedby="logo_boutique_aide">
+                                        <?php if ($logo_boutique !== ''): ?>
+                                            <div class="form-check mt-2">
+                                                <input class="form-check-input" type="checkbox" id="supprimer_logo_boutique" name="supprimer_logo_boutique" value="1">
+                                                <label class="form-check-label small" for="supprimer_logo_boutique">Revenir au logo eStock</label>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                             <div class="row g-3">
                                 <?php foreach ($section['champs'] as $champ):
                                     $cle = $champ['cle'];
@@ -791,4 +874,19 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <?php endif; // fin onglet promotions ?>
 
+<script nonce="<?= h(csp_nonce()) ?>">
+document.addEventListener('DOMContentLoaded', function() {
+    var input = document.getElementById('logo_boutique_file');
+    var preview = document.querySelector('.logo-upload-preview img');
+    if (!input || !preview) return;
+    var urlPrecedente = null;
+    input.addEventListener('change', function() {
+        var fichier = input.files && input.files[0];
+        if (!fichier || !/^image\/(png|jpeg|webp)$/.test(fichier.type)) return;
+        if (urlPrecedente) URL.revokeObjectURL(urlPrecedente);
+        urlPrecedente = URL.createObjectURL(fichier);
+        preview.src = urlPrecedente;
+    });
+});
+</script>
 <?php include __DIR__ . '/includes/footer.php'; ?>

@@ -703,6 +703,7 @@ $twig->addFunction(new \Twig\TwigFunction('csrf_field', 'csrf_field', ['is_safe'
 $twig->addFunction(new \Twig\TwigFunction('csp_nonce', 'csp_nonce'));
 $twig->addFunction(new \Twig\TwigFunction('param', 'param'));
 $twig->addFunction(new \Twig\TwigFunction('param_app_name', 'param_app_name'));
+$twig->addFunction(new \Twig\TwigFunction('param_shop_logo', 'param_shop_logo'));
 $twig->addFunction(new \Twig\TwigFunction('peut', 'peut'));
 $twig->addFunction(new \Twig\TwigFunction('generate_signed_url', 'generate_signed_url'));
 $twig->addFunction(new \Twig\TwigFunction('url_sign', 'url_sign'));

@@ -143,7 +143,7 @@ h1, h2, h3, h4, h5, h6 { color: var(--ink); font-weight: 700; letter-spacing: -0
 }
 .sidebar-brand .logo-img {
     width: 40px; height: 40px; border-radius: 10px;
-    object-fit: cover; flex-shrink: 0;
+    object-fit: contain; flex-shrink: 0;
     box-shadow: 0 4px 14px rgba(99, 102, 241, .35);
 }
 .sidebar-brand .brand-text {
@@ -934,9 +934,9 @@ body::before { animation-duration: 16s; opacity: .78; }
     position: sticky;
     top: 0;
     z-index: 1040;
-    background: linear-gradient(110deg, rgba(255,255,255,.82), rgba(245,248,253,.65));
-    border-bottom: 1px solid rgba(255,255,255,.82);
-    box-shadow: 0 10px 32px rgba(23,32,51,.075), inset 0 1px rgba(255,255,255,.95);
+    background: radial-gradient(ellipse at 0% 0%, rgba(39,107,206,.44), transparent 50%), linear-gradient(155deg, #18365f, #0d1f3b);
+    border-bottom: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 10px 32px rgba(13,31,59,.20), inset 0 1px rgba(255,255,255,.06);
     backdrop-filter: blur(26px) saturate(175%);
     -webkit-backdrop-filter: blur(26px) saturate(175%);
 }
@@ -949,47 +949,58 @@ body::before { animation-duration: 16s; opacity: .78; }
     align-items: center;
     gap: 22px;
 }
-.app-brand { display: inline-flex; align-items: center; gap: 12px; flex-shrink: 0; color: var(--ink); text-decoration: none; }
+.app-brand { display: inline-flex; align-items: center; gap: 12px; flex-shrink: 0; color: #fff; text-decoration: none; }
 .app-brand-mark {
     width: 44px; height: 44px; display: grid; place-items: center; overflow: hidden;
-    border: 1px solid #e6eaf2; border-radius: 14px; background: #fff;
-    box-shadow: 0 4px 12px rgba(23,32,51,.10);
+    border: 1px solid rgba(255,255,255,.16); border-radius: 14px; background: rgba(255,255,255,.08);
+    box-shadow: 0 4px 12px rgba(5,18,39,.18);
     transition: transform .25s ease, box-shadow .25s ease;
 }
 .app-brand:hover .app-brand-mark { transform: rotate(-5deg) scale(1.06); box-shadow: 0 8px 18px rgba(21,91,208,.2); }
-.app-brand-mark img { width: 100%; height: 100%; object-fit: cover; }
+.app-brand-mark img { width: 100%; height: 100%; object-fit: contain; }
 .app-brand-copy { display: grid; gap: 1px; line-height: 1.2; }
-.app-brand-copy strong { color: #172033; font-size: 1rem; font-weight: 750; }
-.app-brand-copy small { color: #8993a5; font-size: .68rem; font-weight: 500; }
+.app-brand-copy strong { color: #fff; font-size: 1rem; font-weight: 750; }
+.app-brand-copy small { color: #b6c9e3; font-size: .68rem; font-weight: 500; }
 .app-header-tools { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.logo-upload-panel { display: flex; align-items: center; gap: 16px; padding: 16px; border: 1px solid rgba(21,91,208,.12); border-radius: 16px; background: linear-gradient(120deg, rgba(237,244,255,.75), rgba(255,255,255,.58)); }
+.logo-upload-preview { width: 88px; height: 88px; display: grid; place-items: center; flex: 0 0 88px; overflow: hidden; border: 1px solid rgba(21,91,208,.12); border-radius: 14px; background: #fff; box-shadow: 0 5px 16px rgba(23,54,95,.08); }
+.logo-upload-preview img { width: 100%; height: 100%; object-fit: contain; }
+.logo-upload-controls { min-width: 0; flex: 1; }
+.logo-upload-controls .form-control { max-width: 440px; }
+@media (max-width: 575.98px) { .logo-upload-panel { align-items: flex-start; flex-direction: column; } .logo-upload-preview { width: 72px; height: 72px; flex-basis: 72px; } }
 .connection-status { margin-right: 4px; }
 .store-switcher { max-width: 220px; }
 .quick-pos { min-height: 40px; padding-inline: 16px; border-radius: 12px; box-shadow: 0 5px 13px rgba(16,185,129,.22); }
 .tool-icon { width: 40px; height: 40px; justify-content: center; padding: 0; border-radius: 12px; }
 .account-link {
     position: relative; display: inline-flex; align-items: center; gap: 11px; margin-left: 3px; padding: 5px 10px 5px 5px;
-    min-height: 50px; border: 1px solid rgba(255,255,255,.84); border-radius: 16px;
-    background: linear-gradient(145deg, rgba(255,255,255,.72), rgba(255,255,255,.38));
-    box-shadow: inset 0 1px rgba(255,255,255,.9), 0 5px 16px rgba(30,48,76,.055);
-    color: var(--ink); text-decoration: none; backdrop-filter: blur(18px) saturate(165%); -webkit-backdrop-filter: blur(18px) saturate(165%);
+    min-height: 50px; border: 1px solid rgba(255,255,255,.15); border-radius: 16px;
+    background: linear-gradient(145deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+    box-shadow: inset 0 1px rgba(255,255,255,.10), 0 5px 16px rgba(5,18,39,.10);
+    color: #f7faff; text-decoration: none; backdrop-filter: blur(18px) saturate(165%); -webkit-backdrop-filter: blur(18px) saturate(165%);
     transition: background .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s ease;
 }
-.account-link:hover { border-color: rgba(255,255,255,.98); background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(237,244,255,.62)); box-shadow: inset 0 1px rgba(255,255,255,.98), 0 9px 22px rgba(21,71,135,.12); transform: translateY(-1px); }
-.account-link:focus-visible { outline: 2px solid rgba(21,91,208,.58); outline-offset: 2px; }
+.account-link:hover { border-color: rgba(255,255,255,.28); background: linear-gradient(145deg, rgba(255,255,255,.19), rgba(255,255,255,.10)); box-shadow: inset 0 1px rgba(255,255,255,.16), 0 9px 22px rgba(5,18,39,.18); transform: translateY(-1px); }
+.account-link:focus-visible { outline: 2px solid rgba(147,197,253,.85); outline-offset: 2px; }
 .account-link .avatar { width: 39px; height: 39px; display: grid; place-items: center; flex: 0 0 39px; border: 1px solid rgba(255,255,255,.96); border-radius: 13px; background: linear-gradient(145deg, #e5f0ff, #b9d4fb); box-shadow: inset 0 1px rgba(255,255,255,.95), 0 3px 10px rgba(42,94,163,.16); color: #174a86; font-size: .74rem; font-weight: 750; letter-spacing: .035em; }
 .account-meta { display: grid; gap: 4px; min-width: 0; max-width: 150px; line-height: 1.1; }
-.account-meta strong { overflow: hidden; color: #1c293b; font-size: .75rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.account-meta small { display: flex; align-items: center; gap: 5px; width: fit-content; padding: 3px 7px; border: 1px solid rgba(21,91,208,.09); border-radius: 999px; background: rgba(21,91,208,.065); color: #4d6480; font-size: .62rem; font-weight: 600; }
-.account-meta small i { color: #3975bd; font-size: .66rem; }
-.account-caret { color: #8995a7; font-size: .65rem; transition: color .2s ease, transform .2s ease; }
+.account-meta strong { overflow: hidden; color: #f7faff; font-size: .75rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.account-meta small { display: flex; align-items: center; gap: 5px; width: fit-content; padding: 3px 7px; border: 1px solid rgba(147,197,253,.20); border-radius: 999px; background: rgba(59,130,246,.16); color: #d7e7fa; font-size: .62rem; font-weight: 600; }
+.account-meta small i { color: #93c5fd; font-size: .66rem; }
+.account-caret { color: #afc0d6; font-size: .65rem; transition: color .2s ease, transform .2s ease; }
 .account-link:hover .account-caret { color: var(--brand); transform: translateX(2px); }
 .logout-form { margin: 0; }
 .logout-button, .burger {
     width: 40px; height: 40px; display: inline-grid; place-items: center;
-    border: 1px solid #e3e8f0; border-radius: 12px; background: #fff; color: #667085; font-size: 1.08rem;
+    border: 1px solid rgba(255,255,255,.16); border-radius: 12px; background: rgba(255,255,255,.08); color: #dbe7f5; font-size: 1.08rem;
     transition: color .18s ease, border-color .18s ease, background-color .18s ease, transform .18s ease;
 }
 .logout-button:hover { color: #c43245; border-color: #f1c5cc; background: #fff5f6; transform: translateY(-1px); }
+.app-header .btn-outline-secondary { color: #e2ebf6; border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.08); }
+.app-header .btn-outline-secondary:hover { color: #fff; border-color: rgba(255,255,255,.34); background: rgba(255,255,255,.16); }
+.app-header .btn-outline-warning, .app-header .btn-outline-danger { background: rgba(255,255,255,.08); }
+.app-header .logout-button:hover { color: #fecdd3; border-color: rgba(251,113,133,.52); background: rgba(190,24,93,.20); }
+.app-header .burger:hover { color: #fff; border-color: rgba(255,255,255,.3); background: rgba(255,255,255,.16); }
 .burger { display: none; cursor: pointer; }
 .primary-nav {
     grid-column: 1;

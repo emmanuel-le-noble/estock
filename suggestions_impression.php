@@ -22,7 +22,7 @@ $nb_total = count($articles);
 <head>
     <meta charset="UTF-8">
     <title>Suggestions d'Achat — <?= h(param_shop_name()) ?></title>
-    <link rel="icon" type="image/x-icon" href="assets/images/logo-eStock.ico">
+    <link rel="icon" href="<?= h(BASE_URL . (param_shop_logo() ?: 'assets/images/estock-mark.svg')) ?>">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">

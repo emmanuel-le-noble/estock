@@ -446,7 +446,7 @@ $tous_ok = !in_array(false, array_column($prerequis, 1), true);
     <!-- Panneau gauche vitrine -->
     <aside class="install-aside">
         <div class="brand-row">
-            <img src="assets/images/logo-eStock-3.png" alt="Logo eStock" class="logo-img">
+            <img src="assets/images/estock-mark.svg" alt="Logo eStock" class="logo-img">
             <span class="brand-name">eStock</span>
         </div>
         <div class="pitch">

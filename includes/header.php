@@ -17,6 +17,8 @@ $sous_titre  = $sous_titre  ?? '';
 $user = user_courant();
 $role = user_role();
 $app_nom = param_app_name();
+$logo_boutique = param_shop_logo();
+$logo_affiche = BASE_URL . ($logo_boutique ?: 'assets/images/estock-mark.svg');
 
 // ----- Sécurité : Initialisation automatique des compteurs d'alertes topbar -----
 if (est_connecte() && (!isset($nb_alertes_topbar) || !isset($nb_alertes_peremption))) {
@@ -144,8 +146,8 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
     <title><?= h($titre_page) ?> · <?= h($app_nom) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link rel="icon" type="image/x-icon" href="<?= BASE_URL ?>assets/images/logo-eStock.ico">
-    <link href="<?= BASE_URL ?>assets/css/style.css?v=16" rel="stylesheet">
+    <link rel="icon" href="<?= h($logo_affiche) ?>">
+    <link href="<?= BASE_URL ?>assets/css/style.css?v=18" rel="stylesheet">
     <style>
         :root {
             --brand: <?= h($theme_vars[0]) ?>;
@@ -164,7 +166,7 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
     <header class="app-header">
         <div class="app-header-main">
             <a class="app-brand" href="tableau_bord.php" aria-label="<?= h($app_nom) ?>, accueil">
-                <span class="app-brand-mark"><img src="<?= BASE_URL ?>assets/images/logo-eStock-3.png" alt=""></span>
+                <span class="app-brand-mark"><img src="<?= h($logo_affiche) ?>" alt=""></span>
                 <span class="app-brand-copy"><strong><?= h($app_nom) ?></strong><small>Gestion commerciale</small></span>
             </a>
             <button class="burger" id="burger" type="button" aria-label="Ouvrir la navigation" aria-expanded="false" aria-controls="sidebar">
