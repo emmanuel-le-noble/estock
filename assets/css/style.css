@@ -856,7 +856,7 @@ kbd {
     z-index: 0;
     pointer-events: none;
 }
-.app-shell, body > main, body > .container, body > .container-fluid {
+body > main, body > .container, body > .container-fluid {
     position: relative;
     z-index: 1;
 }
@@ -927,7 +927,7 @@ kbd {
 html, body { font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 body { background: #e9eef5; color: var(--ink-2); }
 body::before { animation-duration: 16s; opacity: .78; }
-.app-shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); grid-template-rows: 76px minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; background: rgba(239,243,249,.72); position: relative; z-index: 1; }
+.app-shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); grid-template-rows: 76px minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; background: rgba(239,243,249,.72); position: relative; }
 .app-header {
     grid-column: 1 / -1;
     grid-row: 1;
@@ -1073,7 +1073,7 @@ body::before { animation-duration: 16s; opacity: .78; }
 .page-heading p { margin: 7px 0 0; color: #768195; font-size: .88rem; text-wrap: pretty; }
 .page-date { display: inline-flex; align-items: center; gap: 8px; padding: 9px 13px; border: 1px solid rgba(255,255,255,.84); border-radius: 12px; background: rgba(255,255,255,.50); color: #647085; font-size: .75rem; font-weight: 600; white-space: nowrap; box-shadow: inset 0 1px rgba(255,255,255,.8), 0 5px 15px rgba(30,48,76,.045); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); }
 .page-date i { color: var(--brand); }
-.app-content { width: 100%; max-width: 1480px; margin: 0 auto; padding: 8px clamp(24px, 3.5vw, 52px) 48px; flex: 1; position: relative; z-index: 1; }
+.app-content { width: 100%; max-width: 1480px; margin: 0 auto; padding: 8px clamp(24px, 3.5vw, 52px) 48px; flex: 1; position: relative; z-index: auto; }
 .card, .stat-card, .glass-card {
     border: 1px solid rgba(255,255,255,.88);
     border-radius: 16px;

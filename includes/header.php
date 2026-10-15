@@ -145,7 +145,7 @@ $theme_vars = $theme_palettes[$theme_couleur] ?? $theme_palettes['indigo'];
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="<?= BASE_URL ?>assets/images/logo-eStock.ico">
-    <link href="<?= BASE_URL ?>assets/css/style.css?v=13" rel="stylesheet">
+    <link href="<?= BASE_URL ?>assets/css/style.css?v=16" rel="stylesheet">
     <style>
         :root {
             --brand: <?= h($theme_vars[0]) ?>;

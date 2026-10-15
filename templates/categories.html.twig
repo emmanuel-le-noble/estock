@@ -127,6 +127,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const catActif = document.getElementById('catActif');
     const catModalTitle = document.getElementById('catModalTitle');
 
+    modalCat.addEventListener('shown.bs.modal', function() {
+        catNom.focus();
+    });
+
     document.querySelectorAll('.btn-edit-cat').forEach(btn => {
         btn.addEventListener('click', function() {
             catAction.value = 'editer';

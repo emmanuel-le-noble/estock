@@ -56,7 +56,7 @@ $magasin_courant = (int)($_SESSION['magasin_actif'] ?? 0);
     <title>Choisir un magasin · <?= h($app_nom) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="../assets/css/style.css?v=13" rel="stylesheet">
+    <link href="../assets/css/style.css?v=16" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="../assets/images/logo-eStock.ico">
     <style>
         .magasin-split { min-height: 100vh; display: grid; grid-template-columns: 1fr 1.4fr; }

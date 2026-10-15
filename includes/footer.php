@@ -8,7 +8,7 @@
 <?php $flashMessages = $flash_captured ?? []; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script nonce="<?= h(csp_nonce()) ?>" src="<?= BASE_URL ?>assets/js/app.js?v=6"></script>
+<script nonce="<?= h(csp_nonce()) ?>" src="<?= BASE_URL ?>assets/js/app.js?v=7"></script>
 <script nonce="<?= h(csp_nonce()) ?>">
 (function(){
     var msgs = <?= json_encode($flashMessages, JSON_UNESCAPED_UNICODE) ?>;

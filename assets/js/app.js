@@ -2,6 +2,13 @@
    app.js - Interactions globales (Vanilla JS) — Futuristic
    ================================================================= */
 
+// Les conteneurs de page utilisent parfois transform/backdrop-filter, qui
+// créent des contextes d'empilement. Les modales Bootstrap doivent rester
+// directement sous body pour passer au-dessus du backdrop.
+document.querySelectorAll('.app-shell .modal').forEach(function (modal) {
+    document.body.appendChild(modal);
+});
+
 document.addEventListener('DOMContentLoaded', function () {
     // Particules discrètes sur le fond clair.
     var canvas = document.getElementById('particleCanvas');
