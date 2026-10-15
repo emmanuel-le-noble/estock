@@ -105,7 +105,7 @@ eStock est une application de gestion de stock et de point de vente (POS) conçu
 | Paramètres | OUI | OUI | NON | NON |
 | Export CSV | OUI | OUI | OUI | NON |
 | Export SYSCOHADA | OUI | NON | NON | NON |
-| Journal d'audit | OUI | OUI | OUI | OUI |
+| Journal d'audit | OUI | NON | NON | NON |
 | Conformité | OUI | NON | NON | NON |
 
 ---
@@ -197,7 +197,7 @@ Données d'un utilisateur :
 
 Le système utilise une base de données pour gérer les permissions :
 
-- Table permissions : ~100+ permissions par clé
+- Table permissions : catalogue des permissions contrôlées par les modules actifs
 - Table role_permissions : association rôle / permission
 - Fonctions PHP : peut($cle) pour vérifier, exiger_permission($cle) pour bloquer
 
@@ -215,7 +215,7 @@ Exemples de permissions :
 | inventaire_consulter | Voir l'inventaire | OUI | OUI | OUI | NON |
 | retours_consulter | Voir les retours | OUI | OUI | NON | OUI |
 | promotions_consulter | Voir les promotions | OUI | OUI | NON | OUI |
-| audit_consulter | Voir le journal | OUI | OUI | OUI | OUI |
+| audit_consulter | Voir le journal | OUI | NON | NON | NON |
 | conformite_archives | Gérer conformité | OUI | NON | NON | NON |
 | conformite_export_syscohada | Export SYSCOHADA | OUI | NON | NON | NON |
 
@@ -879,7 +879,7 @@ Contenu :
 ### 18.1. Page d'audit
 
 **Fichier :** audit.php
-**Accès :** Tous les rôles (avec permission audit_consulter)
+**Accès :** Directeur uniquement (permission `audit_consulter`)
 
 Contenu :
 - Liste chronologique de toutes les actions
@@ -1014,9 +1014,13 @@ Tables de sécurité :
 | DB_HOST | Hôte MySQL |
 | DB_NAME | Nom de la base |
 | DB_USER | Utilisateur MySQL |
-| DB_PASS | Mot de passe MySQL (obligatoire) |
+| DB_PASS | Mot de passe MySQL (facultatif en développement local si vide ; obligatoire en production) |
 | SECRET_URL_KEY | Clé HMAC (min 32 car., obligatoire) |
-| APP_ENV | development ou production |
+| APP_ENV | `development` ou `production` (production par défaut si absent) |
+
+La connexion Google est limitée aux adresses Google explicitement autorisées
+sur la fiche utilisateur par un administrateur ; aucun compte n'est créé par
+auto-inscription.
 
 ### 20.4. Constantes de rôle
 

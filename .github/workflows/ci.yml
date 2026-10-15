@@ -1,0 +1,48 @@
+name: PHP CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  php:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: development
+      DB_HOST: 127.0.0.1
+      DB_NAME: estock_ci_bootstrap
+      DB_NAME_TEST: estock_db_test
+      DB_USER: root
+      DB_PASS: ci-password
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql, zip, gd, dom, xml, xmlwriter
+          coverage: none
+          tools: composer:v2
+      - name: Create bootstrap database and test key
+        run: |
+          mysql --host=127.0.0.1 --user=root --password="$DB_PASS" -e 'CREATE DATABASE estock_ci_bootstrap CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+          echo "SECRET_URL_KEY=$(php -r 'echo bin2hex(random_bytes(32));')" >> "$GITHUB_ENV"
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Check PHP syntax
+        run: find . -path ./vendor -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Run PHPUnit suite
+        run: vendor/bin/phpunit

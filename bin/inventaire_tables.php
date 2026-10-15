@@ -164,5 +164,5 @@ foreach ($extra as $t) {
 
 echo "\nListe Markdown pour le README :\n  php bin/inventaire_tables.php --md\n";
 if (count($missing) > 1) {
-    echo "\nAVERTISSEMENT : appliquez les migrations manquantes avec database/apply_migrations.php\n";
+    echo "\nAVERTISSEMENT : comparez le schéma à jour à la base avant toute migration. Aucun lanceur général de migrations n'est fourni.\n";
 }

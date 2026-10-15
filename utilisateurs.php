@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
         'id'            => ['type' => 'int'],
         'nom'           => ['type' => 'string', 'trim' => true, 'required' => true, 'max' => 150, 'redirect' => ''],
         'login'         => ['type' => 'string', 'trim' => true, 'required' => true, 'max' => 60, 'redirect' => ''],
+        'google_email'  => ['type' => 'string', 'trim' => true, 'nullable' => true, 'max' => 255, 'redirect' => ''],
         'role'          => ['type' => 'string', 'default' => ROLE_VENDEUR, 'whitelist' => [ROLE_DIRECTEUR, ROLE_ADMIN, ROLE_MAGASINIER, ROLE_VENDEUR]],
         'magasin_id'    => ['type' => 'int', 'min' => 0],
         'mot_de_passe'  => ['type' => 'string'],
@@ -40,6 +41,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
     );
 
     $mdp = $data['mot_de_passe'];
+    if ($data['google_email'] !== null && !filter_var($data['google_email'], FILTER_VALIDATE_EMAIL)) {
+        flash_error('Adresse Google invalide.');
+        redirect($form_url);
+    }
+    if ($data['google_email'] !== null && db_user_google_email_exists($pdo, $data['google_email'], $data['id'])) {
+        flash_error('Cette adresse Google est déjà associée à un autre utilisateur.');
+        redirect($form_url);
+    }
 
     // Vérifier la hiérarchie pour modification
     if ($data['id'] > 0 && !user_can_edit_user($pdo, $data['id'])) {
@@ -80,6 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
 
     db_transaction(
         function(PDO $pdo) use ($data, $mdp, $magasin_utilisateur) {
+            $userId = $data['id'];
             if ($data['id'] > 0) {
                 // Modification sans toucher au mot de passe
                 db_user_update_without_password($pdo, $data['id'], $data['nom'], $data['login'], $data['role'], $data['actif'] ? 1 : 0, $magasin_utilisateur);
@@ -92,8 +102,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'enregistrer') {
                     throw new RuntimeException('Le mot de passe doit contenir au moins 8 caractères.'); 
                 }
                 $mdp_hash = password_hash($mdp, PASSWORD_BCRYPT);
-                db_user_insert($pdo, $data['nom'], $data['login'], $mdp_hash, $data['role'], $data['actif'] ? 1 : 0, $magasin_utilisateur);
+                $userId = db_user_insert($pdo, $data['nom'], $data['login'], $mdp_hash, $data['role'], $data['actif'] ? 1 : 0, $magasin_utilisateur);
             }
+            db_user_set_google_email($pdo, $userId, $data['google_email']);
         },
         'Utilisateur enregistré avec succès.',
         'Une erreur est survenue lors de l\'enregistrement.',
@@ -131,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'toggle') {
 
 // ---- Formulaire ----
 if ($action === 'nouveau' || $action === 'editer') {
-    $u = ['id' => '', 'nom' => '', 'login' => '', 'role' => ROLE_VENDEUR, 'magasin_id' => user_magasin_id(), 'actif' => 1];
+    $u = ['id' => '', 'nom' => '', 'login' => '', 'google_email' => null, 'role' => ROLE_VENDEUR, 'magasin_id' => user_magasin_id(), 'actif' => 1];
     if ($action === 'editer') {
         $get_id = (int)($_GET['id'] ?? 0);
         if (!verify_url_signature($get_id, input_string($_GET['token'] ?? ''), ['action' => 'editer'])) {
@@ -161,6 +172,11 @@ if ($action === 'nouveau' || $action === 'editer') {
                         <div class="mb-3">
                             <label class="form-label">Identifiant (login) *</label>
                             <input type="text" name="login" class="form-control" required value="<?= h($u['login']) ?>">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Adresse Google autorisée</label>
+                            <input type="email" name="google_email" class="form-control" value="<?= h($u['google_email'] ?? '') ?>" autocomplete="off">
+                            <div class="form-text">Laissez vide pour désactiver la connexion Google de cet utilisateur.</div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Rôle *</label>

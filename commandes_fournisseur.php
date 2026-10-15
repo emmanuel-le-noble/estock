@@ -224,8 +224,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['soumettre', 'va
         exiger_permission('achats_gerer');
         if ($cmd['statut'] === 'Brouillon') {
             db_commande_fournisseur_update_statut($pdo, $cmd_id, 'En_Attente');
-            suivre_activite('COMMANDE_SOUMISE', "Commande fournisseur #{$cmd_id} soumise pour validation (chef équipe)");
-            flash_success("Commande #{$cmd_id} soumise pour validation du chef équipe.");
+            suivre_activite('COMMANDE_SOUMISE', "Commande fournisseur #{$cmd_id} soumise pour validation (Directeur)");
+            flash_success("Commande #{$cmd_id} soumise pour validation du Directeur.");
         } else {
             flash_error("Seuls les brouillons peuvent être soumis (statut actuel : « {$cmd['statut']} »).");
         }
@@ -249,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['soumettre', 'va
         exiger_permission('achats_valider');
         if ($cmd['statut'] === 'En_Attente') {
             db_commande_fournisseur_update_statut($pdo, $cmd_id, 'Brouillon');
-            suivre_activite('COMMANDE_REJETEE', "Commande fournisseur #{$cmd_id} renvoyée en brouillon par le chef équipe");
+            suivre_activite('COMMANDE_REJETEE', "Commande fournisseur #{$cmd_id} renvoyée en brouillon par le Directeur");
             flash_success("Commande #{$cmd_id} renvoyée en brouillon. Le magasinier peut la corriger.");
         } else {
             flash_error("Seules les commandes en attente de validation peuvent être rejetées.");

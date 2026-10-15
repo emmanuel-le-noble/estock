@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/database/sql_splitter.php';
 /**
  * install.php - Assistant d'installation initial de eStock
  *
@@ -18,17 +19,28 @@
 // ============================================================
 $envFile = __DIR__ . '/.env';
 $installed = false;
+$requestHost = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+$installEnvDefault = preg_match('/\A(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?\z/', $requestHost)
+    ? 'development'
+    : 'production';
 
 // Verifier si le fichier .env contient les cles requises ET qu'un admin existe
 if (is_file($envFile)) {
     $envContent = file_get_contents($envFile);
-    if (preg_match('/^DB_PASS\s*=\s*.+$/m', $envContent)
-        && preg_match('/^SECRET_URL_KEY\s*=\s*.{32,}$/m', $envContent)) {
+    $configuredEnv = preg_match('/^APP_ENV\s*=\s*(development|production)\s*$/m', $envContent, $envMatch) ? $envMatch[1] : '';
+    $hasDbPass = preg_match('/^DB_PASS\s*=/m', $envContent) === 1;
+    $dbPassRequired = $configuredEnv === 'production'
+        ? preg_match('/^DB_PASS\s*=\s*.+$/m', $envContent) === 1
+        : $configuredEnv === 'development' && $hasDbPass;
+    $hasValidSecret = preg_match('/^SECRET_URL_KEY\s*=\s*([^\r\n]+)$/m', $envContent, $secretMatch) === 1
+        && strlen(trim($secretMatch[1])) >= 32
+        && trim($secretMatch[1]) !== 'votre_cle_secrete_au_moins_32_caracteres_ici';
+    if ($dbPassRequired && $hasValidSecret) {
         // Essayer de se connecter et verifier l'existence d'un admin
         try {
             require_once __DIR__ . '/config/connexion.php';
             if (function_exists('db_user_get_by_login') && function_exists('db_magasins_list_all')) {
-                $admins = $pdo->query("SELECT COUNT(*) FROM utilisateurs WHERE role IN ('chef équipe','Admin') AND actif = 1")->fetchColumn();
+                $admins = $pdo->query("SELECT COUNT(*) FROM utilisateurs WHERE role IN ('Directeur','Admin') AND actif = 1")->fetchColumn();
                 $magasins = $pdo->query("SELECT COUNT(*) FROM magasins WHERE actif = 1")->fetchColumn();
                 if ($admins > 0 && $magasins > 0) {
                     $installed = true;
@@ -105,14 +117,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db_name = preg_replace('/[^a-zA-Z0-9_]/', '', trim($_POST['db_name'] ?? 'estock_db'));
             $db_user = trim($_POST['db_user'] ?? 'root');
             $db_pass = $_POST['db_pass'] ?? '';
+            $app_env = (string)($_POST['app_env'] ?? $installEnvDefault);
             $db_charset = 'utf8mb4';
 
-            if ($db_name === '') {
+            if (!in_array($app_env, ['development', 'production'], true)) {
+                $erreur = 'Environnement invalide.';
+            } elseif (preg_match('/[\r\n\x00]/', $db_host . $db_user . (string)$db_pass)) {
+                $erreur = 'Les paramètres de connexion contiennent des caractères invalides.';
+            } elseif ($db_name === '') {
                 $erreur = "Nom de base de données invalide.";
+            } elseif ($app_env === 'production' && $db_pass === '') {
+                $erreur = 'Un mot de passe MySQL est obligatoire en production.';
             }
 
             // Tester la connexion
             try {
+                if ($erreur !== '') throw new RuntimeException($erreur);
                 $dsn = "mysql:host=$db_host;charset=$db_charset";
                 $testPdo = new PDO($dsn, $db_user, $db_pass, [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -136,20 +156,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sql = file_get_contents($sqlFile);
                         // Decouper par lignes et executer chaque requete
                         $testPdo->exec("SET FOREIGN_KEY_CHECKS = 0");
-                        $statements = array_filter(
-                            array_map('trim', explode(';', $sql)),
-                            fn($s) => !empty($s) && $s !== '--' && !str_starts_with($s, '--')
-                        );
-                        foreach ($statements as $stmt) {
-                            // Ignorer les lignes de commentaires pures
-                            $cleaned = preg_replace('/^\s*--.*$/m', '', $stmt);
-                            $cleaned = trim($cleaned);
-                            if (!empty($cleaned) && $cleaned !== 'SET FOREIGN_KEY_CHECKS = 0') {
-                                try {
-                                    $testPdo->exec($cleaned);
-                                } catch (\Throwable $e) {
-                                    error_log('[INSTALL] SQL non-critique ignoré: ' . $e->getMessage());
-                                }
+                        foreach (split_sql_statements($sql) as $stmt) {
+                            if ($stmt !== 'SET FOREIGN_KEY_CHECKS = 0') {
+                                $testPdo->exec($stmt);
                             }
                         }
                         $testPdo->exec("SET FOREIGN_KEY_CHECKS = 1");
@@ -158,20 +167,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $migrationFile = __DIR__ . '/database/migration_fix_2026_08_22.sql';
                         if (is_file($migrationFile)) {
                             $migration = file_get_contents($migrationFile);
-                            $migStatements = array_filter(
-                                array_map('trim', explode(';', $migration)),
-                                fn($s) => !empty($s) && !str_starts_with($s, '--')
-                            );
-                            foreach ($migStatements as $stmt) {
-                                $cleaned = preg_replace('/^\s*--.*$/m', '', $stmt);
-                                $cleaned = trim($cleaned);
-                                if (!empty($cleaned)) {
-                                    try {
-                                        $testPdo->exec($cleaned);
-                                    } catch (\Throwable $e) {
-                                        error_log('[INSTALL] Migration non-critique ignorée: ' . $e->getMessage());
-                                    }
-                                }
+                            foreach (split_sql_statements($migration) as $stmt) {
+                                $testPdo->exec($stmt);
                             }
                         }
                     }
@@ -179,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Ecrire le fichier .env
                 $secretKey = bin2hex(random_bytes(32));
-                $envContent = "APP_ENV=production\n"
+                $envContent = "APP_ENV=$app_env\n"
                     . "DB_HOST=$db_host\n"
                     . "DB_NAME=$db_name\n"
                     . "DB_USER=$db_user\n"
@@ -200,7 +197,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
             } catch (\Throwable $e) {
-                $erreur = "Connexion echouee : " . $e->getMessage();
+                error_log('[INSTALL] Configuration de la base impossible : ' . $e->getMessage());
+                $erreur = 'Connexion ou installation impossible. Vérifiez les paramètres et le journal du serveur.';
             }
         }
 
@@ -254,6 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                         ]);
                         $pdo->exec("USE `{$dbInfo['name']}`");
+                        $pdo->beginTransaction();
 
                         // Creer le magasin
                         $stmtMag = $pdo->prepare("INSERT INTO magasins (nom, adresse, code_postal, nif, rccm) VALUES (?, ?, ?, ?, ?)");
@@ -268,32 +267,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         // Creer l'admin
                         $mdpHash = password_hash($mdp, PASSWORD_DEFAULT);
-                        $stmtUser = $pdo->prepare("INSERT INTO utilisateurs (nom, login, mot_de_passe, role, actif, magasin_id) VALUES (?, ?, ?, 'chef équipe', 1, ?)");
+                        $stmtUser = $pdo->prepare("INSERT INTO utilisateurs (nom, login, mot_de_passe, role, actif, magasin_id) VALUES (?, ?, ?, 'Directeur', 1, ?)");
                         $stmtUser->execute([$nom, $login, $mdpHash, $magasinId]);
 
-                        // Inserer les permissions manquantes (migration)
-                        try {
-                            $pdo->exec("INSERT IGNORE INTO permissions (cle_permission, description, categorie) VALUES
-                                ('clients_consulter', 'Consulter la fiche client', 'Clients'),
-                                ('clients_gerer', 'Creer / modifier / supprimer les clients', 'Clients'),
-                                ('conformite_archives', 'Gerer les archives de conformite', 'Conformite'),
-                                ('conformite_export_syscohada', 'Exporter en format SYSCOHADA', 'Conformite'),
-                                ('articles_modifier', 'Modifier les articles via l''API', 'Articles')");
+                        // Inserer les permissions manquantes (migration).
+                        // Une erreur annule aussi la création du magasin et du compte.
+                        $pdo->exec("INSERT IGNORE INTO permissions (cle_permission, description, categorie) VALUES
+                            ('clients_consulter', 'Consulter la fiche client', 'Clients'),
+                            ('clients_gerer', 'Creer / modifier / supprimer les clients', 'Clients'),
+                            ('conformite_archives', 'Gerer les archives de conformite', 'Conformite'),
+                            ('conformite_export_syscohada', 'Exporter en format SYSCOHADA', 'Conformite'),
+                            ('articles_modifier', 'Modifier les articles via l''API', 'Articles'),
+                            ('audit_consulter', 'Consulter le journal d’activité', 'Administration'),
+                            ('utilisateurs_gerer', 'Gérer les utilisateurs et les droits', 'Administration'),
+                            ('articles_consulter', 'Consulter le catalogue des articles', 'Articles'),
+                            ('articles_gerer', 'Créer et gérer les articles et catégories', 'Articles'),
+                            ('achats_consulter', 'Consulter les commandes fournisseurs', 'Achats'),
+                            ('achats_gerer', 'Créer, modifier et réceptionner les commandes', 'Achats'),
+                            ('achats_valider', 'Valider les commandes fournisseurs', 'Achats'),
+                            ('stock_consulter', 'Consulter les stocks et péremptions', 'Stock'),
+                            ('inventaire_consulter', 'Consulter les inventaires', 'Inventaire'),
+                            ('inventaire_gerer', 'Créer et valider les inventaires', 'Inventaire'),
+                            ('caisse_gerer', 'Gérer la caisse et enregistrer les ventes', 'Ventes'),
+                            ('facturation_consulter', 'Consulter et imprimer les factures', 'Ventes'),
+                            ('retours_consulter', 'Consulter les retours et le SAV', 'Ventes'),
+                            ('retours_gerer', 'Créer et traiter les retours', 'Ventes'),
+                            ('promotions_consulter', 'Consulter les promotions', 'Ventes'),
+                            ('promotions_gerer', 'Créer et modifier les promotions', 'Ventes')");
 
-                            $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
-                                SELECT 'chef équipe', p.id FROM permissions p
-                                WHERE p.cle_permission IN ('clients_consulter','clients_gerer','conformite_archives','conformite_export_syscohada','articles_modifier')");
+                        $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
+                            SELECT 'Directeur', p.id FROM permissions p");
 
-                            $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
-                                SELECT 'Admin', p.id FROM permissions p
-                                WHERE p.cle_permission IN ('clients_consulter','clients_gerer','articles_modifier')");
+                        $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
+                            SELECT 'Admin', p.id FROM permissions p
+                            WHERE p.cle_permission IN ('clients_consulter','clients_gerer','articles_modifier','articles_consulter','articles_gerer','achats_consulter','achats_gerer','stock_consulter','inventaire_consulter','inventaire_gerer','caisse_gerer','facturation_consulter','retours_consulter','retours_gerer','promotions_consulter','promotions_gerer','utilisateurs_gerer')");
 
-                            $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
-                                SELECT 'Magasinier', p.id FROM permissions p
-                                WHERE p.cle_permission = 'articles_modifier'");
-                        } catch (\Throwable $e) {
-                            // Non-critique
-                        }
+                        $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
+                            SELECT 'Magasinier', p.id FROM permissions p
+                            WHERE p.cle_permission IN ('articles_consulter','articles_gerer','articles_modifier','achats_consulter','achats_gerer','stock_consulter','inventaire_consulter','inventaire_gerer')");
+
+                        $pdo->exec("INSERT IGNORE INTO role_permissions (role_nom, permission_id)
+                            SELECT 'Vendeur', p.id FROM permissions p
+                            WHERE p.cle_permission IN ('caisse_gerer','facturation_consulter','clients_consulter','retours_consulter','retours_gerer','promotions_consulter')");
+
+                        $pdo->commit();
 
                         // Nettoyer la session
                         unset($_SESSION['install_db'], $_SESSION['install_magasin'], $_SESSION['install_csrf']);
@@ -302,7 +319,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     }
                 } catch (\Throwable $e) {
-                    $erreur = "Erreur lors de la creation : " . $e->getMessage();
+                    if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    error_log('[INSTALL] Création du compte initial impossible : ' . $e->getMessage());
+                    $erreur = 'Impossible de terminer la création du compte initial. Vérifiez le journal du serveur.';
                 }
             }
         }
@@ -316,7 +337,7 @@ $etape_titles = [
     1 => 'Prerequis',
     2 => 'Base de donnees',
     3 => 'Magasin',
-    4 => 'Compte chef équipe',
+    4 => 'Compte Directeur',
     5 => 'Termine',
 ];
 
@@ -342,6 +363,7 @@ $tous_ok = !in_array(false, array_column($prerequis, 1), true);
     <title>Installation · eStock</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --brand: #4f46e5; --brand-2: #7c3aed; --brand-soft: rgba(79,70,229,.08);
@@ -349,7 +371,7 @@ $tous_ok = !in_array(false, array_column($prerequis, 1), true);
             --bg: #f8fafc; --card-bg: #fff; --border: #e5e7eb;
         }
         * { box-sizing: border-box; }
-        body { margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); }
+        body { margin: 0; font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); }
 
         .install-split { min-height: 100vh; display: grid; grid-template-columns: 1fr 1.1fr; }
         @media (max-width: 991.98px) { .install-split { grid-template-columns: 1fr; } .install-aside { display: none; } }
@@ -432,7 +454,7 @@ $tous_ok = !in_array(false, array_column($prerequis, 1), true);
             <p>Cet assistant vous guide pour configurer eStock : base de donnees, magasin et compte administrateur.</p>
             <div class="feat"><i class="bi bi-database-check"></i> Installation automatique de la base</div>
             <div class="feat"><i class="bi bi-shop"></i> Configuration de votre premier magasin</div>
-            <div class="feat"><i class="bi bi-person-check"></i> Creation du compte chef équipe</div>
+            <div class="feat"><i class="bi bi-person-check"></i> Creation du compte Directeur</div>
         </div>
         <div class="footnote">&copy; <?= date('Y') ?> eStock &mdash; Assistant d'installation</div>
     </aside>
@@ -499,6 +521,15 @@ $tous_ok = !in_array(false, array_column($prerequis, 1), true);
             <form method="post">
                 <?= install_csrf_field() ?>
                 <input type="hidden" name="etape" value="2">
+
+                <div class="mb-3">
+                    <label class="form-label">Environnement</label>
+                    <select name="app_env" class="form-select" required>
+                        <option value="development" <?= ($app_env ?? $installEnvDefault) === 'development' ? 'selected' : '' ?>>Développement local</option>
+                        <option value="production" <?= ($app_env ?? $installEnvDefault) === 'production' ? 'selected' : '' ?>>Production</option>
+                    </select>
+                    <div class="form-text">Le mot de passe MySQL peut être vide uniquement en développement local.</div>
+                </div>
 
                 <div class="mb-3">
                     <label class="form-label">Serveur MySQL</label>
@@ -570,7 +601,7 @@ $tous_ok = !in_array(false, array_column($prerequis, 1), true);
             <!-- ETAPE 4 : Compte Directeur -->
             <!-- ============================================================ -->
             <?php elseif ($etape === 4): ?>
-            <h2 class="install-title">Compte chef équipe</h2>
+            <h2 class="install-title">Compte Directeur</h2>
             <p class="install-sub">Creez le compte administrateur principal.</p>
 
             <form method="post">

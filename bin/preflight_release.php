@@ -44,6 +44,22 @@ foreach ($requiredTables as $table) {
     }
 }
 
+$requiredTriggers = [
+    'trg_factures_immutable_delete', 'trg_factures_immutable_update',
+    'trg_lignes_facture_immutable_delete', 'trg_lignes_facture_immutable_update',
+    'trg_paiements_immutable_delete', 'trg_paiements_immutable_update',
+    'trg_clotures_immutable_delete', 'trg_clotures_immutable_update',
+];
+foreach ($requiredTriggers as $trigger) {
+    $stmt = $pdo->prepare(
+        'SELECT 1 FROM information_schema.triggers WHERE trigger_schema = DATABASE() AND trigger_name = ? LIMIT 1'
+    );
+    $stmt->execute([$trigger]);
+    if (!$stmt->fetchColumn()) {
+        $errors[] = "Déclencheur obligatoire absent : $trigger";
+    }
+}
+
 // Les comptes de démonstration ne doivent jamais être activés chez un client.
 $stmt = $pdo->prepare("SELECT login FROM utilisateurs WHERE actif = 1 AND login IN ('admin', 'magasin', 'vendeur')");
 $stmt->execute();
@@ -52,7 +68,7 @@ if ($activeDefaults) {
     $errors[] = 'Compte(s) de démonstration actif(s) : ' . implode(', ', $activeDefaults);
 }
 
-$stmt = $pdo->query("SELECT COUNT(*) FROM utilisateurs WHERE actif = 1 AND role = 'chef équipe'");
+$stmt = $pdo->query("SELECT COUNT(*) FROM utilisateurs WHERE actif = 1 AND role = 'Directeur'");
 if ((int)$stmt->fetchColumn() === 0) {
     $errors[] = 'Aucun compte Directeur actif : exécutez bin/create_admin.php.';
 }

@@ -10,26 +10,28 @@ ALTER TABLE `mouvements_stock`
   MODIFY COLUMN `type` enum('Entree','Sortie','Vente','Transfert','Ajustement','Retour_stock') COLLATE utf8mb4_unicode_ci NOT NULL;
 
 -- 2. Permissions manquantes (FONCTIONNALITES INACCESSIBLES)
---    5 permissions referencees par le code PHP n'existaient pas dans la table.
+--    Plusieurs permissions referencees par le code PHP n'existaient pas dans la table.
 INSERT IGNORE INTO `permissions` (`cle_permission`, `description`, `categorie`) VALUES
   ('clients_consulter',   'Consulter la fiche client',               'Clients'),
   ('clients_gerer',       'Creer / modifier / supprimer les clients', 'Clients'),
   ('conformite_archives', 'Gerer les archives de conformite',         'Conformite'),
   ('conformite_export_syscohada', 'Exporter en format SYSCOHADA',     'Conformite'),
-  ('articles_modifier',   'Modifier les articles via l''API',         'Articles');
+  ('articles_modifier',   'Modifier les articles via l''API',         'Articles'),
+  ('audit_consulter',     'Consulter le journal d’activité',          'Administration'),
+  ('utilisateurs_gerer',  'Gérer les utilisateurs et les droits',      'Administration');
 
 -- 3. Ajout des permissions aux roles existants
 -- Directeur : toutes les permissions
 INSERT IGNORE INTO `role_permissions` (`role_nom`, `permission_id`)
-SELECT 'chef équipe', p.id
+SELECT 'Directeur', p.id
 FROM `permissions` p
-WHERE p.cle_permission IN ('clients_consulter','clients_gerer','conformite_archives','conformite_export_syscohada','articles_modifier');
+WHERE p.cle_permission IN ('clients_consulter','clients_gerer','conformite_archives','conformite_export_syscohada','articles_modifier','audit_consulter','utilisateurs_gerer');
 
 -- Admin : clients + articles
 INSERT IGNORE INTO `role_permissions` (`role_nom`, `permission_id`)
 SELECT 'Admin', p.id
 FROM `permissions` p
-WHERE p.cle_permission IN ('clients_consulter','clients_gerer','articles_modifier');
+WHERE p.cle_permission IN ('clients_consulter','clients_gerer','articles_modifier','utilisateurs_gerer');
 
 -- 4. Index manquants pour les performances (CREATE INDEX IF NOT EXISTS = MySQL 8.0.29+)
 CREATE INDEX IF NOT EXISTS `idx_hp_type_operation` ON `historique_points` (`type_operation`);

@@ -6,9 +6,9 @@ quand le serveur final sera disponible.
 
 ## 1. Base et comptes
 
-1. Importer `database/estock_db (1).sql` dans une base vide.
-2. Exécuter `php database/apply_migrations.php`.
-3. Créer le premier Directeur avec `php bin/create_admin.php "Nom" login "mot-de-passe-d-au-moins-12-caracteres"`.
+1. Pour une nouvelle installation, utiliser `install.php` ou importer le fichier réel `database/estock_db.sql` dans une base vide.
+2. Pour une base existante, sauvegarder d'abord la base, puis vérifier et appliquer une seule fois les migrations nécessaires dans `database/`, par date croissante (`migration_fix_2026_08_22.sql`, `migration_google_oauth_2026_08_27.sql`, `migration_rename_directeur_2026_08_28.sql`, `migration_audit_consulter_2026_10_15.sql`, `migration_restore_directeur_2026_10_15.sql`, `migration_rbac_catalog_2026_10_15.sql`). Ces scripts ne sont pas tous réexécutables tels quels.
+3. Créer le premier Directeur avec `php bin/create_admin.php "Nom" login "mot-de-passe-d-au-moins-12-caracteres"` si l'assistant d'installation n'a pas déjà créé ce compte.
 4. Pour une base existante, exécuter `php bin/disable_demo_accounts.php` après la création du nouveau Directeur.
 5. Se connecter, créer les comptes nécessaires et vérifier leurs permissions.
 6. Ne pas activer les trois comptes d'initialisation de la base.

@@ -6,6 +6,22 @@ sémantique (SemVer). La version courante est définie par `APP_VERSION` (`confi
 
 ## [Non publié] — En cours
 
+### Sécurité et fiabilité
+- Les pages PHP ne sont plus conservées dans le cache hors ligne du navigateur.
+- La connexion Google exige une adresse préautorisée sur le compte actif ;
+  l'auto-inscription est désactivée.
+- Les sessions revérifient l'activation, le rôle et le magasin du compte depuis
+  la base de données.
+- L'import SQL de l'assistant respecte les délimiteurs de déclencheurs et
+  échoue explicitement lorsqu'une instruction du schéma échoue.
+- L'environnement par défaut est la production et la clé HMAC d'exemple est
+  refusée.
+- Ajout d'une intégration continue PHP (syntaxe et suite PHPUnit existante).
+
+### Modifié
+- `DB_PASS` peut rester vide avec `APP_ENV=development` pour les bases MySQL
+  locales sans mot de passe ; la variable reste obligatoire en production.
+
 ### Renommages / suppressions (cadre local) — ancien → nouveau
 
 | Ancien | Nouveau | Type |

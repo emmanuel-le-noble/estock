@@ -49,8 +49,16 @@ $_app_tz = getenv('APP_TIMEZONE') ?: 'Africa/Lome';
 //  1. PARAMÈTRES DE CONNEXION  (à adapter à votre WampServer)
 // ============================================================
 
-// Environnement applicatif : 'development' ou 'production'
-define('APP_ENV', getenv('APP_ENV') ?: 'development');
+// En production par défaut : l'absence ou une faute de frappe dans APP_ENV ne
+// doit jamais activer silencieusement les fallbacks de développement.
+$__app_env = getenv('APP_ENV');
+$__app_env = $__app_env === false || $__app_env === '' ? 'production' : $__app_env;
+if (!in_array($__app_env, ['development', 'production'], true)) {
+    error_log('[CRITIQUE] APP_ENV invalide. Valeurs admises : development ou production.');
+    http_response_code(500);
+    die('Configuration invalide : APP_ENV doit valoir development ou production.');
+}
+define('APP_ENV', $__app_env);
 $__is_cli = (php_sapi_name() === 'cli');
 $__is_production = APP_ENV === 'production';
 
@@ -88,30 +96,33 @@ if ($dbUser === false || $dbUser === '') {
 }
 define('DB_USER', $dbUser);
 
-// DB_PASS est TOUJOURS bloquant : aucun fallback vers un mot de passe par
-// défaut, quel que soit l'environnement (le moindre défaut de secret serait
-// un trou de sécurité). La distinction dev/prod porte sur le message et le
-// comportement de démarrage (page d'erreur vs. message CLI).
+// Un mot de passe vide est autorisé en développement local (ex. MySQL root
+// sans mot de passe sous Wamp/XAMPP). En production, DB_PASS reste obligatoire.
 $dbPass = getenv('DB_PASS');
 if ($dbPass === false || $dbPass === '') {
-    error_log('[CRITIQUE] DB_PASS non défini dans l\'environnement.');
-    if ($__is_cli) {
-        die("Erreur : DB_PASS non définie. Configurez votre fichier .env ou les variables d'environnement avant de lancer les scripts CLI.\n");
+    if ($__is_production) {
+        error_log('[CRITIQUE] DB_PASS non défini en environnement production.');
+        if ($__is_cli) {
+            die("Erreur : DB_PASS non définie. Configurez votre fichier .env ou les variables d'environnement avant de lancer les scripts CLI.\n");
+        }
+        http_response_code(500);
+        die('Variable DB_PASS non définie en production. Configurez votre fichier .env ou les variables d\'environnement.');
     }
-    http_response_code(500);
-    die('Variable DB_PASS non définie. Configurez votre fichier .env ou les variables d\'environnement.');
+    error_log('[ALERTE] DB_PASS vide — connexion MySQL sans mot de passe (mode développement uniquement).');
+    $dbPass = '';
 }
 define('DB_PASS', $dbPass);
 
 define('DB_CHARSET', 'utf8mb4');
 
-define('ROLE_DIRECTEUR', 'chef équipe');
+define('ROLE_DIRECTEUR', 'Directeur');
 define('ROLE_ADMIN', 'Admin');
 define('ROLE_MAGASINIER', 'Magasinier');
 define('ROLE_VENDEUR', 'Vendeur');
 
 $secretKey = getenv('SECRET_URL_KEY');
-if ($secretKey === false || strlen($secretKey) < 32) {
+$exampleSecretKey = 'votre_cle_secrete_au_moins_32_caracteres_ici';
+if ($secretKey === false || strlen($secretKey) < 32 || hash_equals($exampleSecretKey, $secretKey)) {
     error_log('[CRITIQUE] SECRET_URL_KEY non défini ou trop court (< 32 caractères).');
     if ($__is_cli) {
         die("Erreur : SECRET_URL_KEY manquante ou trop courte (minimum 32 caractères). Configurez votre fichier .env.\n");
@@ -210,7 +221,7 @@ if (php_sapi_name() !== 'cli' && !$__is_cli) {
     $currentScript = basename($_SERVER['PHP_SELF'] ?? '');
     if ($currentScript !== 'install.php') {
         try {
-            $checkAdmin = $pdo->query("SELECT COUNT(*) FROM utilisateurs WHERE role IN ('chef équipe','Admin') AND actif = 1")->fetchColumn();
+            $checkAdmin = $pdo->query("SELECT COUNT(*) FROM utilisateurs WHERE role IN ('Directeur','Admin') AND actif = 1")->fetchColumn();
             $checkMag   = $pdo->query("SELECT COUNT(*) FROM magasins WHERE actif = 1")->fetchColumn();
             if ((int)$checkAdmin === 0 || (int)$checkMag === 0) {
                 header('Location: install.php');
@@ -352,7 +363,43 @@ function json_out($data, int $code = 200): void {
 
 /** Vrai si un utilisateur est connecté. */
 function est_connecte(): bool {
-    return !empty($_SESSION['user']);
+    static $checked = false;
+    static $authenticated = false;
+    if ($checked) return $authenticated;
+    $checked = true;
+
+    $userId = (int)($_SESSION['user']['id'] ?? 0);
+    if ($userId <= 0) return false;
+
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare('SELECT id, nom, login, role, magasin_id, actif FROM utilisateurs WHERE id = ? LIMIT 1');
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$user || (int)$user['actif'] !== 1) {
+            unset($_SESSION['user'], $_SESSION['magasin_actif']);
+            return false;
+        }
+        // Les changements de rôle et de magasin prennent effet à la prochaine
+        // requête, sans attendre l'expiration complète de la session.
+        $_SESSION['user'] = array_merge($_SESSION['user'], $user);
+        if ($user['role'] !== ROLE_DIRECTEUR) {
+            if ((int)$user['magasin_id'] > 0) {
+                $_SESSION['magasin_actif'] = (int)$user['magasin_id'];
+            } else {
+                unset($_SESSION['magasin_actif']);
+            }
+        } elseif ((int)($_SESSION['magasin_actif'] ?? 0) > 0) {
+            $storeStmt = $pdo->prepare('SELECT id FROM magasins WHERE id = ? AND actif = 1 LIMIT 1');
+            $storeStmt->execute([(int)$_SESSION['magasin_actif']]);
+            if (!$storeStmt->fetchColumn()) unset($_SESSION['magasin_actif']);
+        }
+        $authenticated = true;
+        return true;
+    } catch (Throwable $e) {
+        error_log('Vérification de session impossible : ' . $e->getMessage());
+        return false;
+    }
 }
 
 /** Données utilisateur courant. */
@@ -688,7 +735,9 @@ $flash_captured = $_SESSION['flash'] ?? [];
 $twig->addGlobal('flash_messages', $flash_captured);
 unset($_SESSION['flash']);
 $twig->addGlobal('csrf_token', csrf_token());
-$twig->addGlobal('page_courante', $_GET['_page'] ?? str_replace('.php', '', basename($_SERVER['PHP_SELF'])));
+$page_route = str_replace('.php', '', basename($_SERVER['PHP_SELF']));
+$page_nav = $_GET['_page'] ?? ($page_route === 'parametres' && ($_GET['tab'] ?? '') === 'droits' ? 'droits' : $page_route);
+$twig->addGlobal('page_courante', $page_nav);
 
 $twig->addGlobal('nb_alertes_topbar', (est_connecte() && peut_gerer_stock()) ? db_articles_low_stock_count($pdo, user_magasin_id()) : 0);
 $twig->addGlobal('nb_alertes_peremption', (est_connecte() && peut('stock_consulter')) ? db_peremption_alert_count($pdo, 30, user_magasin_id()) : 0);

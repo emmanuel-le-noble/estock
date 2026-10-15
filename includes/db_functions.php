@@ -759,26 +759,22 @@ function db_user_link_google(PDO $pdo, int $user_id, string $google_id, string $
     $stmt->execute([':gid' => $google_id, ':gemail' => $google_email, ':gavatar' => $google_avatar, ':id' => $user_id]);
 }
 
-/**
- * Créer un nouveau compte utilisateur à partir des informations Google.
- * Retourne le nouvel ID.
- */
-function db_user_create_from_google(PDO $pdo, string $nom, string $google_id, string $google_email, ?string $google_avatar): int {
-    $login = 'google_' . $google_id;
-    $stmt = $pdo->prepare('
-        INSERT INTO utilisateurs (nom, login, mot_de_passe, google_id, google_email, google_avatar, role, actif)
-        VALUES (:nom, :login, :mdp, :gid, :gemail, :gavatar, :role, 1)
-    ');
-    $stmt->execute([
-        ':nom' => $nom,
-        ':login' => $login,
-        ':mdp' => password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT),
-        ':gid' => $google_id,
-        ':gemail' => $google_email,
-        ':gavatar' => $google_avatar,
-        ':role' => ROLE_VENDEUR,
-    ]);
-    return (int)$pdo->lastInsertId();
+function db_user_google_email_exists(PDO $pdo, string $google_email, int $exclude_id = 0): bool {
+    $stmt = $pdo->prepare('SELECT id FROM utilisateurs WHERE google_email = ? AND id <> ? LIMIT 1');
+    $stmt->execute([$google_email, $exclude_id]);
+    return (bool)$stmt->fetchColumn();
+}
+
+/** Associer une adresse Google à un compte préalablement créé par un admin. */
+function db_user_set_google_email(PDO $pdo, int $user_id, ?string $google_email): void {
+    $stmt = $pdo->prepare('SELECT google_email FROM utilisateurs WHERE id = ? LIMIT 1');
+    $stmt->execute([$user_id]);
+    $current = $stmt->fetchColumn();
+    if ($current === false) throw new RuntimeException('Utilisateur introuvable.');
+    if ($current === $google_email) return;
+
+    $stmt = $pdo->prepare('UPDATE utilisateurs SET google_email = ?, google_id = NULL, google_avatar = NULL WHERE id = ?');
+    $stmt->execute([$google_email, $user_id]);
 }
 
 /**
@@ -1836,7 +1832,7 @@ function db_permissions_all_grouped(PDO $pdo): array {
  */
 function db_permissions_get_roles(PDO $pdo): array {
     $stmt = $pdo->query(
-        "SELECT DISTINCT role_nom FROM role_permissions ORDER BY FIELD(role_nom, 'chef équipe', 'Admin', 'Magasinier', 'Vendeur')"
+        "SELECT DISTINCT role_nom FROM role_permissions ORDER BY FIELD(role_nom, 'Directeur', 'Admin', 'Magasinier', 'Vendeur')"
     );
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }

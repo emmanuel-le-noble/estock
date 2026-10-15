@@ -56,37 +56,37 @@ $magasin_courant = (int)($_SESSION['magasin_actif'] ?? 0);
     <title>Choisir un magasin · <?= h($app_nom) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="../assets/css/style.css" rel="stylesheet">
+    <link href="../assets/css/style.css?v=13" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="../assets/images/logo-eStock.ico">
     <style>
         .magasin-split { min-height: 100vh; display: grid; grid-template-columns: 1fr 1.4fr; }
         @media (max-width: 991.98px) { .magasin-split { grid-template-columns: 1fr; } .magasin-aside { display: none; } }
 
         .magasin-aside {
-            position: relative; overflow: hidden; color: #fff;
-            background: radial-gradient(120% 120% at 0% 0%, #10b981 0%, #047857 45%, #0b1020 100%);
+            position: relative; overflow: hidden; color: #172033;
+            background: linear-gradient(145deg, #e5f3ec 0%, #edf3fb 58%, #e9eef7 100%);
             padding: 56px; display: flex; flex-direction: column; justify-content: space-between;
         }
         .magasin-aside::before, .magasin-aside::after {
             content: ''; position: absolute; border-radius: 50%; filter: blur(60px); pointer-events: none;
         }
-        .magasin-aside::before { width: 320px; height: 320px; background: rgba(52,211,153,.5); top: -80px; right: -60px; }
-        .magasin-aside::after  { width: 280px; height: 280px; background: rgba(251,191,36,.3); bottom: -80px; left: -40px; }
+        .magasin-aside::before { width: 320px; height: 320px; background: rgba(52,211,153,.24); top: -80px; right: -60px; }
+        .magasin-aside::after  { width: 280px; height: 280px; background: rgba(251,191,36,.22); bottom: -80px; left: -40px; }
         .magasin-aside .brand-row { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
         .magasin-aside .logo-img {
             width: 46px; height: 46px; border-radius: 13px;
-            object-fit: cover; box-shadow: 0 10px 26px rgba(16,185,129,.5);
+            object-fit: cover; box-shadow: 0 8px 22px rgba(23,32,51,.12);
         }
         .magasin-aside .brand-name { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; }
         .magasin-aside .pitch { position: relative; z-index: 1; }
-        .magasin-aside .pitch h2 { color: #fff; font-size: 2.3rem; font-weight: 800; line-height: 1.15; letter-spacing: -.02em; }
-        .magasin-aside .pitch p { color: #d1fae5; font-size: 1.05rem; max-width: 420px; margin-top: 14px; }
-        .magasin-aside .footnote { position: relative; z-index: 1; color: #a7f3d0; font-size: .82rem; }
+        .magasin-aside .pitch h2 { color: #172033; font-size: 2.3rem; font-weight: 800; line-height: 1.15; letter-spacing: -.02em; }
+        .magasin-aside .pitch p { color: #526176; font-size: 1.05rem; max-width: 420px; margin-top: 14px; }
+        .magasin-aside .footnote { position: relative; z-index: 1; color: #66758a; font-size: .82rem; }
 
-        .magasin-form-side { display: flex; align-items: center; justify-content: center; padding: 40px 28px; background: var(--bg); }
-        .magasin-card { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; border: 2px solid var(--bs-secondary-border-subtle); }
-        .magasin-card:hover { border-color: #10b981; }
-        .magasin-card.magasin-active { border-color: #10b981; box-shadow: 0 4px 14px rgba(16,185,129,.25); background: #ecfdf5; }
+        .magasin-form-side { display: flex; align-items: center; justify-content: center; padding: 40px 28px; background: #edf0f4; color: #172033; }
+        .magasin-card { cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; border: 1px solid #d8dee8; border-radius: 16px; background: #f8f9fb; color: #273449; }
+        .magasin-card:hover { border-color: #10a56f; box-shadow: 0 8px 22px rgba(23,32,51,.09); transform: translateY(-1px); }
+        .magasin-card.magasin-active { border: 2px solid #078052; box-shadow: 0 8px 22px rgba(7,128,82,.12); background: #f4faf6; }
         .magasin-card input:checked + .card-body { }
     </style>
 </head>

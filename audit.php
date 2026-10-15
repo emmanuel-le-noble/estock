@@ -1,6 +1,6 @@
 <?php
 /**
- * audit.php - Journal d'activité (réservé au Directeur).
+ * audit.php - Journal d'activité (permission RBAC).
  */
 if (!function_exists('est_connecte')) { require_once __DIR__ . '/config/connexion.php'; }
 if (!function_exists('db_article_insert')) { require_once __DIR__ . '/includes/db_functions.php'; }
@@ -8,7 +8,7 @@ if (!function_exists('csrf_guard')) { require_once __DIR__ . '/includes/helpers.
 require_once __DIR__ . '/config/connexion.php';
 require_once __DIR__ . '/includes/db_functions.php';
 require_once __DIR__ . '/includes/helpers.php';
-exiger_role(ROLE_DIRECTEUR);
+exiger_permission('audit_consulter');
 
 $search   = input_string($_GET['search'] ?? '');
 $f_action = $_GET['action_filter'] ?? '';

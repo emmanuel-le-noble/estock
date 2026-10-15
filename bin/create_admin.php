@@ -49,7 +49,7 @@ try {
     }
 
     $id = db_user_insert($pdo, $nom, $login, password_hash($password, PASSWORD_DEFAULT), ROLE_DIRECTEUR, 1, $magasinId);
-    echo "Compte chef équipe créé (ID $id). Conservez le mot de passe hors des scripts et dépôts.\n";
+    echo "Compte Directeur créé (ID $id). Conservez le mot de passe hors des scripts et dépôts.\n";
 } catch (Throwable $e) {
     error_log('create_admin: ' . $e->getMessage());
     fwrite(STDERR, "Création du compte impossible. Consultez le journal technique.\n");

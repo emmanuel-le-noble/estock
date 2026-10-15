@@ -163,7 +163,7 @@ $guides = [
                 'description' => 'Cycle complet : créez la commande, soumettez-la, puis réceptionnez la marchandise à l\'arrivée.',
                 'etapes' => [
                     '« Nouvelle commande » : choisissez le fournisseur, ajoutez les articles et les quantités (ou pré-remplissez depuis les Suggestions d\'achat).',
-                    'Enregistrez en brouillon, puis « Soumettre » : la commande passe en attente de validation par le chef équipe.',
+                    'Enregistrez en brouillon, puis « Soumettre » : la commande passe en attente de validation par le Directeur.',
                     'Vous pouvez aussi l\'envoyer directement (« Envoyer ») selon les règles de l\'entreprise.',
                     'À la livraison : « Réceptionner » la commande, corrigez éventuellement les quantités reçues (réception partielle possible), renseignez les DLC des lots pour les périssables.',
                     'La validation de réception réintègre le stock automatiquement (mouvement Entrée).',
@@ -246,12 +246,12 @@ $guides = [
         'role_nom'   => 'Admin',
         'icon'       => 'bi-shield-lock',
         'couleur'    => 'warning',
-        'intro'      => 'Vous pilotez l\'application : utilisateurs, magasins, paramètres, dépenses et supervision de toutes les activités (sauf le journal d\'audit réservé au chef équipe).',
+        'intro'      => 'Vous pilotez l\'application : utilisateurs, magasins, paramètres, dépenses et supervision de toutes les activités (sauf le journal d\'audit réservé au Directeur).',
         'modules'    => [
             [
                 'icon' => 'bi-people', 'page' => 'utilisateurs',
                 'titre' => 'Utilisateurs',
-                'description' => 'Créez et gérez les comptes des employés : rôle (Vendeur, Magasinier, Admin, chef équipe) et magasin d\'affectation.',
+                'description' => 'Créez et gérez les comptes des employés : rôle (Vendeur, Magasinier, Admin, Directeur) et magasin d\'affectation.',
                 'etapes' => [
                     '« Nouvel utilisateur » : nom, prénom, identifiant, mot de passe, rôle et magasin d\'affectation (obligatoire).',
                     'Un utilisateur ne voit et ne gère que son magasin (règle multi-magasins).',
@@ -314,7 +314,7 @@ $guides = [
                 'description' => 'Créez, soumettez et réceptionnez les commandes fournisseurs comme le Magasinier.',
                 'etapes' => [
                     'Suivez le cycle Brouillon → En attente → Envoyée → Reçue.',
-                    'La validation finale reste du ressort du chef équipe (permission achats_valider).',
+                    'La validation finale reste du ressort du Directeur (permission achats_valider).',
                 ],
             ],
             [
@@ -324,8 +324,8 @@ $guides = [
             ],
         ],
     ],
-    'chef équipe' => [
-        'role_nom'   => 'chef équipe',
+    'Directeur' => [
+        'role_nom'   => 'Directeur',
         'icon'       => 'bi-award',
         'couleur'    => 'danger',
         'intro'      => 'Vous avez accès à l\'ensemble de l\'application, y compris le journal d\'audit et la validation des commandes d\'achat. Vous pouvez basculer votre magasin de suivi via le sélecteur en haut à droite.',
@@ -429,7 +429,7 @@ $guides = [
 // - Magasinier : Magasinier uniquement
 // - Vendeur    : Vendeur uniquement
 $visibilite_doc = [
-    'chef équipe'  => ['Vendeur', 'Magasinier', 'Admin', 'chef équipe'],
+    'Directeur'  => ['Vendeur', 'Magasinier', 'Admin', 'Directeur'],
     'Admin'      => ['Vendeur', 'Magasinier', 'Admin'],
     'Magasinier' => ['Magasinier'],
     'Vendeur'    => ['Vendeur'],

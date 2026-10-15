@@ -68,7 +68,7 @@ $profile = json_decode(_google_fetch('https://www.googleapis.com/oauth2/v2/useri
     'access_token' => $tokenData['access_token'],
 ]), true);
 
-if (empty($profile['id']) || empty($profile['email'])) {
+if (empty($profile['id']) || empty($profile['email']) || empty($profile['verified_email'])) {
     error_log('[GOOGLE_OAUTH] Profil Google incomplet: ' . json_encode($profile));
     flash_error('Impossible de récupérer les informations du compte Google.');
     redirect('../auth/login.php');
@@ -87,26 +87,20 @@ if ($googleName === '') {
 $user = db_user_get_by_google_email($pdo, $googleEmail);
 
 if ($user) {
-    // Compte existant lié → mise à jour google_id si nécessaire
-    if (empty($user['google_id']) || $user['google_id'] !== $googleId) {
+    if (!empty($user['google_id']) && $user['google_id'] !== $googleId) {
+        flash_error('Ce compte Google est différent de celui associé à votre utilisateur. Contactez un administrateur.');
+        redirect('../auth/login.php');
+    }
+    // Compte existant autorisé par un administrateur → liaison à la première connexion.
+    if (empty($user['google_id'])) {
         db_user_link_google($pdo, $user['id'], $googleId, $googleEmail, $googleAvatar);
     }
     $utilisateur = $user;
     $actionLog = 'CONNEXION_GOOGLE';
     $msgLog = 'Connexion Google réussie (compte existant lié): ' . $googleEmail;
 } else {
-    // Créer un nouveau compte
-    $newId = db_user_create_from_google($pdo, $googleName, $googleId, $googleEmail, $googleAvatar);
-    $utilisateur = [
-        'id' => $newId,
-        'nom' => $googleName,
-        'login' => 'google_' . $googleId,
-        'role' => ROLE_VENDEUR,
-        'magasin_id' => null,
-        'actif' => 1,
-    ];
-    $actionLog = 'INSCRIPTION_GOOGLE';
-    $msgLog = 'Nouveau compte créé via Google: ' . $googleEmail;
+    flash_error('Aucun compte eStock actif n’est associé à cette adresse Google. Contactez un administrateur.');
+    redirect('../auth/login.php');
 }
 
 // --- Créer la session ---

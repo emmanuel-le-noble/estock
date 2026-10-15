@@ -42,7 +42,7 @@ Chaque clôture valide est chaînée à la précédente (genesis
 `GENESIS-ESTOCK-CLOTURES-V1`) et porte `empreinte_journal` = SHA-256 de
 l'ensemble des paires `id:hash_chaine` des factures de la journée.
 
-### Immuabilité au niveau SGBD (triggers, `database/integrite_ventes.sql`)
+### Immuabilité au niveau SGBD (déclencheurs dans `database/estock_db.sql`)
 
 - `trg_factures_immutable_delete` / `_update` : `SIGNAL 45000` si suppression
   ou modification d'un champ protégé d'une facture validée.
@@ -88,8 +88,11 @@ Depuis `conformite.php` → « Créer une archive » :
 
 ## 5. Procédure de mise en place
 
-1. Appliquer les migrations : `php database/apply_migrations.php`
-   (contient `integrite_ventes.sql`).
+1. Une installation neuve doit utiliser le schéma `database/estock_db.sql`, qui
+   contient les colonnes et déclencheurs de chaînage. Pour une base existante,
+   sauvegarder puis faire vérifier sa version avant d'appliquer les scripts
+   disponibles dans `database/` ; aucun lanceur général de migrations n'est
+   fourni.
 2. Rattraper le chaînage historique : `php bin/verif_integrite.php --backfill`.
 3. Archiver les périodes closes : UI `conformite.php`.
 4. Piste d'audit : sortie `bin/verif_integrite.php --json` + exports

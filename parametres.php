@@ -11,6 +11,9 @@ exiger_role(ROLE_DIRECTEUR, ROLE_ADMIN);
 
 // Déterminer l'onglet actif
 $tab_courant = $_GET['tab'] ?? 'config';
+if ($tab_courant === 'droits' || (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'save_permissions')) {
+    exiger_permission('utilisateurs_gerer');
+}
 
 $sections = [
     'boutique' => [
